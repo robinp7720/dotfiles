@@ -1,0 +1,8 @@
+
+#Available smoothing options are monstercat, sgs, none.
+visualizer.spectrum.smoothing.mode=none
+visualizer.spectrum.bar.width=5
+visualizer.spectrum.bar.spacing=2
+
+audio.stereo.enabled=false
+colors.scheme=mono

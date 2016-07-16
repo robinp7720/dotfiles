@@ -1,0 +1,6 @@
+case $BLOCK_BUTTON in
+    1) exec urxvt -name ncmpcpp -e ncmpcpp &
+esac
+
+
+echo $(mpc -h 192.168.178.50 -f "%title%"  | head -n 1)
