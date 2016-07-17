@@ -4,7 +4,7 @@ urxvt*depth:            32
 urxvt*dynamicColors: on
 URxvt.font: xft:drift:size=10
 URxvt.scrollstyle: plain
-urxvt.background: [80]#201310
+urxvt.background: [80]#1b1b19
 urxvt*color0: #201310
 urxvt*color1: #6092a0
 urxvt*color2: #447ca0
@@ -12,7 +12,7 @@ urxvt*color3: #e04857
 urxvt*color4: #a06772
 urxvt*color5: #a28c81
 urxvt*color6: #c47769
-urxvt.foreground: #fcfcfc
+urxvt.foreground: #e7e8eb
 urxvt*color7: #4a65a0
 urxvt*color8: #602e31
 urxvt*color9: #5486c8
