@@ -18,8 +18,10 @@ set $mod Mod4
 # This font is widely installed, provides lots of unicode glyphs, right-to-left
 # text rendering and scalability on retina/hidpi displays (thanks to pango).
 
-font pango:drift 8
 font pango:FontAwesome 8
+font pango:drift 8
+
+
 #font pango:drift 8
 # Before i3 v4.8, we used to recommend this one as the default:
 # font -misc-fixed-medium-r-normal--13-120-75-75-C-70-iso10646-1
@@ -204,11 +206,11 @@ bindsym $mod+r mode "resize"
 
 
 
-set $bg-color            #201310
-set $inactive-bg-color   #201310
-set $text-color          #fcfcfc
-set $inactive-text-color #fcfcfc
-set $urgent-bg-color     #E53935
+set $bg-color            #1b1b19
+set $inactive-bg-color   #1b1b19
+set $text-color          #e7e8eb
+set $inactive-text-color #e7e8eb
+set $urgent-bg-color     #1b1b19
 
 # window colors
 #                       border              background         text                 indicator
@@ -223,8 +225,8 @@ bar {
 	position top
 	colors {
 		background $bg-color
-        separator #403330
-        statusline #fcfcfc
+        separator #3c414c
+        statusline #e7e8eb
 		#                  border             background         text
 		focused_workspace  $bg-color          $bg-color          $text-color
 		inactive_workspace $inactive-bg-color $inactive-bg-color $inactive-text-color

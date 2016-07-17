@@ -2,7 +2,7 @@ command=/home/robin/.config/i3/scripts/$BLOCK_NAME
 
 [song]
 #command=mpc -h 192.168.178.50 -f "%title%"  | head -n 1
-label=
+label=Now playing
 interval=1
 
 [load_average]
