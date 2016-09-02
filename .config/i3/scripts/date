@@ -1,5 +1,5 @@
 case $BLOCK_BUTTON in
-    1) yad --calendar --no-buttons --mouse --on-top --undecorated --skip-taskbar;;     # left click
+    1) urxvt -name info -geometry "21x10+$(( $BLOCK_X-130 ))+24" -e ~/.scripts/cal.sh ;;
 esac
 
 t=$(date '+%H:%M %a %d %b')

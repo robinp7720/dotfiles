@@ -1,0 +1,22 @@
+#!/bin/bash
+
+
+if [ $1 == "unlock" ]
+then
+	adb shell input keyevent 26
+	adb shell input keyevent 66
+	sleep 1
+	adb shell input text 3410
+	#adb shell input keyevent 66
+fi
+
+if [ $1 == "home" ]
+then
+	adb shell input keyevent 3
+fi
+
+if [ $1 == "backup" ]
+then
+	backupPhone
+fi
+

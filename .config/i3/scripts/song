@@ -1,6 +1,4 @@
 case $BLOCK_BUTTON in
-    1) exec urxvt -name ncmpcpp -e ncmpcpp &
+    1) urxvt -name info -geometry "50x30+$BLOCK_X+24" -e ncmpcpp& ;;
+    *) echo $(mpc -h 192.168.178.50 -f "%title%"  | head -n 1)
 esac
-
-
-echo $(mpc -h 192.168.178.50 -f "%title%"  | head -n 1)

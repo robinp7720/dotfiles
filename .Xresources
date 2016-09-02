@@ -1,10 +1,9 @@
-
 urxvt*scrollBar:        false
 urxvt*depth:            32 
 urxvt*dynamicColors: on
 URxvt.font: xft:drift:size=10
 URxvt.scrollstyle: plain
-urxvt.background: [80]#1b1b19
+urxvt.background: [80]#181816
 urxvt*color0: #201310
 urxvt*color1: #6092a0
 urxvt*color2: #447ca0
@@ -12,7 +11,7 @@ urxvt*color3: #e04857
 urxvt*color4: #a06772
 urxvt*color5: #a28c81
 urxvt*color6: #c47769
-urxvt.foreground: #e7e8eb
+urxvt.foreground: #ffffff
 urxvt*color7: #4a65a0
 urxvt*color8: #602e31
 urxvt*color9: #5486c8
@@ -23,3 +22,71 @@ urxvt*color13: #c1c8c8
 urxvt*color14: #f6b58d
 urxvt.colorBD: #6285c8
 urxvt*color15: #6285c8
+
+info*scrollBar:        false
+info*depth:            32 
+info*dynamicColors: on
+info.font: xft:drift:size=10
+info.scrollstyle: plain
+info.background: [90]#181816
+info*color0: #201310
+info*color1: #6092a0
+info*color2: #447ca0
+info*color3: #e04857
+info*color4: #a06772
+info*color5: #a28c81
+info*color6: #c47769
+info.foreground: #ffffff
+info*color7: #4a65a0
+info*color8: #602e31
+info*color9: #5486c8
+info*color10: #fad5a7
+info*color11: #f2726b
+info*color12: #c89cc0
+info*color13: #c1c8c8
+info*color14: #f6b58d
+info.colorBD: #6285c8
+info*color15: #6285c8
+info.blurRadius:5
+info.internalBorder: 20
+
+ncmpcpp*scrollBar:        false
+ncmpcpp*depth:            32 
+ncmpcpp*dynamicColors: on
+ncmpcpp.font: xft:drift:size=10
+ncmpcpp.scrollstyle: plain
+ncmpcpp.background: [90]#181816
+ncmpcpp*color0: #201310
+ncmpcpp*color1: #6092a0
+ncmpcpp*color2: #447ca0
+ncmpcpp*color3: #e04857
+ncmpcpp*color4: #a06772
+ncmpcpp*color5: #a28c81
+ncmpcpp*color6: #c47769
+ncmpcpp.foreground: #ffffff
+ncmpcpp*color7: #4a65a0
+ncmpcpp*color8: #602e31
+ncmpcpp*color9: #5486c8
+ncmpcpp*color10: #fad5a7
+ncmpcpp*color11: #f2726b
+ncmpcpp*color12: #c89cc0
+ncmpcpp*color13: #c1c8c8
+ncmpcpp*color14: #f6b58d
+ncmpcpp.colorBD: #6285c8
+ncmpcpp*color15: #6285c8
+
+!------------------------------------------------------------------------------
+! ROFI Color theme
+! ------------------------------------------------------------------------------
+! Use extended color scheme
+rofi.color-enabled:                  true
+! Color scheme for normal row
+rofi.color-normal:                   #ffffff,#525d76,#f5f5f5,#5294e2,#ffffff
+! Color scheme for urgent row
+rofi.color-urgent:                   #ffffff,#dc322f,#f5f5f5,#5294e2,#dc322f
+! Color scheme for active row
+rofi.color-active:                   #ffffff,#c2cad0,#f5f5f5,#5294e2,#c2cad0
+! Color scheme window
+rofi.color-window:                   #ffffff,#f5f5f5
+! Separator style (none, dash, solid)
+rofi.separator-style: solid

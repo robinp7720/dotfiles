@@ -33,6 +33,7 @@ font pango:drift 8
 # Use Mouse+$mod to drag floating windows to their wanted position
 floating_modifier $mod
 
+exec mkfifo ~/status.pipe
 
 gaps inner 10
 gaps outer 0
@@ -57,10 +58,8 @@ bindsym XF86AudioLowerVolume exec pamixer -d 5; exec gdbus call --session --dest
 bindsym XF86AudioMute exec pamixer -t; exec gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify my_app_name 42 audio-card "Mute status" "$(pamixer --get-mute)%" [] {} 30
 
 # Brightness control
-bindsym XF86MonBrightnessUp exec xbacklight -inc 5
-
-bindsym XF86MonBrightnessDown exec xbacklight -dec 5
-
+bindsym XF86MonBrightnessUp exec ~/.scripts/brightnessUp.sh
+bindsym XF86MonBrightnessDown exec ~/.scripts/brightnessDown.sh
 bindsym XF86AudioPlay exec mpc toggle
 
 bindsym XF86Tools exec urxvt -name ncmpcpp -e ncmpcpp
@@ -150,18 +149,20 @@ bindsym $mod+Shift+6 move container to workspace 6
 bindsym $mod+Shift+7 move container to workspace 7
 bindsym $mod+Shift+8 move container to workspace 8
 bindsym $mod+Shift+9 move container to workspace 9
-bindsym $modr+Shift+0 move container to workspace 10
+bindsym $mod+Shift+0 move container to workspace 10
 
 assign [class="URxvt" instance="ncmpcpp"] $workspace5
 
 assign [class="google-chrome"] $workspace1
 assign [class="Firefox"] $workspace1
 
-assign [class="URxvt"] $workspace2
+assign [class="URxvt" instance="urxvt"] $workspace2
 
 assign [class="jetbrains"] $workspace3
 
 assign [class="Minecraft"] $workspace4
+assign [class="MultiMC5"] $workspace4
+
 
 assign [class="Vlc"] $workspace5
 
@@ -169,6 +170,8 @@ for_window [class="^.*"] border pixel 0
 for_window [class="Yad"] floating enable
 for_window [class="URxvt" title="vis"] floating enable
 for_window [class="URxvt" title="vis"] sticky enable
+for_window [class="URxvt" instance="info"] floating enable
+for_window [class="URxvt" instance="info"] sticky enable
 
 
 # reload the configuration file
@@ -221,28 +224,55 @@ client.urgent           $urgent-bg-color    $urgent-bg-color   $text-color      
 
 # bar
 bar {
-  	status_command i3blocks -c /home/robin/.config/i3/i3blocks.conf
-	position top
-	colors {
-		background $bg-color
+    status_command i3blocks -c ~/.config/i3/i3blocks.conf
+    position top
+    tray_output primary
+    strip_workspace_numbers yes
+    colors {
+        background $bg-color
         separator #3c414c
         statusline #e7e8eb
-		#                  border             background         text
-		focused_workspace  $bg-color          $bg-color          $text-color
-		inactive_workspace $inactive-bg-color $inactive-bg-color $inactive-text-color
-		urgent_workspace   $urgent-bg-color   $urgent-bg-color   $text-color
-	}
+        #                  border             background         text
+        focused_workspace  $bg-color          $bg-color          $text-color
+        inactive_workspace $inactive-bg-color $inactive-bg-color $inactive-text-color
+        urgent_workspace   $urgent-bg-color   $urgent-bg-color   $text-color
+    }
+}
+
+# bottombar
+# This bar is to display current information from a fifo file located in the home directory. This is mainly there for applications which run in the background and shouldn't spam the user with notifications.
+bar {
+    status_command "/home/robin/.config/i3/bottombar.sh"
+    position bottom
+    workspace_buttons no
+    colors {
+        background $bg-color
+        separator #3c414c
+        statusline #e7e8eb
+        #                  border             background         text
+        focused_workspace  $bg-color          $bg-color          $text-color
+        inactive_workspace $inactive-bg-color $inactive-bg-color $inactive-text-color
+        urgent_workspace   $urgent-bg-color   $urgent-bg-color   $text-color
+    }
 }
 
 # Start Rofi
-bindsym $mod+space exec /home/robin/.config/i3/launcher.sh run
-bindsym $mod+Tab exec /home/robin/.config/i3/launcher.sh window
+bindsym $mod+space exec ~/.config/i3/launcher.sh main
+bindsym $mod+Tab exec ~/.config/i3/launcher.sh window
 
+bindsym $mod+p exec rofi-pass
+bindsym $mod+d exec dofi
+
+exec_always ~/.screenlayout/main.sh
 
 exec_always feh --bg-scale ~/.wallpaper.jpg
 exec_always pax11publish -S 192.168.178.50 -e
-exec node /home/robin/Projects/LinConnectNode/index.js
+#exec node /home/robin/Projects/LinConnectNode/index.js
 exec compton
+exec dunst
+exec pwrnotify 10 -f
+exec thunar --daemon
 exec /home/robin/.config/i3/themer.sh
 exec mpd-notification
-exec_always /home/robin/.screenlayout/main.sh
+exec ~/.scripts/updateNotify.sh 
+#exec dex -a

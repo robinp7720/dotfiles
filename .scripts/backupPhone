@@ -1,0 +1,36 @@
+#!/bin/bash
+
+adb start-server
+
+/bin/echo "Android as been plugged in. Backup commencing in 2 seconds" > /home/robin/status.pipe
+
+export DISPLAY=:0
+sleep 2
+
+/bin/notify-send "Backuping up" "Backup of phone has started"
+/bin/adb pull /storage/sdcard0/DCIM/Camera /home/robin/tmp/phoneBackup/  2> /home/robin/status.pipe
+/bin/notify-send "Phone backup" "Backup of photos and images completed"
+/bin/notify-send "Phone backup" "Sorting images by date"
+
+/usr/bin/vendor_perl/exiftool '-Directory<CreateDate' -d /home/robin/tmp/images/%Y/%m/%d -r /home/robin/tmp/phoneBackup/ > /home/robin/status.pipe
+
+/bin/echo "Copying images to Pictures folder" > /home/robin/status.pipe
+/bin/cp /home/robin/tmp/images/* /home/robin/Pictures/ -rf
+/bin/rm /home/robin/tmp/images/*
+
+/bin/echo "Moving remaining unsorted images into NoDate folder" > /home/robin/status.pipe
+/bin/mv /home/robin/tmp/phoneBackup/* /home/robin/Pictures/NoDate -f
+
+/bin/notify-send "Phone backup" "Images sorted by date"
+
+/bin/notify-send "Phone backup" "Moving videos to videos folder"
+
+/bin/mv /home/robin/tmp/phoneBackup/*.mp4 /home/robin/Videos/
+
+/bin/echo "Image sort finished" > /home/robin/status.pipe
+/bin/notify-send "Phone backup" "Deleting images on device"
+/bin/adb shell rm /storage/sdcard0/DCIM/Camera/*
+/bin/notify-send "Phone backup" "Images deleted"
+
+/bin/echo "Images on device deleted" > /home/robin/status.pipe
+exit

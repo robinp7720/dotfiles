@@ -1,0 +1,6 @@
+#!/bin/python
+
+import glob
+
+for filename in glob.iglob('/usr/share/applications/*.desktop'):
+        print(filename)
