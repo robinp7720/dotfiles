@@ -1,0 +1,8 @@
+[module/mpd-open]
+type = custom/text
+
+content = 
+
+click-left = termite -t Music -e "ncmpcpp"
+
+# vi: ft=dosini

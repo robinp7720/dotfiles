@@ -1,0 +1,12 @@
+[bar/third]
+inherit = section/common
+
+monitor = HDMI-0
+
+modules-left = bspwm
+modules-center = mpd
+modules-right =  date
+
+dpi = 92
+
+# vi: ft=dosini

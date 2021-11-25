@@ -1,0 +1,122 @@
+#! /bin/bash
+
+wid=$1
+class=$2
+instance=$3
+consequences=$4
+title=$(xtitle $wid)
+
+# Command to see what information is available to be used
+#dunstify "BSPWM" "wid='$wid'<br>class='$class'<br>instance='$instance'<br>consequences='$consequences'<br>title='$title'"
+
+# Rules for zoom windows
+if [[ "$class" == "zoom" ]]; then
+	if [[ $title =~ .*Part.* ]]; then
+		echo "state=pseudo_tiled"
+		exit
+	fi
+
+	if [[ $title =~ .*Poll.* ]]; then
+		echo "state=floating"
+		exit
+	fi
+	
+	# Make the change host window a floating window
+	if [[ "$title" == "" ]]; then
+		echo "state=floating"
+		exit
+	fi
+
+	if [[ "$title" == "Rename" ]]; then
+		echo "state=floating"
+		echo "rectangle=500x100+1670+1035"
+		exit
+	fi
+
+	# Zoom calls the other windows such as the "please wait" and the "Leave
+	# Meeting" windows "zoom"
+	if [[ "$title" == "zoom" ]]; then
+		echo "state=floating"
+		echo "border=off"
+		#echo "rectangle=250x89+1795+1035"
+		exit
+	fi
+
+	# Breakout rooms will close in seconds window
+	if [[ "$title" == "Breakout Rooms" ]]; then
+		echo "state=floating"
+		exit
+	fi
+
+	# The join meeting window is called "Zoom"
+	if [[ "$title" == "Zoom" ]]; then
+		echo "state=floating"
+		echo "border=on"
+		echo "rectangle=400x365"
+		exit,
+	fi
+
+	echo "state=tiled"
+fi
+
+# Rules for custom terminal windows
+if [[ "$class" == "Termite" ]]; then
+	if [[ "$title" == "Music" ]]; then
+		echo "state=floating"
+		echo "sticky=on"
+		echo "locked=on"
+		echo "focus=on"
+		echo "border=off"
+		echo "rectangle=1200x500+3840+40"	
+	fi
+
+	if [[ "$title" == "Calendar" ]]; then
+		echo "state=floating"
+		echo "sticky=on"
+		echo "locked=on"
+		echo "focus=on"	
+		echo "border=off"
+		echo "rectangle=1200x300+3840+40"		
+	fi
+fi
+
+# Rules for firefox
+if [[ "$class" == "Nightly" ]]; then
+	if [[ "$title" == "Picture-in-Picture" ]]; then
+		echo "state=floating"
+		echo "sticky=on"
+		echo "border=off"
+
+		# 16x9 video
+		echo "rectangle=704x396+3116+1744"		
+		
+		# 4x3 video
+		# echo "rectangle=528x396+3292+1744"
+		exit
+	fi
+
+	# Download window
+	if [[ $title == "" || $title  =~ Opening.* ]]; then
+		echo "state=floating"
+		exit
+	fi
+	
+	echo "state=tiled"
+	echo "layer=0"
+
+	exit
+fi
+
+# Rules for kunst (MPD Album Art overlay)
+if [[ "$class" == "Sxiv" ]]; then
+		echo "state=floating"
+		echo "sticky=on"
+		echo "border=off"
+		echo "locked=on"
+		echo "rectangle=250x250+3570+1890"
+fi
+
+if [[ "$class" == "xfreerdp" ]]; then
+		echo "state=tiled"
+fi
+

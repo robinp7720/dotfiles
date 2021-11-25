@@ -1,0 +1,25 @@
+[color]
+background = #000000
+foreground = #FFFFFF
+
+border = #15C3FD
+
+background-date = ${color.background}
+background-github = ${color.background}
+background-tray = ${color.background}
+background-network = ${color.background}
+
+foreground-error = #FFCCCC
+
+foreground-network = #B294BB
+foreground-date = #B5BD68
+foreground-audio = #688EBD
+foreground-cpu = #7FBD68
+foreground-updates-pacman-aurhelper = #BD7B68
+foreground-info-hackspeed = #AF68BD 
+
+foreground-workspace-occupied = #688EBD
+foreground-workspace-focused = #7768BD
+foreground-workspace-urgent = #BD6871
+
+# vi: ft=dosini

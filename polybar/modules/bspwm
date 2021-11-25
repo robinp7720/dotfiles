@@ -1,0 +1,48 @@
+[module/bspwm]
+type = internal/bspwm
+
+pin-workspaces = true
+strip-wsnumbers = true
+
+enable-click = true
+enable-scroll = true
+
+wrapping-scroll = false
+reverse-scroll = false
+
+format = <label-state>
+
+label-focused = 
+label-focused-foreground = ${color.foreground-workspace-focused}
+label-focused-background = ${color.background}
+label-focused-padding = 1
+
+label-unfocused = 
+label-unfocused-foreground = ${color.background}
+label-unfocused-background = ${color.background}
+label-unfocused-padding = 1
+
+label-occupied = 
+label-occupied-foreground = ${color.foreground-workspace-occupied}
+label-occupied-padding = 1
+
+label-empty = 
+label-empty-padding = 1
+
+label-urgent = 
+label-urgent-foreground = ${color.foreground-workspace-urgent}
+label-urgent-padding = 1
+
+label-monocle = 
+label-tiled = 舘
+label-fullscreen = 
+label-floating = " "
+label-pseudotiled = P
+label-locked = L
+label-locked-foreground = #bd2c40
+label-sticky = S
+label-sticky-foreground = #fba922
+label-private = P
+label-private-foreground = #bd2c40
+label-marked = M
+# vi: ft=dosini

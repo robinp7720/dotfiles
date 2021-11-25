@@ -1,0 +1,8 @@
+[module/info-hackspeed]
+type = custom/script
+exec = ~/.config/polybar/scripts/info-hackspeed.sh
+tail = true
+
+format-foreground = ${color.foreground-info-hackspeed}
+
+# vi: ft=dosini

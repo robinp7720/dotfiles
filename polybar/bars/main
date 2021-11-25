@@ -1,0 +1,10 @@
+[bar/main]
+inherit = section/common
+
+monitor = DP-2
+
+modules-left = bspwm
+modules-center = 
+modules-right = info-hackspeed bsp-layout updates-pacman-aurhelper cpu pulseaudio network do-not-disturb time date
+
+# vi: ft=dosini

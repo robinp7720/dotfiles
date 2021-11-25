@@ -1,0 +1,72 @@
+#! /bin/sh
+
+# SET DESKTOP ENVIRONMENT VARIABLES
+
+source ~/.config/environment
+
+# LAUNCH SERVICES
+picom --experimental-backends &
+mpd-notification -m /mnt/robin/Music/ &
+redshift &
+kdeconnect-indicator &
+thunar --daemon &
+
+# Run the main mode
+~/.config/bspwm/modes/main.sh
+
+
+# Scripts to automate desktop actions
+/home/robin/.config/bspwm/focus_watcher &
+
+# Set the border colors.
+bspc config normal_border_color "#cccccc"
+bspc config active_border_color "#BEEFFF"
+bspc config focused_border_color "#15C3FD"
+bspc config presel_border_color "#FA2C0D"
+
+## SET ALL THE BSPWM WM OPTIONS
+bspc config border_width    5
+bspc config window_gap      4
+
+bspc config split_ratio           0.50
+bspc config focus_follows_pointer true
+
+bspc config remove_unplugged_monitors   true
+bspc config remove_disabled_monitors    true
+
+bspc config paddingless_monocle false
+bspc config borderless_monocle  true
+bspc config gapless_monocle     true
+bspc config single_monocle      true
+
+# I have no clue what this does, but it's still here
+bspc config directional_focus_tightness high
+
+# Set window rules
+bspc rule -a Pinentry state=floating
+bspc rule -a Plank layer=above manage=on border=off
+bspc rule -a Nightly state=tiling”
+
+bspc config external_rules_command "/home/robin/.config/bspwm/external_rules"
+
+# Start polkit authentication daemon.
+# This allows us to use thunar and gparted without starting them as root
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
+
+# Load our ssh keys
+# We only need this so we can directly login into an ssh server from rofi
+eval $(/usr/bin/gnome-keyring-daemon --start --components=pkcs11,secrets,ssh)
+export SSH_AUTH_SOCK
+
+# NVIDIA Low latency mode
+export __GL_MaxFramesAllowed=0
+
+# Fix intellij
+.scripts/java_nonreparenting_wm_hack.sh
+
+# And now let me have a nice cursor
+xsetroot -cursor_name left_ptr
+
+sxhkd &
+
+plank &

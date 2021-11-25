@@ -1,0 +1,32 @@
+[section/common]
+width = 100%
+height = 35
+offset-x = 0
+offset-y = 0
+
+background = ${color.background}
+foreground = ${color.foreground}
+
+padding = 2
+module-margin = 2
+
+border-bottom-size = 5
+border-bottom-color = ${color.border}
+
+#font-0 = "Jua:size=13;0"
+font-0 = "Fira Code:size=8;1"
+font-1 = "JetBrainsMono Nerd Font:size=12;1"
+
+# Block fonts for CPU module
+font-2 = "3270Medium Nerd Font:size=12;1"
+
+override-redirect = true
+
+bottom = false
+fixed-center = true
+
+enable-ipc = true
+
+dpi = 0
+
+# vi: ft=dosini

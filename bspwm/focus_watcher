@@ -1,0 +1,26 @@
+#! /bin/bash
+
+lastTitle=$(xtitle)
+lastWid=0
+
+bspc subscribe node_focus | while read -a msg ; do
+   desk_id=${msg[2]}
+   wid=${msg[3]}
+   title=$(xtitle $wid)
+
+   # Close the music popup window if it has lost its focus
+   if [[ "$lastTitle" == "Music" ]]; then
+      if [[ $wid != $lastWid ]]; then
+         wmctrl -i -c $lastWid
+      fi
+   fi
+
+   if [[ "$lastTitle" == "Calendar" ]]; then
+      if [[ $wid != $lastWid ]]; then
+         wmctrl -i -c $lastWid
+      fi
+   fi
+
+   lastTitle=$title
+   lastWid=$wid
+done

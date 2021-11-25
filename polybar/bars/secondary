@@ -1,0 +1,20 @@
+[bar/secondary]
+inherit = section/common
+
+monitor = DVI-D-0
+
+modules-left = bspwm
+modules-center = mpd-open mpd
+modules-right = 
+
+tray-position = right
+tray-detached = false
+tray-background = ${color.background-tray}
+tray-offset-x = 0
+tray-offset-y = 0
+tray-padding = 0
+tray-scale = 1
+
+dpi = 90
+
+# vi: ft=dosini

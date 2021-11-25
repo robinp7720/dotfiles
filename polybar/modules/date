@@ -1,0 +1,15 @@
+[module/date]
+type = custom/script
+
+interval = 1.0
+
+exec = date "+%Y-%m-%d"
+
+format-background = ${color.background-date}
+format-foreground = ${color.foreground-date}
+
+format-prefix = " "
+
+click-left = termite -t Calendar -e "/home/robin/.scripts/calendar.sh" --hold
+
+# vi: ft=dosini
