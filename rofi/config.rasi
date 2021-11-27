@@ -25,6 +25,6 @@ configuration {
     display-calc: "";
     display-window: "缾";
     display-combi: "";
-
-    theme: "./default.rasi";
 }
+
+@theme "./default.rasi"
