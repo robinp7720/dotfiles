@@ -1,0 +1,2 @@
+rofi\
+    -show combi

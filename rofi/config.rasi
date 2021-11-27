@@ -1,0 +1,30 @@
+configuration {
+    terminal: "termite";
+
+    ssh-command: "termite -e '{ssh-client} {host} [-p {port}]'";
+    run-shell-command: "{terminal} -e '{cmd}'";
+
+    drun-show-actions: true;
+    
+    modi: [combi];
+    combi-modi: [window,drun,ssh];
+
+    show-icons: true;
+
+    sorting-method: "fzf";
+    auto-select: false;
+    sort: false;
+
+    window-thumbnail: true;
+
+    matching: "normal";
+    
+    display-run: "";
+    display-drun: "";
+    display-ssh: "";
+    display-calc: "";
+    display-window: "缾";
+    display-combi: "";
+
+    theme: "./default.rasi";
+}
