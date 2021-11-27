@@ -20,6 +20,7 @@ font-1 = "JetBrainsMono Nerd Font:size=12;1"
 # Block fonts for CPU module
 font-2 = "3270Medium Nerd Font:size=12;1"
 
+wm-restack = bspwm
 override-redirect = true
 
 bottom = false
