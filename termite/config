@@ -1,0 +1,131 @@
+[options]
+allow_bold = true
+#audible_bell = false
+clickable_url = true
+#dynamic_title = true
+#font = Fira Mono 12
+#font = Source Code Pro for Powerline 12
+#font = Inconsolata for Powerline 12
+font = JetBrainsMono Nerd Font 12
+
+
+#fullscreen = true
+#geometry = 640x480
+#icon_name = terminal
+#mouse_autohide = false
+#scroll_on_output = false
+#scroll_on_keystroke = true
+# Length of the scrollback buffer, 0 disabled the scrollback buffer
+# and ting it to a negative value means "infinite scrollback"
+scrollback_lines = 10000
+#search_wrap = true
+#urgent_on_bell = true
+#hyperlinks = false
+
+# $BROWSER is used by default if , with xdg-open as a fallback
+#browser = xdg-open
+
+# "system", "on" or "off"
+cursor_blink = off
+
+# "block", "underline" or "ibeam"
+cursor_shape = ibeam
+
+# Hide links that are no longer valid in url select overlay mode
+#filter_unmatched_urls = true
+
+# Emit escape sequences for extra modified keys
+#modify_other_keys = false
+
+#  size hints for the window
+#size_hints = false
+
+# "off", "left" or "right"
+#scrollbar = off
+
+[colors]
+# If both of these are un, cursor falls back to the foreground color,
+# and cursor_foreground falls back to the background color.
+cursor = #dcdccc
+cursor_foreground = #dcdccc
+
+#foreground = #dcdccc
+#foreground_bold = #ffffff
+#background = #3f3f3f
+
+# 20% background transparency (requires a compositor)
+#background = rgba(63, 63, 63, 0.8)
+
+# If un, will reverse foreground and background
+#highlight = #2f2f2f
+
+# Colors from color0 to color254 can be 
+
+
+background = rgba(13, 25, 38, 0.6)
+#background = #0d1926
+foreground = #fffcff
+
+# --- standard colors ---
+
+# black
+color0 = #2c2c2c
+
+# bright_black
+color8 = #808080
+
+# red
+color1 = #d45970
+
+# bright_red
+color9 = #e18d9d
+
+# green
+color2 = #70d459
+
+# bright_green
+color10 = #9de18d
+
+# yellow
+color3 = #d4bd59
+
+# bright_yellow
+color11 = #e1d28d
+
+# blue
+color4 = #5970d4
+
+# bright_blue
+color12 = #8d9de1
+
+# magenta
+color5 = #bd59d4
+
+# bright_magenta
+color13 = #d28de1
+
+# cyan
+color6 = #59d4bd
+
+# bright_cyan
+color14 = #8de1d2
+
+# white
+color7 = #ededed
+
+# bright_white
+color15 = #ffffff
+
+
+[hints]
+font = Monospace 12
+foreground = #dcdccc
+background = #3f3f3f
+active_foreground = #e68080
+active_background = #3f3f3f
+padding = 2
+border = #3f3f3f
+border_width = 0.5
+roundness = 2.0
+
+# vim: ft=dosini cms=#%s
