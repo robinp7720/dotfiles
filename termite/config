@@ -44,78 +44,31 @@ cursor_shape = ibeam
 #scrollbar = off
 
 [colors]
-# If both of these are un, cursor falls back to the foreground color,
-# and cursor_foreground falls back to the background color.
-cursor = #dcdccc
-cursor_foreground = #dcdccc
+cursor = #d8dee9
+cursor_foreground = #2e3440
 
-#foreground = #dcdccc
-#foreground_bold = #ffffff
-#background = #3f3f3f
+foreground = #d8dee9
+foreground_bold = #d8dee9
+background = #2e3440
 
-# 20% background transparency (requires a compositor)
-#background = rgba(63, 63, 63, 0.8)
+highlight = #4c566a
 
-# If un, will reverse foreground and background
-#highlight = #2f2f2f
-
-# Colors from color0 to color254 can be 
-
-
-background = rgba(13, 25, 38, 0.6)
-#background = #0d1926
-foreground = #fffcff
-
-# --- standard colors ---
-
-# black
-color0 = #2c2c2c
-
-# bright_black
-color8 = #808080
-
-# red
-color1 = #d45970
-
-# bright_red
-color9 = #e18d9d
-
-# green
-color2 = #70d459
-
-# bright_green
-color10 = #9de18d
-
-# yellow
-color3 = #d4bd59
-
-# bright_yellow
-color11 = #e1d28d
-
-# blue
-color4 = #5970d4
-
-# bright_blue
-color12 = #8d9de1
-
-# magenta
-color5 = #bd59d4
-
-# bright_magenta
-color13 = #d28de1
-
-# cyan
-color6 = #59d4bd
-
-# bright_cyan
-color14 = #8de1d2
-
-# white
-color7 = #ededed
-
-# bright_white
-color15 = #ffffff
-
+color0  = #3b4252
+color1  = #bf616a
+color2  = #a3be8c
+color3  = #ebcb8b
+color4  = #81a1c1
+color5  = #b48ead
+color6  = #88c0d0
+color7  = #e5e9f0
+color8  = #4c566a
+color9  = #bf616a
+color10 = #a3be8c
+color11 = #ebcb8b
+color12 = #81a1c1
+color13 = #b48ead
+color14 = #8fbcbb
+color15 = #eceff4
 
 [hints]
 font = Monospace 12
