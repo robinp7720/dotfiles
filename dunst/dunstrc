@@ -27,27 +27,27 @@
     # message displayed.  A positive x is measured from the left, a
     # negative from the right side of the screen.  Y is measured from
     # the top and down respectively.
-# The width can be negative.  In this case the actual width is the
-# screen width minus the width defined in within the geometry option.
+    # The width can be negative.  In this case the actual width is the
+    # screen width minus the width defined in within the geometry option.
     geometry = "600x20-10+50"
 
-# Turn on the progess bar
+    # Turn on the progess bar
     progress_bar = true
 
-# Set the progress bar height. This includes the frame, so make sure
-# it's at least twice as big as the frame width.
+    # Set the progress bar height. This includes the frame, so make sure
+    # it's at least twice as big as the frame width.
     progress_bar_height = 20
 
-# Set the frame width of the progress bar
+    # Set the frame width of the progress bar
     progress_bar_frame_width = 0
 
-# Set the minimum width for the progress bar
+    # Set the minimum width for the progress bar
     progress_bar_min_width = 150
 
-# Set the maximum width for the progress bar
+    # Set the maximum width for the progress bar
     progress_bar_max_width = 600
 
-# Show how many messages are currently hidden (because of geometry).
+    # Show how many messages are currently hidden (because of geometry).
     indicate_hidden = yes
 
     # Shrink window if it's smaller than the width.  Will be ignored if
