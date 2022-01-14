@@ -17,6 +17,7 @@ foreground-audio = #688EBD
 foreground-cpu = #7FBD68
 foreground-updates-pacman-aurhelper = #BD7B68
 foreground-info-hackspeed = #AF68BD 
+foreground-do-not-disturb = #333333
 
 foreground-workspace-occupied = #688EBD
 foreground-workspace-focused = #7768BD
