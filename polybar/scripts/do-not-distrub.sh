@@ -5,22 +5,27 @@ notifications_enabled_icon="/usr/share/icons/Adwaita/64x64/apps/preferences-syst
 trap "toggle" USR1
 
 update() {
-	if [[ "$(dunstctl is-paused)" == "true" ]]; then
-		echo "%{F#FF3333}ﮗ"
-	else
+	if [[ "$(dunstctl is-paused)" == "false" ]]; then
 		echo ""
+	else
+		echo "%{F#FF3333}ﮗ"
 	fi
 }
 
 
 toggle() {
-	dunstctl set-paused toggle
 
-	if [[ "$(dunstctl is-paused)" == "false" ]]; then
+	if [[ "$(dunstctl is-paused)" == "true" ]]; then
+		echo ""
+		dunstctl set-paused toggle
 		dunstify -i "$notifications_enabled_icon" "Notifications" "Enabled"
-	fi
-
-	update
+	else
+		echo "%{F#FF3333}ﮗ"
+		dunstify -i "$notifications_enabled_icon" "Notifications" "Disabled"
+		sleep 1
+		dunstctl close
+		dunstctl set-paused toggle
+	fi	
 }
 
 while true; do
