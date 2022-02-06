@@ -107,6 +107,15 @@ if [[ "$class" == "Nightly" ]]; then
 	exit
 fi
 
+
+if [[ "$class" == "Thunar" ]]; then
+	if [[ $title =~ .*Progress ]]; then
+		echo "state=floating"
+		exit
+	fi
+
+fi
+
 # Rules for kunst (MPD Album Art overlay)
 if [[ "$class" == "Sxiv" ]]; then
 		echo "state=floating"
