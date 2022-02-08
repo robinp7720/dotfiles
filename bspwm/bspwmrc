@@ -12,7 +12,7 @@ kdeconnect-indicator &
 thunar --daemon &
 
 # Run the main mode
-~/.config/bspwm/modes/main.sh
+~/.config/bspwm/modes/all_monitors.sh
 
 
 # Scripts to automate desktop actions
