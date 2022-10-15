@@ -8,7 +8,7 @@ exec = date "+%Y-%m-%d"
 format-background = ${color.background-date}
 format-foreground = ${color.foreground-date}
 
-format-prefix = " "
+format-prefix = "  "
 
 click-left = termite -t Calendar -e "/home/robin/.scripts/calendar.sh" --hold
 

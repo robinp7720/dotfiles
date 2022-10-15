@@ -36,8 +36,8 @@ if [[ "$class" == "zoom" ]]; then
 	# Zoom calls the other windows such as the "please wait" and the "Leave
 	# Meeting" windows "zoom"
 	if [[ "$title" == "zoom" ]]; then
-		echo "state=floating"
-		echo "border=off"
+		#echo "state=floating"
+		#echo "border=off"
 		#echo "rectangle=250x89+1795+1035"
 		exit
 	fi
