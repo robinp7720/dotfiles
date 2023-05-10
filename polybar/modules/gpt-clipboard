@@ -1,0 +1,10 @@
+[module/gpt]
+type = custom/script
+exec = ~/.config/polybar/scripts/gpt-clipboard.sh
+tail = true
+
+click-left = kill -USR1 %pid%
+
+format-foreground = ${color.foreground-do-not-disturb}
+
+# vi: ft=dosini
