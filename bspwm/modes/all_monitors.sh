@@ -22,4 +22,5 @@ bspc config right_padding   0
 
 bspc config -m HDMI-1 top_padding 0
 
-superpaper &
+nitrogen --restore &
+#superpaper &
