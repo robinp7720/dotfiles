@@ -5,7 +5,7 @@
 source ~/.config/environment
 
 # LAUNCH SERVICES
-picom --experimental-backends &
+picom &
 mpd-notification -m /mnt/robin/Music/ &
 redshift &
 kdeconnect-indicator &
