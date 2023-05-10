@@ -6,6 +6,7 @@ source ~/.config/environment
 
 # Set the screen resolution and layout
 ~/.screenlayout/all_monitors.sh
+#~/.screenlayout/using_splitter.sh
 
 # Start polybar
 ~/.config/polybar/launch.sh &
