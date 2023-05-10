@@ -11,11 +11,13 @@ title=$(xtitle $wid)
 
 # Rules for zoom windows
 if [[ "$class" == "zoom" ]]; then
+	# All participants window
 	if [[ $title =~ .*Part.* ]]; then
 		echo "state=pseudo_tiled"
 		exit
 	fi
 
+	# Poll window
 	if [[ $title =~ .*Poll.* ]]; then
 		echo "state=floating"
 		exit
@@ -27,6 +29,7 @@ if [[ "$class" == "zoom" ]]; then
 		exit
 	fi
 
+	# Username change window
 	if [[ "$title" == "Rename" ]]; then
 		echo "state=floating"
 		echo "rectangle=500x100+1670+1035"
