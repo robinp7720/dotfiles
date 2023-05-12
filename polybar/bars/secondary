@@ -4,7 +4,7 @@ inherit = section/common
 monitor = DVI-D-0
 
 modules-left = bspwm
-modules-center = mpd-open mpd
+modules-center = 
 modules-right = 
 
 tray-position = right
