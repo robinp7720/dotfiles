@@ -91,7 +91,7 @@ if [[ "$class" == "Nightly" ]]; then
 		echo "border=off"
 
 		# 16x9 video
-		echo "rectangle=704x396+3116+1744"		
+		echo "rectangle=704x396+5256+2411"		
 		
 		# 4x3 video
 		# echo "rectangle=528x396+3292+1744"
