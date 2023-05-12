@@ -68,5 +68,3 @@ export __GL_MaxFramesAllowed=0
 xsetroot -cursor_name left_ptr
 
 sxhkd &
-
-plank &
