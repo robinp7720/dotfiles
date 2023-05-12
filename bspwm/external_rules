@@ -83,8 +83,17 @@ if [[ "$class" == "Termite" ]]; then
 	fi
 fi
 
+if [[ "$class" == "Update" ]]; then
+		echo "state=floating"
+		echo "sticky=on"
+		echo "locked=on"
+		echo "focus=on"	
+		#echo "border=off"
+		echo "rectangle=904x396+5056+2411"		
+fi
+
 # Rules for firefox
-if [[ "$class" == "Nightly" ]]; then
+if [[ "$class" == "Nightly" || "$class" == "firefox" ]]; then
 	if [[ "$title" == "Picture-in-Picture" ]]; then
 		echo "state=floating"
 		echo "sticky=on"

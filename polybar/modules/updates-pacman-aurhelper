@@ -1,9 +1,10 @@
 [module/updates-pacman-aurhelper]
 type = custom/script
 exec = ~/.config/polybar/scripts/updates-pacman-aurhelper.sh
-interval = 600
+interval = 3600 # 1 hour
 
 format-prefix = "ﯩ  "
 format-foreground = ${color.foreground-updates-pacman-aurhelper}
+click-left = ~/.config/polybar/scripts/updates-pacman-aurhelper.sh
 
 # vi: ft=dosini

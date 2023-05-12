@@ -1,13 +1,22 @@
 #!/bin/sh
 
-if ! updates_arch=$(checkupdates 2> /dev/null | wc -l ); then
-    updates_arch=0
-fi
+pacmanupdates=$(checkupdates)
+aurupdates=$(yay -Qum --devel --timeupdate)
 
-if ! updates_aur=$(yay -Qum 2> /dev/null | wc -l); then
-    updates_aur=0
-fi
+updates_arch=$(checkupdates | wc -l)
+updates_aur=$(yay -Qum --devel --timeupdate | wc -l)
 
 updates=$(("$updates_arch" + "$updates_aur"))
+
+updatetext="$pacmanupdates\n$aurupdates"
+
+if [ "$updates_arch" -eq 0 ]; then
+    updatetext="$aurupdates"
+fi
+
+# If more then 0 updates
+if [ "$updates" -gt 0 ]; then
+    ~/.dotfiles/scripts/update-notification.sh "$updatetext" &
+fi
 
 echo $updates
