@@ -5,6 +5,6 @@ monitor = DP-2
 
 modules-left = bspwm
 modules-center =  
-modules-right = info-hackspeed bsp-layout updates-pacman-aurhelper cpu pulseaudio gpt network do-not-disturb time date
+modules-right = bsp-layout updates-pacman-aurhelper pulseaudio gpt do-not-disturb time date
 
 # vi: ft=dosini
