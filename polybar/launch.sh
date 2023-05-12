@@ -1,8 +1,8 @@
 killall polybar
 
-polybar main &
-polybar secondary &
-polybar third &
+polybar main -r &
+polybar secondary -r &
+polybar third -r &
 
 
 
