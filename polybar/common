@@ -1,8 +1,8 @@
 [section/common]
-width = 100%
-height = 35
-offset-x = 0
-offset-y = 0
+width = 100%:-40
+height = 40
+offset-x = 20
+offset-y = 10
 
 background = ${color.background}
 foreground = ${color.foreground}
@@ -10,15 +10,18 @@ foreground = ${color.foreground}
 padding = 2
 module-margin = 2
 
-border-bottom-size = 5
-border-bottom-color = ${color.border}
+border-size = 0
+border-color = ${color.border}
 
-#font-0 = "Jua:size=13;0"
-font-0 = "Fira Code:size=8;1"
-font-1 = "JetBrainsMono Nerd Font:size=12;1"
+radius = 8
+
+font-0 = "JetBrainsMono:size=10;4"
+#font-0 = "Jua:size=10;2"
+#font-0 = "Fira Code:size=7:0"
+font-1 = "JetBrainsMono Nerd Font:size=12;4"
 
 # Block fonts for CPU module
-font-2 = "3270Medium Nerd Font:size=12;1"
+font-2 = "3270Medium Nerd Font:size=12;4"
 
 wm-restack = bspwm
 override-redirect = true
