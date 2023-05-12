@@ -10,20 +10,20 @@ enable-scroll = true
 wrapping-scroll = false
 reverse-scroll = false
 
-format = <label-state> <label-mode>
+format = <label-state>
 label-padding = 2
 
 label-focused = 
 label-focused-foreground = ${color.foreground-workspace-focused}
-label-focused-background = ${color.background}
+#label-focused-background = #ffffff
 label-focused-padding = 1
 
 label-unfocused = 
-label-unfocused-foreground = ${color.background}
-label-unfocused-background = ${color.background}
+#label-unfocused-foreground = ${color.background}
+#label-unfocused-background = ${color.background}
 label-unfocused-padding = 1
 
-label-occupied = 
+label-occupied = 綠
 label-occupied-foreground = ${color.foreground-workspace-occupied}
 label-occupied-padding = 1
 
