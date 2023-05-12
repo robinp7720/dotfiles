@@ -37,7 +37,7 @@ bspc config remove_disabled_monitors    true
 bspc config paddingless_monocle false
 bspc config borderless_monocle  true
 bspc config gapless_monocle     true
-bspc config single_monocle      true
+bspc config single_monocle      false
 
 # I have no clue what this does, but it's still here
 bspc config directional_focus_tightness high
