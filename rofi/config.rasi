@@ -1,7 +1,7 @@
 configuration {
-    terminal: "alacritty";
+    terminal: "kitty";
 
-    ssh-command: "alacritty -e {ssh-client} {host} [-p {port}]";
+    ssh-command: "{terminal} -e {ssh-client} {host} [-p {port}]";
     run-shell-command: "{terminal} -e {cmd}";
 
     drun-show-actions: true;
