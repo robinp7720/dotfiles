@@ -63,14 +63,14 @@ if [[ "$class" == "zoom" ]]; then
 fi
 
 # Rules for custom terminal windows
-if [[ "$class" == "Termite" ]]; then
+if [[ "$class" == "Alacritty" ]]; then
 	if [[ "$title" == "Music" ]]; then
 		echo "state=floating"
 		echo "sticky=on"
 		echo "locked=on"
 		echo "focus=on"
 		echo "border=off"
-		echo "rectangle=1200x500+3840+40"	
+		echo "rectangle=1200x500+4800+767"	
 	fi
 
 	if [[ "$title" == "Calendar" ]]; then
@@ -78,8 +78,8 @@ if [[ "$class" == "Termite" ]]; then
 		echo "sticky=on"
 		echo "locked=on"
 		echo "focus=on"	
-		echo "border=off"
-		echo "rectangle=1200x300+3840+40"		
+		echo "border=on"
+		echo "rectangle=710x300+5250+757"		
 	fi
 fi
 

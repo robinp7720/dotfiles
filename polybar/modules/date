@@ -10,6 +10,6 @@ format-foreground = ${color.foreground-date}
 
 format-prefix = "  "
 
-click-left = termite -t Calendar -e "/home/robin/.scripts/calendar.sh" --hold
+click-left = alacritty -T Calendar -e "/home/robin/.scripts/calendar.sh"
 
 # vi: ft=dosini

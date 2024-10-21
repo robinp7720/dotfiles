@@ -10,6 +10,7 @@ mpd-notification -m /mnt/robin/Music/ &
 redshift &
 kdeconnect-indicator &
 thunar --daemon &
+#ibus-daemon -rxR &
 
 # Run the main mode
 ~/.config/bspwm/modes/all_monitors.sh
