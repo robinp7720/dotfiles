@@ -19,12 +19,12 @@ configuration {
 
     matching: "normal";
     
-    display-run: "";
+    display-run: ">";
     display-drun: "";
     display-ssh: "";
     display-calc: "";
-    display-window: "缾";
-    display-combi: "";
+    display-window: "";
+    display-combi: ">";
 }
 
 @theme "./default.rasi"

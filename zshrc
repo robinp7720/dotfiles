@@ -76,6 +76,7 @@ alias mpv="devour mpv"
 alias ip='ip -c'
 
 alias v='vim'
+alias vim='nvim'
 
 alias cat='bat'
 alias dig='dog'
@@ -86,7 +87,6 @@ alias du='dust'
 
 # Use eza instead of ls on native host only
 
-if [[ "$HOST" == "Tria" ]]; then
     # eza commands
     # general use
     alias ls='eza -lbF --git --icons --header'                                                # list, size, type, git
@@ -94,7 +94,6 @@ if [[ "$HOST" == "Tria" ]]; then
     alias llm='eza -lbGd --git --sort=modified --icons --header'                            # long list, modified date sort
     alias la='eza -lbhHigUmuSa --time-style=long-iso --git --color-scale --icons'  # all list
     alias lx='eza -lbhHigUmuSa@ --time-style=long-iso --git --color-scale --icons' # all + extended list
-fi
 
 # Setup the path
 # ---------------------
@@ -104,6 +103,7 @@ export PATH=$HOME/.gem/ruby/3.0.0/bin:$PATH
 export PATH=$HOME/.cargo/bin:$PATH
 export PATH=$HOME/.local/bin:$PATH
 export PATH="$PATH:$(go env GOBIN):$(go env GOPATH)/bin"
+export PATH="/opt/xpack-arm-none-eabi-gcc-12.2.1-1.2/bin:$PATH"
 
 # Setup android dev tools
 export ANDROID_SDK_ROOT=/opt/android-sdk
