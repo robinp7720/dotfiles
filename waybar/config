@@ -1,222 +1,120 @@
 {
-	"layer": "top",
-	"position": "top",
-
-	"modules-left": [
-		"hyprland/submap",
-		"hyprland/workspaces",
-		"custom/arrow10",
-		"hyprland/window"
-	],
-
-	"modules-right": [
-		"custom/arrow9",
-		"pulseaudio",
-		"custom/arrow8",
-		"network",
-		"custom/arrow7",
-		"memory",
-		"custom/arrow6",
-		"cpu",
-		"custom/arrow5",
-		"temperature",
-		"custom/arrow4",
-		"mpris",
-		"custom/arrow3",
-		"hyprland/language",
-		"custom/arrow2",
-		"tray",
-		"clock#date",
-		"custom/arrow1",
-		"clock#time"
-	],
-
-	// Modules
-
-	"battery": {
-		"interval": 10,
-		"states": {
-			"warning": 30,
-			"critical": 15
+    "layer": "top",
+    "position": "top",
+    "spacing": 0,
+    "height": 34,
+    "modules-left": [
+        "custom/logo1",
+        "hyprland/workspaces",
+		"hyprland/window",
+    ],
+    "modules-center": [
+    ],
+    "modules-right": [
+        "cpu",
+        "memory",
+        "network",
+        "clock"
+    ],
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "on-click": "activate",
+        "on-click-right": "fullscreen",
+        "icon-theme": "WhiteSur",
+        "icon-size": 25,
+        "tooltip-format": "{title}"
+    },
+    "hyprland/workspaces": {
+		"on-click": "activate",
+		"format": "{icon} {windows}",
+		"show-special": true,
+        "persistent_workspaces": {
+            "1": [],
+            "2": [],
+            "3": [],
+            "4": [],
+            "5": [],
+			"6": [],
+			"7": [],
+			"8": [],
+			"9": [],
+			"10": []
 		},
-		"format-time": "{H}:{M:02}",
-		"format": "{icon} {capacity}% ({time})",
-		"format-charging": " {capacity}% ({time})",
-		"format-charging-full": " {capacity}%",
-		"format-full": "{icon} {capacity}%",
-		"format-alt": "{icon} {power}W",
-		"format-icons": [
-			"",
-			"",
-			"",
-			"",
-			""
-		],
-		"tooltip": false
-	},
-
-	"clock#time": {
-		"interval": 10,
-		"format": "{:%H:%M}",
-		"tooltip": false
-	},
-
-	"pulseaudio/slider": {
-		"min": 0,
-		"max": 100,
-		"orientation": "horizontal"
-	},
-
-	"clock#date": {
-		"interval": 20,
-		"format": "{:%e %b %Y}",
-		"tooltip": false
-		//"tooltip-format": "{:%e %B %Y}"
-	},
-
-	"cpu": {
-		"interval": 1,
-		"tooltip": false,
-		"format": " {icon0}{icon1}{icon2}{icon3}{icon4}{icon5}{icon6}{icon7}{icon8}{icon9}{icon10}{icon11}{icon12}{icon13}{icon14}{icon15}{icon16}{icon17}{icon18}{icon19}{icon20}{icon21}{icon22}{icon23}",
-		"format-icons": ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"],
-		"format-alt": " {load}",
-		"states": {
-			"warning": 70,
-			"critical": 90
-		}
-	},
-
-	"sway/language": {
-		"format": " {}",
-		"min-length": 5,
-		"on-click": "swaymsg 'input * xkb_switch_layout next'",
-		"tooltip": false
-	},
-
-	"memory": {
-		"interval": 5,
-		"format": " {used:0.1f}G/{total:0.1f}G",
-		"states": {
-			"warning": 70,
-			"critical": 90
+		"window-rewrite-default": "",
+		"window-rewrite": {
+			"title<.*youtube.*>": "", // Windows whose titles contain "youtube"
+			"class<firefox>": "", // Windows whose classes are "firefox"
+			"class<firefox> title<.*github.*>": "", // Windows whose class is "firefox" and title contains "github". Note that "class" always comes first.
+			"kitty": "", // Windows that contain "foot" in either class or title. For optimization reasons, it will only match against a title if at least one other window explicitly matches against a title.
+			"code": "󰨞",
 		},
-		"tooltip": false
-	},
-
-	"network": {
-		"interval": 5,
-		"format-wifi": " {essid} ({signalStrength}%)",
-		"format-ethernet": " {ifname}",
-		"format-disconnected": "No connection",
-		"format-alt": " {ipaddr}/{cidr}",
-		"tooltip": false
-	},
-
-	"hyprland/submap": {
-		"format": "{}",
-		"tooltip": true,
-		"max-length": 30
-	},
-
+    },
 	"hyprland/window": {
 		"format": "{}",
 		"max-length": 30,
 		"tooltip": false
 	},
-
-	"hyprland/workspaces": {
-		"disable-scroll-wraparound": true,
-		"smooth-scrolling-threshold": 4,
-		"enable-bar-scroll": true,
-		"format": "{name}"
-	},
-
-	"pulseaudio": {
-		"format": "{icon} {volume}%",
-		"format-bluetooth": "{icon} {volume}%",
-		"format-muted": "",
-		"format-icons": {
-			"headphone": "",
-			"hands-free": "",
-			"headset": "",
-			"phone": "",
-			"portable": "",
-			"car": "",
-			"default": ["", ""]
-		},
-		"scroll-step": 1,
-		"on-click": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
-		"tooltip": false
-	},
-
-	"temperature": {
-		"critical-threshold": 90,
+    "cpu": {
+        "interval": 5,
+        "format": " {usage}%"
+    },
+    "memory": {
+        "interval": 5,
+        "format": "  {}%",
+        "max-length": 10
+    },
+    "clock": {
+        "tooltip-format": "{calendar}",
+        "format-alt": "  {:%a, %d %b %Y}",
+        "format": "  {:%I:%M %p}"
+    },
+    "network": {
 		"interval": 5,
-		"format": "{icon} {temperatureC}°",
-		"format-icons": [
-			"",
-			"",
-			"",
-			"",
-			""
-		],
+		"format-wifi": " {essid} ({signalStrength}%)",
+		"format-ethernet": "󰛴 {bandwidthDownBytes} 󰛶 {bandwidthUpBytes}",
+		"format-disconnected": "No connection",
+		"format-alt": " {ipaddr}/{cidr}",
 		"tooltip": false
-	},
-
-	"tray": {
-		"icon-size": 18
-		//"spacing": 10
-	},
-
-	"custom/arrow1": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow2": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow3": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow4": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow5": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow6": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow7": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow8": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow9": {
-		"format": "",
-		"tooltip": false
-	},
-
-	"custom/arrow10": {
-		"format": "",
-		"tooltip": false
-	}
+    },
+    "custom/logo1": {
+        "format": "  ",
+        "tooltip": false,
+        "on-click": "kitty"
+    },
+    "battery": {
+        "format": "{capacity}% {icon}",
+        "format-icons": {
+            "charging": [
+                "󰢜",
+                "󰂆",
+                "󰂇",
+                "󰂈",
+                "󰢝",
+                "󰂉",
+                "󰢞",
+                "󰂊",
+                "󰂋",
+                "󰂅"
+            ],
+            "default": [
+                "󰁺",
+                "󰁻",
+                "󰁼",
+                "󰁽",
+                "󰁾",
+                "󰁿",
+                "󰂀",
+                "󰂁",
+                "󰂂",
+                "󰁹"
+            ]
+        },
+        "format-full": "Charged ",
+        "interval": 5,
+        "states": {
+            "warning": 20,
+            "critical": 10
+        },
+        "tooltip": false
+    }
 }
-
-// vi:ft=jsonc

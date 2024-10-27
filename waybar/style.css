@@ -1,270 +1,125 @@
-/* Keyframes */
-
-@keyframes blink-critical {
-	to {
-		/*color: @white;*/
-		background-color: @critical;
-	}
-}
-
-
-/* Styles */
-
-/* Colors (gruvbox) */
-@define-color black	#282828;
-@define-color red	#cc241d;
-@define-color green	#98971a;
-@define-color yellow	#d79921;
-@define-color blue	#458588;
-@define-color purple	#b16286;
-@define-color aqua	#689d6a;
-@define-color gray	#a89984;
-@define-color brgray	#928374;
-@define-color brred	#fb4934;
-@define-color brgreen	#b8bb26;
-@define-color bryellow	#fabd2f;
-@define-color brblue	#83a598;
-@define-color brpurple	#d3869b;
-@define-color braqua	#8ec07c;
-@define-color white	#ebdbb2;
-@define-color bg2	#504945;
-
-
-@define-color warning 	@bryellow;
-@define-color critical	@red;
-@define-color mode	@black;
-@define-color unfocused	@bg2;
-@define-color focused	@braqua;
-@define-color inactive	@purple;
-@define-color sound	@brpurple;
-@define-color network	@purple;
-@define-color memory	@braqua;
-@define-color cpu	@green;
-@define-color temp	@brgreen;
-@define-color layout	@bryellow;
-@define-color mpris	@aqua;
-@define-color date	@black;
-@define-color time	@white;
-
-/* Reset all styles */
 * {
-	border: none;
-	border-radius: 0;
-	min-height: 0;
-	margin: 0;
-	padding: 0;
-	box-shadow: none;
-	text-shadow: none;
-	icon-shadow: none;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  font-family: FiraCode Nerd Font;
+  font-size: 13px;
 }
 
-/* The whole bar */
-#waybar {
-	background: rgba(40, 40, 40, 0.8784313725); /* #282828e0 */
-	color: @white;
-	font-family: JetBrainsMono Nerd Font Mono, Siji;
-	font-size: 10pt;
-	/*font-weight: bold;*/
+window#waybar {
+  background-color: #181825;
+  transition-property: background-color;
+  transition-duration: 0.5s;
 }
 
-/* Each module */
-#battery,
-#clock,
-#cpu,
-#language,
-#memory,
-#submap,
-#network,
-#pulseaudio,
-#temperature,
-#tray,
-#backlight,
-#idle_inhibitor,
-#disk,
-#user,
-#mpris {
-	padding-left: 8pt;
-	padding-right: 8pt;
+window#waybar.hidden {
+  opacity: 0.5;
 }
 
-/* Each critical module */
-#submap,
-#memory.critical,
-#cpu.critical,
-#temperature.critical,
-#battery.critical.discharging {
-	animation-timing-function: linear;
-	animation-iteration-count: infinite;
-	animation-direction: alternate;
-	animation-name: blink-critical;
-	animation-duration: 1s;
+#workspaces {
+  background-color: transparent;
 }
 
-/* Each warning */
-#network.disconnected,
-#memory.warning,
-#cpu.warning,
-#temperature.warning,
-#battery.warning.discharging {
-	color: @warning;
-}
-
-/* And now modules themselves in their respective order */
-
-/* Current sway mode (resize etc) */
-#submap {
-	color: @white;
-	background: @mode;
-}
-
-/* Workspaces stuff */
 #workspaces button {
-	/*font-weight: bold;*/
-	padding-left: 2pt;
-	padding-right: 2pt;
-	color: @white;
-	background: @unfocused;
+  all: initial;
+  /* Remove GTK theme values (waybar #1351) */
+  min-width: 0;
+  /* Fix weird spacing in materia (waybar #450) */
+  box-shadow: inset 0 -3px transparent;
+  /* Use box-shadow instead of border so the text isn't offset */
+  padding: 6px 18px;
+  margin: 6px 3px;
+  border-radius: 4px;
+  background-color: #1e1e2e;
+  color: #cdd6f4;
 }
 
-/* Inactive (on unfocused output) */
-#workspaces button.visible {
-	color: @white;
-	background: @inactive;
+#workspaces button.active, #workspaces button.active:hover {
+  color: #1e1e2e;
+  background-color: #cdd6f4;
 }
 
-/* Active (on focused output) */
-#workspaces button.focused {
-	color: @black;
-	background: @focused;
-}
-
-/* Contains an urgent window */
-#workspaces button.urgent {
-	color: @black;
-	background: @warning;
-}
-
-/* Style when cursor is on the button */
 #workspaces button:hover {
-	background: @black;
-	color: @white;
+  box-shadow: inherit;
+  text-shadow: inherit;
+  color: #cdd6f4;
+  background-color: #45475a;
+  border-radius: 15px;
+  transition: border-radius 1s;
+}
+
+#workspaces button.urgent {
+  background-color: #f38ba8;
+}
+
+#cpu,
+#memory,
+#battery,
+#network,
+#window,
+#clock {
+  border-radius: 4px;
+  margin: 6px 3px;
+  padding: 6px 12px;
+  background-color: #1e1e2e;
+  color: #181825;
+}
+
+#custom-logo1 {
+  padding-right: 7px;
+  padding-left: 7px;
+  margin-left: 5px;
+  font-size: 15px;
+  border-radius: 8px 0px 0px 8px;
+  color: #1793d1;
 }
 
 #window {
-	margin-right: 35pt;
-	margin-left: 35pt;
-}
-
-#pulseaudio {
-	background: @sound;
-	color: @black;
-}
-
-#network {
-	background: @network;
-	color: @white;
+  background-color: #94e2d5;
 }
 
 #memory {
-	background: @memory;
-	color: @black;
+  background-color: #fab387;
 }
 
 #cpu {
-	background: @cpu;
-	color: @white;
-}
-
-#temperature {
-	background: @temp;
-	color: @black;
-}
-
-#language {
-	background: @layout;
-	color: @black;
-}
-
-#mpris{
-	background: @mpris;
-	color: @white;
+  background-color: #a6e3a1;
 }
 
 #battery {
-	background: @battery;
-	color: @white;
+  background-color: #f38ba8;
 }
 
-#tray {
-	background: @date;
+#battery.warning,
+#battery.critical,
+#battery.urgent {
+  background-color: #ff0000;
+  color: #FFFF00;
 }
 
-#clock.date {
-	background: @date;
-	color: @white;
+#battery.charging {
+  background-color: #a6e3a1;
+  color: #181825;
 }
 
-#clock.time {
-	background: @time;
-	color: @black;
+#network {
+  background-color: #94e2d5;
+  padding-right: 17px;
 }
 
-#custom-arrow1 {
-	font-size: 11pt;
-	color: @time;
-	background: @date;
+#clock {
+  background-color: #cba6f7;
 }
 
-#custom-arrow2 {
-	font-size: 11pt;
-	color: @date;
-	background: @layout;
+tooltip {
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #131822;
 }
 
-#custom-arrow3 {
-	font-size: 11pt;
-	color: @layout;
-	background: @mpris;
+tooltip label {
+  padding: 5px;
+  background-color: #131822;
 }
 
-#custom-arrow4 {
-	font-size: 11pt;
-	color: @mpris;
-	background: @temp;
-}
 
-#custom-arrow5 {
-	font-size: 11pt;
-	color: @temp;
-	background: @cpu;
-}
-
-#custom-arrow6 {
-	font-size: 11pt;
-	color: @cpu;
-	background: @memory;
-}
-
-#custom-arrow7 {
-	font-size: 11pt;
-	color: @memory;
-	background: @network;
-}
-
-#custom-arrow8 {
-	font-size: 11pt;
-	color: @network;
-	background: @sound;
-}
-
-#custom-arrow9 {
-	font-size: 11pt;
-	color: @sound;
-	background: transparent;
-}
-
-#custom-arrow10 {
-	font-size: 11pt;
-	color: @unfocused;
-	background: transparent;
-}
