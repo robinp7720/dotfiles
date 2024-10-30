@@ -13,9 +13,23 @@
     "modules-right": [
         "cpu",
         "memory",
+        "hyprland/language",
         "network",
+        "power-profiles-daemon",
+        "battery",
         "clock"
     ],
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+        "tooltip": true,
+        "format-icons": {
+            "default": "",
+            "performance": "",
+            "balanced": "",
+            "power-saver": ""
+        }
+    },
     "wlr/taskbar": {
         "format": "{icon}",
         "on-click": "activate",
@@ -48,6 +62,9 @@
 			"kitty": "", // Windows that contain "foot" in either class or title. For optimization reasons, it will only match against a title if at least one other window explicitly matches against a title.
 			"code": "󰨞",
 		},
+    },
+    "hyprland/language": {
+        "on-click": "hyprctl switchxkblayout all next"
     },
 	"hyprland/window": {
 		"format": "{}",

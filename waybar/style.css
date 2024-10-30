@@ -57,7 +57,9 @@ window#waybar.hidden {
 #battery,
 #network,
 #window,
-#clock {
+#language,
+#clock,
+#power-profiles-daemon {
   border-radius: 4px;
   margin: 6px 3px;
   padding: 6px 12px;
@@ -82,6 +84,14 @@ window#waybar.hidden {
   background-color: #fab387;
 }
 
+#language {
+  background-color: #fab387;
+}
+
+#power-profiles-daemon {
+  background-color: #a6e3a1;
+}
+
 #cpu {
   background-color: #a6e3a1;
 }
@@ -93,8 +103,7 @@ window#waybar.hidden {
 #battery.warning,
 #battery.critical,
 #battery.urgent {
-  background-color: #ff0000;
-  color: #FFFF00;
+  background-color: #ff5a48;
 }
 
 #battery.charging {
