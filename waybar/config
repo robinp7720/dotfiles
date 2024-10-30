@@ -79,7 +79,7 @@
     "custom/logo1": {
         "format": "  ",
         "tooltip": false,
-        "on-click": "kitty"
+        "on-click": "~/.config/rofi/launcher.sh"
     },
     "battery": {
         "format": "{capacity}% {icon}",
