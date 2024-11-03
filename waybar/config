@@ -19,6 +19,12 @@
         "battery",
         "clock"
     ],
+    "backlight/slider": {
+        "min": 0,
+        "max": 100,
+        "orientation": "horizontal",
+        "device": "intel_backlight"
+    },
     "power-profiles-daemon": {
         "format": "{icon}",
         "tooltip-format": "Power profile: {profile}\nDriver: {driver}",

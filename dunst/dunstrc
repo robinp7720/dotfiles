@@ -320,8 +320,9 @@
     default_icon = preferences-system-notifications-symbolic
 
 [urgency_normal]
-    background = "#cdd6f4"
+    background = "#94e2d5"
     foreground = "#1e1e2e"
+    frame_color = "#94e2d5"
     timeout = 30
     # Icon for notifications with normal urgency, uncomment to enable
     default_icon = preferences-system-notifications-symbolic
