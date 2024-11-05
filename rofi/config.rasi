@@ -7,7 +7,7 @@ configuration {
     drun-show-actions: true;
     
     modi: [combi];
-    combi-modi: [window,drun,ssh];
+    combi-modi: [window,drun,ssh,run];
 
     show-icons: true;
 
