@@ -8,7 +8,7 @@ source ~/.config/environment
 picom &
 mpd-notification -m /mnt/robin/Music/ &
 redshift &
-kdeconnect-indicator &
+kdeconnectd &
 thunar --daemon &
 #ibus-daemon -rxR &
 
