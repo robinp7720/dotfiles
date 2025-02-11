@@ -17,7 +17,7 @@ bspc config bottom_padding  0
 bspc config left_padding    0
 bspc config right_padding   0
 
-superpaper &
+#superpaper &
 
 xset -dpms
 xset s off
