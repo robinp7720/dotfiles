@@ -1,1 +1,1 @@
-cp ~/.config/hypr/monitor_layouts/game_external.conf ~/.config/hypr/monitors.conf
+cp ~/.config/hypr/monitor_layouts/game.conf ~/.config/hypr/monitors.conf
