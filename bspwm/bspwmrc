@@ -10,11 +10,13 @@ mpd-notification -m /mnt/robin/Music/ &
 redshift &
 kdeconnectd &
 thunar --daemon &
+
 #ibus-daemon -rxR &
 
 # Run the main mode
 ~/.config/bspwm/modes/all_monitors.sh
 
+plank &
 
 # Scripts to automate desktop actions
 /home/robin/.config/bspwm/focus_watcher &

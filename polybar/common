@@ -16,12 +16,12 @@ border-color = ${color.border}
 radius = 8
 
 font-0 = "JetBrainsMono:size=10;4"
-#font-0 = "Jua:size=10;2"
-#font-0 = "Fira Code:size=7:0"
-font-1 = "JetBrainsMono Nerd Font:size=12;4"
+font-1 = "Jua:size=10;2"
+font-2 = "Fira Code:size=7:0"
+font-3 = "JetBrainsMono Nerd Font:size=12;4"
 
 # Block fonts for CPU module
-font-2 = "3270Medium Nerd Font:size=12;4"
+font-4 = "3270Medium Nerd Font:size=12;4"
 
 wm-restack = bspwm
 override-redirect = true
