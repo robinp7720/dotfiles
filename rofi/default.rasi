@@ -38,7 +38,7 @@ mainbox {
     padding:                     10px;
     border:                      0px solid;
     border-radius:               0; 
-    border-color:                @selected;
+    border-color:                @primary;
     background-color:            @background;
     children:                    [ "inputbar", "listview" ];
 }
@@ -51,9 +51,9 @@ inputbar {
     padding:                     10px;
     border:                      none;
     border-radius:               8px;
-    border-color:                @selected;
-    background-color:            #a6e3a1;
-    text-color:                  #181825;
+    border-color:                @on-primary-fixed;
+    background-color:            @primary;
+    text-color:                  @on-primary;
     children:                    [ "prompt", "entry" ];
 }
 
@@ -116,7 +116,7 @@ element {
     padding:                     5px;
     border:                      0px solid;
     border-radius:               0px;
-    border-color:                @selected;
+    border-color:                @tertiary;
     background-color:            transparent;
     text-color:                  @foreground;
     orientation:                 horizontal;
