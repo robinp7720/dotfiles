@@ -30,7 +30,7 @@
     height = 300
 
     # Position the notification in the top right corner
-    origin = top-right
+    origin = bottom-right
 
     # Offset from the origin
     offset = 10x10
@@ -92,7 +92,7 @@
 
     # Defines width in pixels of frame around the notification window.
     # Set to 0 to disable.
-    frame_width = 3
+    frame_width = 0
 
     # Defines color of the frame around the notification window.
     frame_color = "#181825"
@@ -201,7 +201,7 @@
     enable_recursive_icon_lookup = true
 
     # Set icon theme (only used for recursive icon lookup)
-    icon_theme = Adwaita
+    icon_theme = Moka
     # You can also set multiple icon themes, with the leftmost one being used first.
     # icon_theme = "Adwaita, breeze"
 
@@ -313,28 +313,28 @@
 [urgency_low]
     # IMPORTANT: colors have to be defined in quotation marks.
     # Otherwise the "#" and following would be interpreted as a comment.
-    background = "#1e1e2e"
-    foreground = "#cdd6f4"
+    background = "#c3c5dd"
+    foreground = "#2c2f42"
     timeout = 10
     # Icon for notifications with low urgency, uncomment to enable
-    default_icon = preferences-system-notifications-symbolic
+    default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
 
 [urgency_normal]
-    background = "#94e2d5"
-    foreground = "#1e1e2e"
+    background = "#121318"
+    foreground = "#e3e1e9"
     frame_color = "#94e2d5"
     timeout = 30
     # Icon for notifications with normal urgency, uncomment to enable
-    default_icon = preferences-system-notifications-symbolic
+    default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
 
 [urgency_critical]
-    background = "#fab387"
-    foreground = "#333333"
+    background = "#ffb4ab"
+    foreground = "#690005"
     #frame_color = "#ff0000"
     timeout = 0
     # Icon for notifications with critical urgency, uncomment to enable
     #default_icon = /path/to/icon
-    default_icon = preferences-system-notifications-symbolic
+    default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
 
 # Every section that isn't one of the above is interpreted as a rules to
 # override settings for certain messages.
