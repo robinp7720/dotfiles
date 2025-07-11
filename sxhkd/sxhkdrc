@@ -1,0 +1,224 @@
+##################################
+#     wm independent hotkeys     #
+##################################
+
+ctrl + Escape
+	find-cursor -d 10 -s 100 -w 0 -f -c "#333333"
+
+# program launcher
+super + r
+	rofi -show run
+
+# Program launcher has been replaced with albert
+super + space
+    ~/.config/rofi/launcher.sh
+
+super + p
+	rofi-pass
+
+# reload sxhkd
+super + Escape
+	pkill -USR1 -x sxhkd
+
+super + c
+    rofi -show calc -modi calc -no-show-match -no-sort
+
+# terminal
+super + x
+	kitty
+
+########################
+#     bspwm hotkeys    #
+########################
+
+# quit bspwm normally
+super + alt + Escape
+	bspc quit
+
+# close and kill
+super + {_,shift + } + w
+	bspc node -{c,k}
+
+# if the current node is automatic, send it to the last manual, otherwise pull the last leaf
+super + y
+	bspc query -N -n focused.automatic && bspc node -n last.!automatic || bspc node last.leaf -n focused
+
+# equalize tree
+super + b
+    bspc node @/ -E
+
+# balance tree
+super + shift + b
+	bspc node @/ -B
+
+super + a
+	bsp-layout cycle
+
+#######################
+#     state/flags     #
+#######################
+
+# toggle monocle and tiled
+super shift + F5
+	bspc desktop -l next
+
+# set the window state
+super + shift + {F1,F2,F3,F4}
+	bspc node -t {tiled,pseudo_tiled,floating,fullscreen}
+
+# set the node flags
+super + ctrl + {F1,F2,F3}
+	bspc node -g {locked,sticky,private}
+
+######################
+#     focus/swap     #
+######################
+
+# focus the node in the given direction (Vim style (on DVORAK)
+super + {_,shift + }{d,h,t,n}
+	bspc node -{f,s} {west,south,north,east}
+
+# and with arrow keys
+super + {_,shift + }{Left, Down, Up, Right}
+	bspc node -{f,s} {west,south,north,east}
+
+# focus the next/previous node
+super + {_,shift + }Tab
+	bspc node -f {next,prev}
+
+# focus the next/previous desktop
+ctrl + {XF86Back,XF86Forward}
+	bspc desktop -f {prev,next}
+
+# focus the last node/desktop
+super + {grave,Tab}
+	bspc {node,desktop} -f last
+
+# circulate the tree
+super + {o,e}
+    bspc node @/ -C {forward, backward}
+
+super + shift + {o,e}
+    bspc node @/ -R {90, 270}
+
+# flip the tree
+super + {v,z}
+    bspc node @/ -F {horizontal, vertical}
+
+# focus or send to the given desktop
+super + {_,shift + }{1-9,0}
+	bspc {desktop -f,node -d} '{I,II,III,IV,V,VI,VII,VIII,IX,X}'
+
+#####################
+#     preselect     #
+#####################
+
+# preselect the direction
+super + ctrl + {Left,Down,Up,Right}
+	bspc node -p {west,south,north,east}
+
+# preselect the ratio
+super + ctrl + {1-9}
+	bspc node -o 0.{1-9}
+
+# cancel the preselection for the focused node
+super + ctrl + Escape
+	bspc node -p cancel
+
+# cancel the preselection for the focused desktop
+super + ctrl + shift + Escape
+	bspc query -N -d | xargs -I id -n 1 bspc node id -p cancel
+
+#################################
+#     resize tiled/floating     #
+#################################
+
+# expand the tiled space in the given direction
+super + alt + {Left,Down,Up,Right}
+	bspc node {@west -r -10,@south -r +10,@north -r -10,@east -r +10}
+
+# contract the tiled space in the given direction
+super + alt + shift + {Left,Down,Up,Right}
+	bspc node {@east -r -10,@north -r +10,@south -r -10,@west -r +10}
+
+# move a floating window
+super + {Left,Down,Up,Right}
+	xdo move {-x -20,-y +20,-y -20,-x +20}
+
+#####################################
+#     pointer focus/move/resize     #
+#####################################
+
+# focus
+# ~button1
+#	bspc pointer -g focus
+
+# start move/resize
+# super + button{1-3}
+#	; bspc pointer -g {move,resize_side,resize_corner}
+
+# end move/resize
+# super + @button{1-3}
+#	bspc pointer -u
+
+#########################
+#     media buttons     #
+#########################
+
+# play/pause
+XF86AudioPlay
+	playerctl play-pause
+
+# stop
+XF86AudioStop
+	playerctl stop
+
+# next
+XF86AudioNext
+	playerctl next
+
+# prev
+XF86AudioPrev
+	playerctl previous
+
+# volume up
+XF86AudioRaiseVolume
+	pulseaudio-ctl up
+
+# volume down
+XF86AudioLowerVolume
+	pulseaudio-ctl down
+
+# mute/unmute
+XF86AudioMute
+	pulseaudio-ctl mute
+
+######################
+#     screenshot     #
+######################
+
+@Print
+    ~/.scripts/screenshot.sh -s
+
+@ctrl + Print
+    ~/.scripts/screenshot.sh
+
+alt + Print
+    notify-send "Started 10 second screen recording"; setsid byzanz-record ~/Videos/Screencasts/$(date +%y-%m-%d).gif; notify-send "Recording finished" "Saved to Screencasts directory" 
+
+super + alt + a
+	sgpt "$(xclip -o)" | xclip -in
+
+######################
+#     Smart Home     #
+######################
+
+super + l
+    lights on
+
+
+super + alt + l
+    lights off
+
+super + alt + p
+    mpc toggle
