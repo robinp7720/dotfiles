@@ -1,3 +1,5 @@
+@import 'colors.css';
+
 * {
   border: none;
   border-radius: 0;
@@ -7,7 +9,7 @@
 }
 
 window#waybar {
-  background-color: #181825;
+  background-color: @surface_container_lowest;
   transition-property: background-color;
   transition-duration: 0.5s;
 }
@@ -30,26 +32,25 @@ window#waybar.hidden {
   padding: 6px 18px;
   margin: 6px 3px;
   border-radius: 4px;
-  background-color: #1e1e2e;
-  color: #cdd6f4;
+  background-color: @surface_container_low;
+  color: @on_surface;
 }
 
 #workspaces button.active, #workspaces button.active:hover {
-  color: #1e1e2e;
-  background-color: #cdd6f4;
+  color: @inverse_on_surface;
+  background-color: @inverse_surface;
 }
 
 #workspaces button:hover {
   box-shadow: inherit;
   text-shadow: inherit;
-  color: #cdd6f4;
-  background-color: #45475a;
-  border-radius: 15px;
-  transition: border-radius 1s;
+  color: @on_surface;
+  background-color: @surface_container;
 }
 
 #workspaces button.urgent {
-  background-color: #f38ba8;
+  color: @on_error;
+  background-color: @error;
 }
 
 #cpu,
@@ -63,8 +64,8 @@ window#waybar.hidden {
   border-radius: 4px;
   margin: 6px 3px;
   padding: 6px 12px;
-  background-color: #1e1e2e;
-  color: #181825;
+  background-color: @secondary;
+  color: @on_secondary;
 }
 
 #custom-logo1 {
@@ -73,37 +74,34 @@ window#waybar.hidden {
   margin-left: 5px;
   font-size: 15px;
   border-radius: 8px 0px 0px 8px;
-  color: #1793d1;
+  color: @primary;
 }
 
 #window {
-  background-color: #94e2d5;
+  background-color: @primary;
+  color: @on_primary;
 }
 
 #memory {
-  background-color: #fab387;
 }
 
 #language {
-  background-color: #fab387;
 }
 
 #power-profiles-daemon {
-  background-color: #a6e3a1;
 }
 
 #cpu {
-  background-color: #a6e3a1;
 }
 
 #battery {
-  background-color: #f38ba8;
 }
 
 #battery.warning,
 #battery.critical,
 #battery.urgent {
-  background-color: #ff5a48;
+  background-color: @error;
+  color: @on_error;
 }
 
 #battery.charging {
@@ -111,13 +109,9 @@ window#waybar.hidden {
   color: #181825;
 }
 
-#network {
-  background-color: #94e2d5;
-  padding-right: 17px;
-}
-
 #clock {
-  background-color: #cba6f7;
+  background-color: @tertiary;
+  color: @on_tertiary;
 }
 
 #backlight-slider slider {
