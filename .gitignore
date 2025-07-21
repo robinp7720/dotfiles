@@ -1,3 +1,6 @@
 hypr/hyprland.conf
 hypr/monitors.conf
 dunst/dunstrc
+colors.conf
+waybar/colors.css
+colors.rasi
