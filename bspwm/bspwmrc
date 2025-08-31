@@ -16,7 +16,7 @@ thunar --daemon &
 # Run the main mode
 ~/.config/bspwm/modes/all_monitors.sh
 
-plank &
+cairo-dock &
 
 # Scripts to automate desktop actions
 /home/robin/.config/bspwm/focus_watcher &
