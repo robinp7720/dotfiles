@@ -1,7 +1,7 @@
-# If you come from bash you might have to change your $PATH.
-
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
+
+AURHELPER="paru"
 
 # Options for oh-my-zsh
 # ---------------------
@@ -50,9 +50,20 @@ if [[ -n $VIRTUAL_ENV && -e "${VIRTUAL_ENV}/bin/activate" ]]; then
   source "${VIRTUAL_ENV}/bin/activate"
 fi
 
+
 # Configure aliases
 # ---------------------
-alias update='yay -Syu --noconfirm --sudoloop --devel --timeupdate --batchinstall=false --pgpfetch'
+
+if [[ $AURHELPER == "paru" ]]; then
+    alias update='paru -Syu --noconfirm --sudoloop --devel --pgpfetch'
+elif [[ $AURHELPER == "yay" ]]; then
+    alias update='yay -Syu --noconfirm --sudoloop --devel --timeupdate --batchinstall=false --pgpfetch'
+else
+    echo "No valid AUR helper set in .zshrc"
+fi
+
+
+alias yay=$AURHELPER
 
 # Deleting stuff is dangerous
 alias rrm="/usr/bin/rm"
