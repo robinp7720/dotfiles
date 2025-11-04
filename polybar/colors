@@ -8,6 +8,7 @@ background-date = ${color.background}
 background-github = ${color.background}
 background-tray = ${color.background}
 background-network = ${color.background}
+background-bluetooth = ${color.background}
 
 foreground-error = #FFCCCC
 
@@ -18,6 +19,7 @@ foreground-cpu = #7FBD68
 foreground-updates-pacman-aurhelper = #333333
 foreground-info-hackspeed = #AF68BD 
 foreground-do-not-disturb = #333333
+foreground-bluetooth = #333333
 
 foreground-workspace-occupied = #333333
 foreground-workspace-focused = #333333

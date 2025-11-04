@@ -5,6 +5,6 @@ monitor = DP-2
 
 modules-left = bspwm
 modules-center =  
-modules-right = updates-pacman-aurhelper pulseaudio do-not-disturb time date
+modules-right = updates-pacman-aurhelper pulseaudio bluetooth do-not-disturb time date
 
 # vi: ft=dosini

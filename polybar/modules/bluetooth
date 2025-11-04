@@ -1,0 +1,11 @@
+[module/bluetooth]
+type = custom/script
+exec = ~/.config/polybar/scripts/bluetooth.sh
+interval = 5
+
+format-foreground = ${color.foreground-bluetooth}
+format-background = ${color.background-bluetooth}
+
+label = %output%
+
+# vi: ft=dosini
