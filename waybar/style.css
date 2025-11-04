@@ -57,6 +57,8 @@ window#waybar.hidden {
 #memory,
 #battery,
 #network,
+#bluetooth,
+#custom-headphones,
 #window,
 #language,
 #clock,
@@ -80,6 +82,16 @@ window#waybar.hidden {
 #window {
   background-color: @primary;
   color: @on_primary;
+}
+
+#bluetooth.off {
+  background-color: @error;
+  color: @on_error;
+}
+
+#custom-headphones.disconnected {
+  background-color: @error;
+  color: @on_error;
 }
 
 #memory {
@@ -144,5 +156,3 @@ tooltip label {
   padding: 5px;
   background-color: #131822;
 }
-
-

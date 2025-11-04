@@ -6,6 +6,7 @@
     "modules-left": [
         "custom/logo1",
         "hyprland/workspaces",
+        "niri/workspaces",
 		"hyprland/window",
     ],
     "modules-center": [
@@ -15,6 +16,8 @@
         "memory",
         "hyprland/language",
         "network",
+        "bluetooth",
+        "custom/headphones",
         "power-profiles-daemon",
         "battery",
         "clock"
@@ -69,6 +72,15 @@
 			"code": "󰨞",
 		},
     },
+    "niri/workspaces": {
+        "all-outputs": true,
+        "format": "{icon} {value}",
+        "format-icons": {
+            "focused": "",
+            "active": "",
+            "default": ""
+        }
+    },
     "hyprland/language": {
         "on-click": "hyprctl switchxkblayout all next"
     },
@@ -98,6 +110,26 @@
 		"format-disconnected": "No connection",
 		"format-alt": " {ipaddr}/{cidr}",
 		"tooltip": false
+    },
+    "bluetooth": {
+        "format": " {status}",
+        "format-connected": " {num_connections}",
+        "format-on": " 0",
+        "format-off": " off",
+        "tooltip-format": "{controller_alias}\n{status}\nConnections: {num_connections}",
+        "tooltip-format-connected": "{controller_alias}\nConnections: {num_connections}\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}",
+        "tooltip-format-off": "{controller_alias}\nController off",
+        "on-click": "~/.dotfiles/waybar/scripts/bluetooth_toggle.sh"
+    },
+    "custom/headphones": {
+        "exec": "~/.dotfiles/waybar/scripts/headphones_status.py",
+        "return-type": "json",
+        "interval": 10,
+        "tooltip": true,
+        "env": {
+            "HEADPHONES_ALIAS": "Headphones"
+        }
     },
     "custom/logo1": {
         "format": "  ",
