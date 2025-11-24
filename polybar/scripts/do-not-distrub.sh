@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 notifications_enabled_icon="/usr/share/icons/Adwaita/64x64/apps/preferences-system-notifications-symbolic.symbolic.png"
 

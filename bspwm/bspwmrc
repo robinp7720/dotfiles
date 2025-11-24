@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/usr/bin/env bash
 
 # SET DESKTOP ENVIRONMENT VARIABLES
 
@@ -48,7 +48,7 @@ bspc config directional_focus_tightness high
 # Set window rules
 bspc rule -a Pinentry state=floating
 bspc rule -a Plank layer=above manage=on border=off
-bspc rule -a Nightly state=tiling”
+bspc rule -a Nightly state=tiling"
 
 bspc config external_rules_command "/home/robin/.config/bspwm/external_rules"
 
@@ -65,7 +65,7 @@ export SSH_AUTH_SOCK
 export __GL_MaxFramesAllowed=0
 
 # Fix intellij
-.scripts/java_nonreparenting_wm_hack.sh
+~/.scripts/java_nonreparenting_wm_hack.sh
 
 # And now let me have a nice cursor
 xsetroot -cursor_name left_ptr

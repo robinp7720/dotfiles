@@ -39,10 +39,13 @@ ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 
 # Enable oh-my-zsh
 # ---------------------
-source $ZSH/oh-my-zsh.sh
+if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
+  source "$ZSH/oh-my-zsh.sh"
+fi
 
-
-source ~/.config/environment
+if [[ -r "$HOME/.config/environment" ]]; then
+  source "$HOME/.config/environment"
+fi
 
 #source /opt/esp-idf/export.sh
 
@@ -113,7 +116,17 @@ export PATH=/usr/local/bin:$PATH
 export PATH=$HOME/.gem/ruby/3.0.0/bin:$PATH
 export PATH=$HOME/.cargo/bin:$PATH
 export PATH=$HOME/.local/bin:$PATH
-export PATH="$PATH:$(go env GOBIN):$(go env GOPATH)/bin"
+if command -v go >/dev/null 2>&1; then
+    __go_bin="$(go env GOBIN 2>/dev/null)"
+    __go_path="$(go env GOPATH 2>/dev/null)"
+    if [[ -n "$__go_bin" ]]; then
+        export PATH="$PATH:$__go_bin"
+    fi
+    if [[ -n "$__go_path" ]]; then
+        export PATH="$PATH:$__go_path/bin"
+    fi
+    unset __go_bin __go_path
+fi
 export PATH="/opt/xpack-arm-none-eabi-gcc-12.2.1-1.2/bin:$PATH"
 
 # Setup android dev tools
@@ -169,4 +182,3 @@ greeting() {
 }
 
 greeting
-

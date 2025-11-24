@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 bspc subscribe node_focus | 
     while read -a msg ; do
@@ -29,6 +30,5 @@ bspc subscribe node_focus |
 
         LAST_COLOR=$BACKGROUND_COLOR
     done
-
 
 
