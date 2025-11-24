@@ -5,12 +5,18 @@ set -euo pipefail
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hyprlock"
 OUT="$CACHE_DIR/album.jpg"
-FALLBACK="${HOME}/Pictures/Wallpapers/PXL_20230314_080809539.jpg"
 
 mkdir -p "$CACHE_DIR"
 
+status="$(playerctl status 2>/dev/null || true)"
 art_url="$(playerctl metadata mpris:artUrl 2>/dev/null || true)"
 local_path=""
+
+# If nothing is playing (or no status available), remove any old cover and exit.
+if [[ -z "$status" || "$status" != "Playing" ]]; then
+  rm -f "$OUT"
+  exit 0
+fi
 
 if [[ -n "$art_url" ]]; then
   case "$art_url" in
@@ -37,9 +43,5 @@ if [ -n "$local_path" ] && [ -f "$local_path" ]; then
   exit 0
 fi
 
-# Fallback image so Hyprlock always has something to show
-if [ -f "$FALLBACK" ]; then
-  cp "$FALLBACK" "$OUT"
-else
-  : > "$OUT"  # create empty file to keep hyprlock happy
-fi
+# No art available: remove cached file so Hyprlock shows nothing
+rm -f "$OUT"
