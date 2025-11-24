@@ -60,6 +60,9 @@ if command -v gcalcli >/dev/null 2>&1; then
       eta="soon"
     fi
 
+    # Trim trailing details after a comma to keep names short
+    summary="${summary%%,*}"
+
     out="${summary}"
     if [ -n "${eta:-}" ]; then
       out="${out} in ${eta}"
