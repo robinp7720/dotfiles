@@ -1,7 +1,7 @@
 ;; Window placement for agenda widget.
 
 (defwindow agenda_widget
-  :geometry (geometry :x "40px" :y "230px" :width "560px")
+  :geometry (geometry :x "40px" :y "300px" :width "560px")
   :stacking "bottom"
   :monitor "DP-4"
   :anchor "top right"
