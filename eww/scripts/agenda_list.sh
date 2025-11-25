@@ -97,4 +97,7 @@ def main():
     print(json.dumps(events[:MAX_ITEMS]))
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        print("[]")
