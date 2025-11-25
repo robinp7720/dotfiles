@@ -19,3 +19,7 @@ output_path = '~/.config/rofi/colors.rasi'
 [templates.dunst]
 input_path = '~/.config/matugen/templates/dunstrc'
 output_path = '~/.config/dunst/dunstrc'
+
+[templates.eww]
+input_path = '~/.config/matugen/templates/eww.scss'
+output_path = '~/.config/eww/colors.scss'
