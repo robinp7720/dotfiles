@@ -46,14 +46,39 @@ window {
   min-width: 540px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
+.agenda-list {
+  margin-top: 10px;
+}
+.agenda-item {
+  background-color: $surface_container;
+  border: 1px solid $outline_variant;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
 .agenda-title {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.4px;
   color: $primary;
 }
-.agenda-body {
-  margin-top: 8px;
-  font-size: 16px;
+.agenda-summary {
+  font-size: 17px;
+  font-weight: 700;
   color: $on_surface;
+}
+.agenda-timespan {
+  margin-top: 2px;
+  font-size: 14px;
+  color: $on_surface_variant;
+}
+.agenda-eta {
+  margin-top: 2px;
+  font-size: 13px;
+  color: $primary;
+}
+.agenda-location {
+  margin-top: 2px;
+  font-size: 13px;
+  color: $secondary;
 }

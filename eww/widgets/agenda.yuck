@@ -1,6 +1,12 @@
-;; Agenda widget showing up to a few upcoming events.
+;; Agenda widget showing upcoming events, one card per entry.
 
 (defwidget agenda []
   (box :class "agenda" :orientation "vertical" :space-evenly "false"
     (label :class "agenda-title" :text "Agenda" :halign "start")
-    (label :class "agenda-body" :text agenda_list :wrap true :limit-width 80 :halign "start")))
+    (box :class "agenda-list" :orientation "vertical" :space-evenly "false"
+      (for ev in agenda_list
+        (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+          (label :class "agenda-summary" :text (get ev "summary") :halign "start" :wrap true :limit-width 80)
+          (label :class "agenda-timespan" :text (get ev "time_span") :halign "start")
+          (label :class "agenda-eta" :text (get ev "eta") :halign "start")
+          (label :class "agenda-location" :text (get ev "location") :halign "start" :wrap true :limit-width 80))))))
