@@ -1,0 +1,3 @@
+;; Polls & state for the next event widget.
+
+(defpoll next_event :interval "60s" "~/.config/eww/scripts/next_event_pretty.sh")

@@ -1,0 +1,5 @@
+;; Entry point – keep this thin and include modular pieces.
+
+(include "./vars/next_event.yuck")
+(include "./widgets/next_event.yuck")
+(include "./windows/next_event.yuck")

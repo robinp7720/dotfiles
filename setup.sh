@@ -18,6 +18,7 @@ directories=(
   "hypr"
   "kitty"
   "matugen"
+  "eww"
   "niri"
   "polybar"
   "rofi"

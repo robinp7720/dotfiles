@@ -1,0 +1,35 @@
+@import "colors.scss";
+
+*{
+  all: unset;
+}
+window {
+  background-color: transparent;
+  color: $on_surface;
+  font-family: Museo Sans;
+}
+
+.next-window {
+  background-color: transparent;
+}
+
+
+/* Next event widget */
+.next-event {
+  background-color: $surface_container_high;
+  border-radius: 14px;
+  padding: 22px 26px;
+  min-width: 540px;
+  min-height: 120px;
+}
+.next-event-title {
+  font-size: 4em;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: $primary;
+}
+.next-event-body {
+  margin-top: 10px;
+  font-size: 20px;
+  color: $on_surface;
+}

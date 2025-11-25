@@ -1,0 +1,6 @@
+;; Visual structure for the next event widget.
+
+(defwidget next-event []
+  (box :class "next-event" :orientation "vertical" :space-evenly "false"
+    (label :class "next-event-title" :text "Next event" :halign "start")
+    (label :class "next-event-body" :text next_event :wrap true :limit-width 70 :halign "start")))
