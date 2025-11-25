@@ -1,0 +1,6 @@
+[Unit]
+Description=Render wallpaper with next calendar event
+
+[Service]
+Type=oneshot
+ExecStart=%h/.dotfiles/scripts/wall_agenda.sh

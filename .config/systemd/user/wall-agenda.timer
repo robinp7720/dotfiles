@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic wallpaper calendar overlay refresh
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=default.target
