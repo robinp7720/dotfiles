@@ -13,6 +13,10 @@ window {
   background-color: transparent;
 }
 
+.agenda-window {
+  background-color: transparent;
+}
+
 
 /* Next event widget */
 .next-event {
@@ -31,5 +35,25 @@ window {
 .next-event-body {
   margin-top: 10px;
   font-size: 20px;
+  color: $on_surface;
+}
+
+/* Agenda widget */
+.agenda {
+  background-color: $surface_container_high;
+  border-radius: 14px;
+  padding: 18px 22px;
+  min-width: 540px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+.agenda-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: $primary;
+}
+.agenda-body {
+  margin-top: 8px;
+  font-size: 16px;
   color: $on_surface;
 }

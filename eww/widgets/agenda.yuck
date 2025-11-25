@@ -1,0 +1,6 @@
+;; Agenda widget showing up to a few upcoming events.
+
+(defwidget agenda []
+  (box :class "agenda" :orientation "vertical" :space-evenly "false"
+    (label :class "agenda-title" :text "Agenda" :halign "start")
+    (label :class "agenda-body" :text agenda_list :wrap true :limit-width 80 :halign "start")))
