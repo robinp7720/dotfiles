@@ -5,4 +5,4 @@
     (label :class "now-title" :text "Now playing" :halign "start")
     (box :class "now-body" :orientation "horizontal" :space-evenly "false"
       (image :class "now-art" :path "/home/robin/.cache/hyprlock/album.jpg")
-      (label :class "now-summary" :text now_playing :halign "start" :wrap true :limit-width 55))))
+      (label :class "now-summary" :text now_playing :halign "start" :wrap true :limit-width 70))))
