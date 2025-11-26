@@ -1,3 +1,3 @@
-;; Polls for agenda list (multi-event) as JSON.
+;; Agenda poll (plain text fallback for eww 0.6).
 
-(defpoll agenda_list :interval "120s" :json true :initial "[{\"summary\":\"Loading...\",\"time_span\":\"\",\"eta\":\"\",\"location\":\"\"}]" "bash -lc '~/.config/eww/scripts/agenda_list.sh'")
+(defpoll agenda_list :interval "120s" "~/.config/eww/scripts/agenda_list.sh")

@@ -2,6 +2,7 @@
 import subprocess, json, datetime, sys
 
 MAX_ITEMS = 5
+FALLBACK = [{"summary":"No upcoming events","time_span":"","eta":"","location":""}]
 
 def day_label(date_str):
     today = datetime.date.today()
@@ -92,12 +93,19 @@ def main():
     if not events:
         events = parse_gcalcli()
     if not events:
-        print(json.dumps([{"summary":"No upcoming events","time_span":"","eta":"","location":""}]))
-        return
-    print(json.dumps(events[:MAX_ITEMS]))
+        events = FALLBACK
+    lines = []
+    for ev in events[:MAX_ITEMS]:
+        parts = [ev["summary"], ev["time_span"]]
+        if ev["eta"]:
+            parts.append(f"Starts in {ev['eta']}")
+        if ev["location"]:
+            parts.append(ev["location"])
+        lines.append("\n".join(parts))
+    print("\n\n".join(lines))
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        print("[]")
+        print("No upcoming events")
