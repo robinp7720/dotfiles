@@ -1,4 +1,6 @@
 ;; Now playing art-only widget.
 
 (defwidget now-playing []
-  (image :class "now-art-only" :path "/home/robin/.cache/hyprlock/album.jpg" :width 140 :height 140 :keep-aspect true))
+  (image :class "now-art-only"
+         :path (string "/home/robin/.cache/hyprlock/album.jpg?" album_mtime)
+         :width 120 :height 120 :keep-aspect true))

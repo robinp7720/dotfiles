@@ -1,3 +1,4 @@
 ;; Now playing poll (uses existing script with emoji/icon prefix).
 
 (defpoll now_playing :interval "3s" "~/.dotfiles/scripts/now_playing.sh")
+(defpoll album_mtime :interval "2s" "stat -c %Y /home/robin/.cache/hyprlock/album.jpg 2>/dev/null || echo 0")
