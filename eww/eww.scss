@@ -42,7 +42,7 @@ window {
 .agenda {
   background-color: $surface_container_high;
   border-radius: 14px;
-  padding: 18px 22px;
+  padding: 22px 26px;
   min-width: 540px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
@@ -57,7 +57,7 @@ window {
   margin-bottom: 8px;
 }
 .agenda-title {
-  font-size: 18px;
+  font-size: 4em;
   font-weight: 700;
   letter-spacing: 0.4px;
   color: $primary;
