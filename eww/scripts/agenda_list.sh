@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-import subprocess, json, datetime, sys
+import subprocess, json, datetime, sys, os
 
 MAX_ITEMS = 5
-FALLBACK = [{"summary":"No upcoming events","time_span":"","eta":"","location":""}]
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "eww_agenda.txt")
+
+FALLBACK = ["No upcoming events"]
 
 def day_label(date_str):
     today = datetime.date.today()
@@ -88,20 +90,51 @@ def parse_gcalcli():
             break
     return events
 
-def main():
+def format_events(evlist):
+    lines = []
+    for ev in evlist[:MAX_ITEMS]:
+        parts = [ev["summary"], ev["time_span"]]
+        if ev.get("eta"):
+            parts.append(f"Starts in {ev['eta']}")
+        if ev.get("location"):
+            parts.append(ev['location'])
+        lines.append("\n".join(parts))
+    return lines or FALLBACK
+
+def write_cache(lines):
+    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+    with open(CACHE, "w", encoding="utf-8") as f:
+        f.write("\n\n".join(lines))
+
+def read_cache_line(idx):
+    try:
+        with open(CACHE, "r", encoding="utf-8") as f:
+            blocks = f.read().split("\n\n")
+        if 0 <= idx < len(blocks):
+            return blocks[idx].strip()
+    except FileNotFoundError:
+        pass
+    return ""
+
+def get_events():
     events = parse_khal()
     if not events:
         events = parse_gcalcli()
     if not events:
         events = FALLBACK
-    lines = []
-    for ev in events[:MAX_ITEMS]:
-        parts = [ev["summary"], ev["time_span"]]
-        if ev["eta"]:
-            parts.append(f"Starts in {ev['eta']}")
-        if ev["location"]:
-            parts.append(ev["location"])
-        lines.append("\n".join(parts))
+    return events
+
+def main():
+    events = get_events()
+    lines = format_events(events)
+    write_cache(lines)
+
+    if len(sys.argv) == 2 and sys.argv[1].isdigit():
+        idx = int(sys.argv[1])
+        line = lines[idx] if 0 <= idx < len(lines) else ""
+        print(line)
+        return
+
     print("\n\n".join(lines))
 
 if __name__ == "__main__":

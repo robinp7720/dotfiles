@@ -1,7 +1,16 @@
-;; Agenda widget showing upcoming events (plain formatted text for eww 0.6).
+;; Agenda widget with per-entry cards using fixed polls (eww 0.6 compatible).
 
 (defwidget agenda []
   (box :class "agenda" :orientation "vertical" :space-evenly "false"
     (label :class "agenda-title" :text "Agenda" :halign "start")
     (box :class "agenda-list" :orientation "vertical" :space-evenly "false"
-      (label :class "agenda-summary" :text agenda_list :halign "start" :wrap true :limit-width 80))))
+      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+        (label :class "agenda-summary" :text agenda_item_0 :halign "start" :wrap true :limit-width 80))
+      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+        (label :class "agenda-summary" :text agenda_item_1 :halign "start" :wrap true :limit-width 80))
+      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+        (label :class "agenda-summary" :text agenda_item_2 :halign "start" :wrap true :limit-width 80))
+      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+        (label :class "agenda-summary" :text agenda_item_3 :halign "start" :wrap true :limit-width 80))
+      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+        (label :class "agenda-summary" :text agenda_item_4 :halign "start" :wrap true :limit-width 80)))) )

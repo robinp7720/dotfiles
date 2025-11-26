@@ -1,3 +1,7 @@
-;; Agenda poll (plain text fallback for eww 0.6).
+;; Agenda items as separate polls (eww 0.6 friendly)
 
-(defpoll agenda_list :interval "120s" "~/.config/eww/scripts/agenda_list.sh")
+(defpoll agenda_item_0 :interval "120s" "~/.config/eww/scripts/agenda_list.sh 0")
+(defpoll agenda_item_1 :interval "120s" "~/.config/eww/scripts/agenda_list.sh 1")
+(defpoll agenda_item_2 :interval "120s" "~/.config/eww/scripts/agenda_list.sh 2")
+(defpoll agenda_item_3 :interval "120s" "~/.config/eww/scripts/agenda_list.sh 3")
+(defpoll agenda_item_4 :interval "120s" "~/.config/eww/scripts/agenda_list.sh 4")
