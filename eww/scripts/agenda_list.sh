@@ -93,11 +93,11 @@ def parse_gcalcli():
 def format_events(evlist):
     lines = []
     for ev in evlist[:MAX_ITEMS]:
-        parts = [ev["summary"], ev["time_span"]]
+        parts = [f"📅 {ev['summary']}", f"🕒 {ev['time_span']}"]
         if ev.get("eta"):
-            parts.append(f"Starts in {ev['eta']}")
+            parts.append(f"⏳ Starts in {ev['eta']}")
         if ev.get("location"):
-            parts.append(ev['location'])
+            parts.append(f"📍 {ev['location']}")
         lines.append("\n".join(parts))
     return lines or FALLBACK
 
