@@ -16,6 +16,9 @@ window {
 .agenda-window {
   background-color: transparent;
 }
+.now-window {
+  background-color: transparent;
+}
 
 
 /* Next event widget */
@@ -81,4 +84,32 @@ window {
   margin-top: 2px;
   font-size: 13px;
   color: $secondary;
+}
+
+/* Now playing widget */
+.now {
+  background-color: $surface_container_high;
+  border-radius: 14px;
+  padding: 18px 22px;
+  min-width: 320px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+.now-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: $primary;
+  margin-bottom: 8px;
+}
+.now-body {
+}
+.now-art {
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 10px;
+  border: 1px solid $outline_variant;
+}
+.now-summary {
+  font-size: 18px;
+  color: $on_surface;
 }

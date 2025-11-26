@@ -1,0 +1,9 @@
+;; Window placement for now playing widget.
+
+(defwindow now_playing_widget
+  :geometry (geometry :x "40px" :y "40px" :width "500px")
+  :stacking "bottom"
+  :monitor "DP-4"
+  :anchor "top left"
+  :class "now-window"
+  (now-playing))
