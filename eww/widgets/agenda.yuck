@@ -4,13 +4,13 @@
   (box :class "agenda" :orientation "vertical" :space-evenly "false"
     (label :class "agenda-title" :text "Agenda" :halign "start")
     (box :class "agenda-list" :orientation "vertical" :space-evenly "false"
-      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+      (box :class "agenda-item" :visible (not (eq agenda_item_0 "")) :orientation "vertical" :space-evenly "false"
         (label :class "agenda-summary" :text agenda_item_0 :halign "start" :wrap true :limit-width 80))
-      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+      (box :class "agenda-item" :visible (not (eq agenda_item_1 "")) :orientation "vertical" :space-evenly "false"
         (label :class "agenda-summary" :text agenda_item_1 :halign "start" :wrap true :limit-width 80))
-      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+      (box :class "agenda-item" :visible (not (eq agenda_item_2 "")) :orientation "vertical" :space-evenly "false"
         (label :class "agenda-summary" :text agenda_item_2 :halign "start" :wrap true :limit-width 80))
-      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+      (box :class "agenda-item" :visible (not (eq agenda_item_3 "")) :orientation "vertical" :space-evenly "false"
         (label :class "agenda-summary" :text agenda_item_3 :halign "start" :wrap true :limit-width 80))
-      (box :class "agenda-item" :orientation "vertical" :space-evenly "false"
+      (box :class "agenda-item" :visible (not (eq agenda_item_4 "")) :orientation "vertical" :space-evenly "false"
         (label :class "agenda-summary" :text agenda_item_4 :halign "start" :wrap true :limit-width 80)))) )
