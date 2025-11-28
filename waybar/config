@@ -128,8 +128,10 @@
         "return-type": "json",
         "interval": 10,
         "tooltip": true,
+        "on-click": "~/.dotfiles/waybar/scripts/headphones_toggle.sh",
         "env": {
-            "HEADPHONES_ALIAS": "Headphones"
+            "HEADPHONES_ALIAS": "Headphones",
+            "HEADPHONES_MAC": "88:C9:E8:25:7B:04"
         }
     },
     "custom/nowplaying": {
