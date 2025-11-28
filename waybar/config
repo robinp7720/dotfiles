@@ -10,6 +10,7 @@
 		"hyprland/window",
     ],
     "modules-center": [
+        "custom/nowplaying"
     ],
     "modules-right": [
         "cpu",
@@ -130,6 +131,16 @@
         "env": {
             "HEADPHONES_ALIAS": "Headphones"
         }
+    },
+    "custom/nowplaying": {
+        "exec": "~/.dotfiles/scripts/now_playing.sh",
+        "return-type": "string",
+        "interval": 2,
+        "max-length": 45,
+        "tooltip": true,
+        "on-click": "playerctl --player=spotify play-pause",
+        "on-scroll-up": "playerctl --player=spotify next",
+        "on-scroll-down": "playerctl --player=spotify previous"
     },
     "custom/logo1": {
         "format": "  ",

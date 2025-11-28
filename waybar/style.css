@@ -59,6 +59,7 @@ window#waybar.hidden {
 #network,
 #bluetooth,
 #custom-headphones,
+#custom-nowplaying,
 #window,
 #language,
 #clock,
@@ -68,6 +69,11 @@ window#waybar.hidden {
   padding: 6px 12px;
   background-color: @secondary;
   color: @on_secondary;
+}
+
+#custom-nowplaying {
+  background-color: @primary_container;
+  color: @on_primary_container;
 }
 
 #custom-logo1 {
