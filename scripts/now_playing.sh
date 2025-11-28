@@ -117,10 +117,21 @@ if [[ "$chosen_status" == "Paused" ]]; then
   icon="⏸"
 fi
 
+escape_markup() {
+  local s="$1"
+  s="${s//&/&amp;}"
+  s="${s//</&lt;}"
+  s="${s//> /&gt;}"
+  s="${s//>/&gt;}"
+  echo "$s"
+}
+
 if [[ "$output_mode" == "text" ]]; then
+  safe_artist=$(escape_markup "$chosen_artist")
+  safe_title=$(escape_markup "$chosen_title")
   if [[ -n "$chosen_artist" ]]; then
-    echo "$icon $chosen_artist — $chosen_title"
+    echo "$icon $safe_artist — $safe_title"
   else
-    echo "$icon $chosen_title"
+    echo "$icon $safe_title"
   fi
 fi
