@@ -39,3 +39,23 @@ for dir in "${directories[@]}"; do
   fi
   ln -sfn "$DIR/$dir" "$target"
 done
+
+# Link user systemd units
+mkdir -p "$HOME/.config/systemd/user"
+for unit in "$DIR"/systemd/user/*.service; do
+  [[ -e "$unit" ]] || continue
+  target="$HOME/.config/systemd/user/$(basename "$unit")"
+  if [[ -L "$target" ]]; then
+    rm -f -- "$target"
+  elif [[ -e "$target" ]]; then
+    backup="${target}.bak.$(date +%s)"
+    echo "Backing up existing $target to $backup"
+    mv -- "$target" "$backup"
+  fi
+  ln -sfn "$unit" "$target"
+done
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --user daemon-reload || true
+  systemctl --user enable --now auto-spotify.service || true
+fi

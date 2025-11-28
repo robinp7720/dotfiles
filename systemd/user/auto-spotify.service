@@ -1,0 +1,13 @@
+[Unit]
+Description=Launch Spotify when Bluetooth audio connects
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/home/robin/.dotfiles/scripts/auto_open_spotify_on_bt.sh
+Restart=always
+RestartSec=3
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+
+[Install]
+WantedBy=default.target
