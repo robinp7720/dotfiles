@@ -407,6 +407,7 @@ binds {
     Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "kitty"; }
     Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "kitty"; }
     Mod+Space hotkey-overlay-title="Run an Application: rofi" { spawn "~/.config/rofi/launcher.sh"; }
+    Mod+P hotkey-overlay-title="Passwords: tessen" { spawn "tessen"; }
     Super+L hotkey-overlay-title="Lock the Screen: swaylock" { spawn "~/.dotfiles/scripts/hyprlock_with_art.sh"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
