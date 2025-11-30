@@ -21,6 +21,7 @@
         "custom/headphones",
         "power-profiles-daemon",
         "battery",
+        "custom/power",
         "clock"
     ],
     "backlight/slider": {
@@ -184,5 +185,10 @@
             "critical": 10
         },
         "tooltip": false
+    },
+    "custom/power": {
+        "format": "",
+        "tooltip": "Power menu",
+        "on-click": "~/.dotfiles/scripts/power_menu.sh"
     }
 }

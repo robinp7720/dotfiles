@@ -60,6 +60,7 @@ window#waybar.hidden {
 #bluetooth,
 #custom-headphones,
 #custom-nowplaying,
+#custom-power,
 #window,
 #language,
 #clock,
@@ -130,6 +131,11 @@ window#waybar.hidden {
 #clock {
   background-color: @tertiary;
   color: @on_tertiary;
+}
+
+#custom-power {
+  background-color: @error;
+  color: @on_error;
 }
 
 #backlight-slider slider {
