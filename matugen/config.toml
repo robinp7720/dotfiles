@@ -24,3 +24,7 @@ output_path = '~/.config/dunst/dunstrc'
 [templates.eww]
 input_path = '~/.config/matugen/templates/eww.scss'
 output_path = '~/.config/eww/colors.scss'
+
+[templates.greetd]
+input_path = '~/.config/matugen/templates/greetd.css'
+output_path = '/var/cache/matugen/greetd.css'
