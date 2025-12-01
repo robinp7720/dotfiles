@@ -28,3 +28,8 @@ output_path = '~/.config/eww/colors.scss'
 [templates.greetd]
 input_path = '~/.config/matugen/templates/greetd.css'
 output_path = '/var/cache/matugen/greetd.css'
+
+[templates.refind]
+input_path = '~/.config/matugen/templates/refind.json'
+output_path = '/var/cache/matugen/refind-colors.json'
+post_hook = '~/.dotfiles/scripts/refind-matugen.sh /var/cache/matugen/refind-colors.json'
