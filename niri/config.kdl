@@ -3,6 +3,9 @@
 // Check the wiki for a full description of the configuration:
 // https://yalter.github.io/niri/Configuration:-Introduction
 
+// Split out monitor definitions for easier reuse (see niri/wiki "Configuration: Include").
+include "outputs.kdl"
+
 // Input device configuration.
 // Find the full list of options on the wiki:
 // https://yalter.github.io/niri/Configuration:-Input
@@ -106,40 +109,6 @@ input {
     // If the position is unset or results in an overlap, the output is instead placed
     // automatically.
     position x=1280 y=0
-}
-
-output "eDP-1" {
-    mode "1920x1080"
-    position x=3640 y=546
-    scale 1
-    // transform "normal"   // default
-}
-
-output "DP-5" {
-    mode "2560x1440@59.95"
-    position x=1080 y=186
-    scale 1
-    // NOTE: Hypr bitdepth=10 has no direct Niri option.
-}
-
-output "DP-6" {
-    mode "1920x1080@60.0"
-    position x=0 y=0
-    transform "90"   // Hypr: transform,1
-    scale 1
-}
-output "DP-3" {
-    mode "2560x1440@59.95"
-    position x=1080 y=186
-    scale 1
-    // NOTE: Hypr bitdepth=10 has no direct Niri option.
-}
-
-output "DP-4" {
-    mode "1920x1080@60.0"
-    position x=0 y=0
-    transform "90"   // Hypr: transform,1
-    scale 1
 }
 
 // Settings that influence how windows are positioned and sized.
