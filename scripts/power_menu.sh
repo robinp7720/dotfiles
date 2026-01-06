@@ -27,7 +27,8 @@ case "$choice" in
     if pgrep -x Hyprland >/dev/null 2>&1 && command -v hyprctl >/dev/null 2>&1; then
       hyprctl dispatch exit
     elif pgrep -x niri >/dev/null 2>&1 && command -v niri >/dev/null 2>&1; then
-      niri msg exit
+      # Use niri IPC to quit without showing the confirmation dialog.
+      niri msg action quit --skip-confirmation
     elif pgrep -x bspwm >/dev/null 2>&1; then
       bspc quit
     elif command -v loginctl >/dev/null 2>&1 && [[ -n "${XDG_SESSION_ID:-}" ]]; then
