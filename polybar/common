@@ -1,8 +1,8 @@
 [section/common]
-width = 100%:-40
+width = 100%
 height = 40
-offset-x = 20
-offset-y = 10
+offset-x = 0
+offset-y = 0
 
 background = ${color.background}
 foreground = ${color.foreground}
@@ -12,13 +12,15 @@ module-margin = 2
 
 border-size = 0
 border-color = ${color.border}
+line-size = 2
+line-color = ${color.accent}
 
 radius = 8
 
-font-0 = "JetBrainsMono:size=10;4"
-font-1 = "Jua:size=10;2"
-font-2 = "Fira Code:size=7:0"
-font-3 = "JetBrainsMono Nerd Font:size=12;4"
+font-0 = "JetBrainsMono Nerd Font Mono:style=Regular:size=10;2"
+font-1 = "JetBrainsMono Nerd Font Mono:style=Bold:size=10;2"
+font-2 = "Font Awesome 7 Free:style=Solid:size=10;2"
+font-3 = "Font Awesome 7 Brands:style=Regular:size=10;2"
 
 # Block fonts for CPU module
 font-4 = "3270Medium Nerd Font:size=12;4"

@@ -1,13 +1,13 @@
 [module/bsp-layout]
 type = custom/script
 
-exec = ~/.config/polybar/scripts/current-layout.sh DP-2
+exec = ~/.config/polybar/scripts/current-layout.sh DP-2-2
 interval = 1.0
 
 format-background = ${color.background-date}
 format-foreground = ${color.foreground-date}
 
-format-prefix = "﩯 "
+format-prefix = " "
 
 click-left = bsp-layout cycle
 

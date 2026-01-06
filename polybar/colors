@@ -1,8 +1,11 @@
 [color]
-background = #00CFCFCF
-foreground = #333333
-
-border = #15C3FD
+background = #131313
+foreground = #e2e2e2
+border = #b7c9d9
+background-alt = #2a2a2a
+accent = #8ccdff
+accent-alt = #b7c9d9
+muted = #c6c6c6
 
 background-date = ${color.background}
 background-github = ${color.background}
@@ -10,19 +13,18 @@ background-tray = ${color.background}
 background-network = ${color.background}
 background-bluetooth = ${color.background}
 
-foreground-error = #FFCCCC
+foreground-error = #ffb4ab
+foreground-network = #8ccdff
+foreground-date = #e2e2e2
+foreground-audio = #e2e2e2
+foreground-cpu = #b7c9d9
+foreground-updates-pacman-aurhelper = #e2e2e2
+foreground-info-hackspeed = #8ccdff
+foreground-do-not-disturb = #e2e2e2
+foreground-bluetooth = #e2e2e2
 
-foreground-network = #B294BB
-foreground-date = #333333
-foreground-audio = #333333
-foreground-cpu = #7FBD68
-foreground-updates-pacman-aurhelper = #333333
-foreground-info-hackspeed = #AF68BD 
-foreground-do-not-disturb = #333333
-foreground-bluetooth = #333333
-
-foreground-workspace-occupied = #333333
-foreground-workspace-focused = #333333
-foreground-workspace-urgent = #BD6871
+foreground-workspace-occupied = #c6c6c6
+foreground-workspace-focused = #8ccdff
+foreground-workspace-urgent = #ffb4ab
 
 # vi: ft=dosini

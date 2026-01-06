@@ -3,7 +3,7 @@ inherit = section/common
 
 monitor = DVI-D-0
 
-modules-left = bspwm
+modules-left = bspwm playerctl
 modules-center = 
 modules-right = 
 

@@ -15,6 +15,6 @@ bspc config right_padding   0
 # Start polybar
 ~/.config/polybar/launch.sh &
 
-bspc monitor DP-2 -d  "I" "II" "III" "IV" "V" 
+bspc monitor DP-2-2 -d  "I" "II" "III" "IV" "V" 
 
 superpaper &

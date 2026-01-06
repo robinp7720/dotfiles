@@ -3,7 +3,7 @@ type = internal/github
 token = ${env:GITHUB_ACCESS_TOKEN}
 
 format-background = ${color.background-github}
-format-prefix = " " 
+format-prefix = " " 
 
 empty-notifications = true
 

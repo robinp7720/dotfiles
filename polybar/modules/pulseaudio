@@ -2,9 +2,13 @@
 type = internal/pulseaudio
 
 format-volume = <ramp-volume> <label-volume>
+format-volume-background = ${color.background-alt}
 format-volume-foreground = ${color.foreground-audio}
+format-volume-underline = ${color.accent}
+format-volume-padding = 4
 
-label-muted = ﱝ
+label-muted = 
+label-muted-background = ${color.background-alt}
 label-muted-foreground = ${color.foreground-error}
 
 ramp-volume-0 = 

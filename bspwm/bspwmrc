@@ -48,7 +48,7 @@ bspc config directional_focus_tightness high
 # Set window rules
 bspc rule -a Pinentry state=floating
 bspc rule -a Plank layer=above manage=on border=off
-bspc rule -a Nightly state=tiling"
+bspc rule -a Nightly state=tiling
 
 bspc config external_rules_command "/home/robin/.config/bspwm/external_rules"
 

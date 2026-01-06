@@ -1,10 +1,10 @@
 [bar/third]
 inherit = section/common
 
-monitor = HDMI-0
+monitor = DP-0
 
-modules-left = bspwm
-modules-center = mpd
+modules-left = bspwm playerctl
+modules-center = 
 modules-right =  date
 
 dpi = 92

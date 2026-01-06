@@ -4,10 +4,10 @@ type = internal/xbacklight
 card = intel_backlight
 format = <ramp>
 
-ramp-0 = 
-ramp-1 = 
-ramp-2 = 
-ramp-3 = 
-ramp-4 = 
+ramp-0 = 
+ramp-1 = 
+ramp-2 = 
+ramp-3 = 
+ramp-4 = 
 
 # vi: ft=dosini

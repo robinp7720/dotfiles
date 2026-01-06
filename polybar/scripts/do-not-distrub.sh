@@ -9,20 +9,20 @@ trap "toggle" USR1
 
 update() {
 	if [[ "$(dunstctl is-paused)" == "false" ]]; then
-		echo ""
+		echo ""
 	else
-		echo "%{F$active_color}ﮗ"
+		echo "%{F$active_color}"
 	fi
 }
 
 
 toggle() {
 	if [[ "$(dunstctl is-paused)" == "true" ]]; then
-		echo ""
+		echo ""
 		dunstctl set-paused toggle
 		dunstify -i "$notifications_enabled_icon" "Notifications" "Enabled"
 	else
-		echo "%{F$active_color}ﮗ"
+		echo "%{F$active_color}"
 		dunstify -i "$notifications_enabled_icon" "Notifications" "Disabled"
 		sleep 1
 		dunstctl close

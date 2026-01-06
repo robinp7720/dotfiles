@@ -4,7 +4,9 @@ exec = ~/.config/polybar/scripts/bluetooth.sh
 interval = 5
 
 format-foreground = ${color.foreground-bluetooth}
-format-background = ${color.background-bluetooth}
+format-background = ${color.background-alt}
+format-underline = ${color.accent-alt}
+format-padding = 4
 
 label = %output%
 

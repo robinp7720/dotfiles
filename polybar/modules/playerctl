@@ -1,0 +1,18 @@
+[module/playerctl]
+type = custom/script
+exec = ~/.dotfiles/scripts/now_playing.sh
+tail = true
+interval = 0
+
+format = <label>
+format-background = ${color.background-alt}
+format-foreground = ${color.foreground}
+format-underline = ${color.accent}
+format-padding = 6
+
+click-left = playerctl play-pause
+scroll-up = playerctl next
+scroll-down = playerctl previous
+
+label = %output%
+# vi: ft=dosini

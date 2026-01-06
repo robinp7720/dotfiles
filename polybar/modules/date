@@ -5,10 +5,12 @@ interval = 1.0
 
 exec = date "+%Y-%m-%d"
 
-format-background = ${color.background-date}
+format-background = ${color.background-alt}
 format-foreground = ${color.foreground-date}
-
-format-prefix = "  "
+format-underline = ${color.accent-alt}
+format-padding = 4
+format-prefix = " "
+format-prefix-foreground = ${color.accent-alt}
 
 click-left = alacritty -T Calendar -e "/home/robin/.scripts/calendar.sh"
 

@@ -7,8 +7,9 @@ accumulate-stats = true
 
 format-connected-foreground = ${color.foreground-network}
 format-disconnected-foreground = ${color.foreground-network}
-
-format-connected-background = ${color.background-network}
+format-connected-background = ${color.background-alt}
+format-connected-underline = ${color.accent}
+format-connected-padding = 4
 
 animation-packetloss-foreground = ${color.foreground-network}
 animation-packetloss-0-foreground = ${color.foreground-error}
@@ -16,7 +17,8 @@ animation-packetloss-1-foreground = ${color.foreground-network}
 
 label-disconnected-foreground = ${color.foreground-error}
 
-label-connected = 囹 %local_ip% %upspeed% 李 %downspeed%
+label-connected =  %local_ip%  %upspeed%  %downspeed%
+label-connected-foreground = ${color.foreground-network}
 label-disconnected = Disconnected
 
 format-connected = <label-connected>

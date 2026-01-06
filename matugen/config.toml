@@ -17,6 +17,11 @@ post_hook = 'pkill -USR1 -x kitty'
 input_path = '~/.config/matugen/templates/rofi.rasi'
 output_path = '~/.config/rofi/colors.rasi'
 
+[templates.polybar]
+input_path = '~/.config/matugen/templates/polybar.ini'
+output_path = '~/.config/polybar/colors'
+post_hook = '~/.config/polybar/launch.sh'
+
 [templates.dunst]
 input_path = '~/.config/matugen/templates/dunstrc'
 output_path = '~/.config/dunst/dunstrc'

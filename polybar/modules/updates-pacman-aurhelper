@@ -3,7 +3,11 @@ type = custom/script
 exec = ~/.config/polybar/scripts/updates-pacman-aurhelper.sh
 interval = 3600 # 1 hour
 
-format-prefix = "ﯩ  "
+format-prefix = " "
+format-prefix-foreground = ${color.accent}
+format-background = ${color.background-alt}
+format-underline = ${color.accent}
+format-padding = 4
 format-foreground = ${color.foreground-updates-pacman-aurhelper}
 click-left = ~/.config/polybar/scripts/updates-pacman-aurhelper.sh
 
