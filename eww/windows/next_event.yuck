@@ -3,7 +3,7 @@
 (defwindow next_event_widget
   :geometry (geometry :x "40px" :y "40px" :width "560px")
   :stacking "bottom"
-  :monitor "DP-4"
+  ;;:monitor "DP-4"
   :anchor "top right"
   :class "next-window"
   (next-event))

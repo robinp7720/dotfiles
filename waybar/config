@@ -19,7 +19,7 @@
         "network",
         "bluetooth",
         "custom/headphones",
-        "power-profiles-daemon",
+        "custom/powerprofile",
         "battery",
         "custom/power",
         "clock"
@@ -30,16 +30,12 @@
         "orientation": "horizontal",
         "device": "intel_backlight"
     },
-    "power-profiles-daemon": {
-        "format": "{icon}",
-        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
-        "tooltip": true,
-        "format-icons": {
-            "default": "",
-            "performance": "",
-            "balanced": "",
-            "power-saver": ""
-        }
+    "custom/powerprofile": {
+        "exec": "~/.dotfiles/waybar/scripts/power_profile_toggle.sh",
+        "return-type": "json",
+        "interval": 5,
+        "on-click": "~/.dotfiles/waybar/scripts/power_profile_toggle.sh --toggle",
+        "tooltip": true
     },
     "wlr/taskbar": {
         "format": "{icon}",

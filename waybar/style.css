@@ -59,6 +59,7 @@ window#waybar.hidden {
 #network,
 #bluetooth,
 #custom-headphones,
+#custom-powerprofile,
 #custom-nowplaying,
 #custom-power,
 #window,
@@ -108,6 +109,9 @@ window#waybar.hidden {
 }
 
 #power-profiles-daemon {
+}
+
+#custom-powerprofile {
 }
 
 #cpu {
