@@ -64,6 +64,7 @@ window#waybar.hidden {
 #custom-power,
 #window,
 #language,
+#custom-keyboard-layout,
 #clock,
 #power-profiles-daemon {
   border-radius: 4px;
@@ -106,6 +107,9 @@ window#waybar.hidden {
 }
 
 #language {
+}
+
+#custom-keyboard-layout {
 }
 
 #power-profiles-daemon {

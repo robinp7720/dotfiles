@@ -15,7 +15,7 @@
     "modules-right": [
         "cpu",
         "memory",
-        "hyprland/language",
+        "custom/keyboard-layout",
         "network",
         "bluetooth",
         "custom/headphones",
@@ -79,8 +79,12 @@
             "default": ""
         }
     },
-    "hyprland/language": {
-        "on-click": "hyprctl switchxkblayout all next"
+    "custom/keyboard-layout": {
+        "exec": "~/.dotfiles/waybar/scripts/keyboard_layout.py",
+        "return-type": "json",
+        "interval": 1,
+        "tooltip": true,
+        "on-click": "niri msg action switch-layout next"
     },
 	"hyprland/window": {
 		"format": "{}",

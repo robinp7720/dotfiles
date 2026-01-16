@@ -16,7 +16,8 @@ input {
             // For more information, see xkeyboard-config(7).
 
             // For example:
-            layout "us"
+            layout "us,us"
+            variant ",dvorak"
             // options "grp:win_space_toggle,compose:ralt,ctrl:nocaps"
 
             // If this section is empty, niri will fetch xkb settings
@@ -602,11 +603,14 @@ binds {
     // Having both at once on the same hotkey will break the switching,
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
     // Mod+Space       { switch-layout "next"; }
-    // Mod+Shift+Space { switch-layout "prev"; }
+    Mod+Shift+Space hotkey-overlay-title="Switch Keyboard Layout" { switch-layout "next"; }
 
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
+    Super+Print hotkey-overlay-title="Screenshot Area (grim)" {
+        spawn-sh "dir=\"$HOME/Pictures/Screenshots\"; mkdir -p \"$dir\"; ts=$(date +'%Y-%m-%d %H-%M-%S'); file=\"$dir/Screenshot from $ts.png\"; region=$(slurp) || exit 1; grim -g \"$region\" \"$file\" && wl-copy -t image/png < \"$file\" && dunstify -i \"$file\" \"Screenshot\" \"Saved to $file and copied to clipboard\"";
+    }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here
