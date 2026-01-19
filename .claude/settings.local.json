@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(hyprctl monitors:*)",
+      "Bash(pgrep:*)",
+      "Bash(echo:*)",
+      "Bash(niri msg:*)",
+      "Bash(hyprctl hyprpaper:*)",
+      "Bash(hyprpaper --help:*)",
+      "Bash(awww --help:*)",
+      "Bash(awww-daemon:*)",
+      "Bash(awww img:*)",
+      "Bash(killall:*)",
+      "Bash(awww query:*)",
+      "Bash(chmod:*)",
+      "Bash(awww kill)"
+    ]
+  }
+}
