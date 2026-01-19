@@ -1,15 +1,30 @@
 @import 'colors.css';
 
+@define-color bar_bg alpha(@surface_container_lowest, 0.86);
+@define-color bar_border alpha(@outline_variant, 0.65);
+@define-color module_bg alpha(@surface_container, 0.92);
+@define-color module_bg_alt alpha(@surface_container_high, 0.92);
+@define-color module_border alpha(@outline_variant, 0.6);
+@define-color accent @primary;
+@define-color accent_fg @on_primary;
+@define-color soft_fg @on_surface_variant;
+
 * {
   border: none;
   border-radius: 0;
   min-height: 0;
-  font-family: FiraCode Nerd Font;
-  font-size: 13px;
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono", "FiraCode Nerd Font";
+  font-size: 12px;
+  font-weight: 500;
 }
 
 window#waybar {
-  background-color: @surface_container_lowest;
+  background-color: @bar_bg;
+  border: 1px solid @bar_border;
+  border-radius: 14px;
+  margin: 0;
+  box-shadow: 0 6px 18px alpha(@shadow, 0.35);
+  color: @on_surface;
   transition-property: background-color;
   transition-duration: 0.5s;
 }
@@ -18,34 +33,39 @@ window#waybar.hidden {
   opacity: 0.5;
 }
 
+#modules-left,
+#modules-center,
+#modules-right {
+  margin: 4px 6px;
+}
+
 #workspaces {
   background-color: transparent;
 }
 
 #workspaces button {
   all: initial;
-  /* Remove GTK theme values (waybar #1351) */
   min-width: 0;
-  /* Fix weird spacing in materia (waybar #450) */
   box-shadow: inset 0 -3px transparent;
-  /* Use box-shadow instead of border so the text isn't offset */
-  padding: 6px 18px;
-  margin: 6px 3px;
-  border-radius: 4px;
-  background-color: @surface_container_low;
+  padding: 6px 12px;
+  margin: 6px 4px;
+  border-radius: 10px;
+  background-color: @module_bg;
   color: @on_surface;
+  border: 1px solid @module_border;
+  font-weight: 600;
 }
 
-#workspaces button.active, #workspaces button.active:hover {
-  color: @inverse_on_surface;
-  background-color: @inverse_surface;
+#workspaces button.active,
+#workspaces button.active:hover {
+  color: @accent_fg;
+  background-color: @accent;
+  box-shadow: 0 4px 10px alpha(@accent, 0.35);
 }
 
 #workspaces button:hover {
-  box-shadow: inherit;
-  text-shadow: inherit;
   color: @on_surface;
-  background-color: @surface_container;
+  background-color: @module_bg_alt;
 }
 
 #workspaces button.urgent {
@@ -67,61 +87,43 @@ window#waybar.hidden {
 #custom-keyboard-layout,
 #clock,
 #power-profiles-daemon {
-  border-radius: 4px;
-  margin: 6px 3px;
+  border-radius: 10px;
+  margin: 6px 4px;
   padding: 6px 12px;
-  background-color: @secondary;
-  color: @on_secondary;
+  background-color: @module_bg;
+  color: @on_surface;
+  border: 1px solid @module_border;
 }
 
 #custom-nowplaying {
-  background-color: @primary_container;
+  background-color: alpha(@primary_container, 0.95);
   color: @on_primary_container;
+  border: 1px solid alpha(@primary, 0.5);
+  font-weight: 600;
 }
 
 #custom-logo1 {
-  padding-right: 7px;
-  padding-left: 7px;
-  margin-left: 5px;
+  padding-right: 10px;
+  padding-left: 10px;
+  margin-left: 6px;
   font-size: 15px;
-  border-radius: 8px 0px 0px 8px;
-  color: @primary;
+  border-radius: 12px;
+  background-image: linear-gradient(135deg, @primary, @tertiary);
+  color: @on_primary;
+  border: 1px solid alpha(@primary, 0.5);
 }
 
 #window {
-  background-color: @primary;
-  color: @on_primary;
+  background-color: @module_bg_alt;
+  color: @on_surface;
+  font-weight: 500;
 }
 
-#bluetooth.off {
-  background-color: @error;
-  color: @on_error;
-}
-
+#bluetooth.off,
 #custom-headphones.disconnected {
   background-color: @error;
   color: @on_error;
-}
-
-#memory {
-}
-
-#language {
-}
-
-#custom-keyboard-layout {
-}
-
-#power-profiles-daemon {
-}
-
-#custom-powerprofile {
-}
-
-#cpu {
-}
-
-#battery {
+  border: 1px solid alpha(@error, 0.6);
 }
 
 #battery.warning,
@@ -129,50 +131,57 @@ window#waybar.hidden {
 #battery.urgent {
   background-color: @error;
   color: @on_error;
+  border: 1px solid alpha(@error, 0.6);
 }
 
 #battery.charging {
-  background-color: #a6e3a1;
-  color: #181825;
+  background-color: alpha(@secondary_container, 0.9);
+  color: @on_secondary_container;
+  border: 1px solid alpha(@secondary, 0.6);
 }
 
 #clock {
-  background-color: @tertiary;
-  color: @on_tertiary;
+  background-color: alpha(@tertiary_container, 0.9);
+  color: @on_tertiary_container;
+  border: 1px solid alpha(@tertiary, 0.5);
 }
 
 #custom-power {
   background-color: @error;
   color: @on_error;
+  border: 1px solid alpha(@error, 0.6);
 }
 
 #backlight-slider slider {
-    min-height: 0px;
-    min-width: 0px;
-    opacity: 0;
-    background-image: none;
-    border: none;
-    box-shadow: none;
+  min-height: 0px;
+  min-width: 0px;
+  opacity: 0;
+  background-image: none;
+  border: none;
+  box-shadow: none;
 }
+
 #backlight-slider trough {
-    min-height: 80px;
-    min-width: 10px;
-    border-radius: 5px;
-    background-color: black;
+  min-height: 80px;
+  min-width: 10px;
+  border-radius: 5px;
+  background-color: black;
 }
+
 #backlight-slider highlight {
-    min-width: 10px;
-    border-radius: 5px;
-    background-color: red;
+  min-width: 10px;
+  border-radius: 5px;
+  background-color: red;
 }
 
 tooltip {
-  border-radius: 8px;
-  padding: 15px;
-  background-color: #131822;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background-color: alpha(@surface_container_high, 0.95);
+  border: 1px solid alpha(@outline_variant, 0.6);
+  color: @on_surface;
 }
 
 tooltip label {
-  padding: 5px;
-  background-color: #131822;
+  padding: 2px 4px;
 }

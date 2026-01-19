@@ -1,13 +1,17 @@
 {
     "layer": "top",
     "position": "top",
-    "spacing": 0,
-    "height": 34,
+    "spacing": 4,
+    "height": 44,
+    "margin-top": 10,
+    "margin-left": 14,
+    "margin-right": 14,
+    "margin-bottom": 0,
     "modules-left": [
         "custom/logo1",
         "hyprland/workspaces",
         "niri/workspaces",
-		"hyprland/window",
+        "hyprland/window"
     ],
     "modules-center": [
         "custom/nowplaying"
@@ -67,8 +71,8 @@
 			"class<firefox>": "", // Windows whose classes are "firefox"
 			"class<firefox> title<.*github.*>": "", // Windows whose class is "firefox" and title contains "github". Note that "class" always comes first.
 			"kitty": "", // Windows that contain "foot" in either class or title. For optimization reasons, it will only match against a title if at least one other window explicitly matches against a title.
-			"code": "󰨞",
-		},
+			"code": "󰨞"
+		}
     },
     "niri/workspaces": {
         "all-outputs": true,
