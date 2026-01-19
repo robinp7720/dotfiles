@@ -24,16 +24,16 @@
     # dynamic width from 0 to 300
     # width = (0, 300)
     # constant width of 300
-    width = (300,600)
+    width = (320,520)
 
     # The maximum height of a single notification, excluding the frame.
-    height = 300
+    height = 280
 
     # Position the notification in the top right corner
-    origin = bottom-right
+    origin = top-right
 
     # Offset from the origin
-    offset = 10x10
+    offset = 16x18
 
     # Scale factor. It is auto-detected if value is 0.
     scale = 0
@@ -49,7 +49,7 @@
 
     # Set the progress bar height. This includes the frame, so make sure
     # it's at least twice as big as the frame width.
-    progress_bar_height = 10
+    progress_bar_height = 8
 
     # Set the frame width of the progress bar
     progress_bar_frame_width = 0
@@ -61,10 +61,10 @@
     progress_bar_max_width = 300
 
     # Corner radius for the progress bar. 0 disables rounded corners.
-    progress_bar_corner_radius = 8
+    progress_bar_corner_radius = 10
 
     # Corner radius for the icon image.
-    icon_corner_radius = 4
+    icon_corner_radius = 8
 
     # Show how many messages are currently hidden (because of
     # notification_limit).
@@ -79,29 +79,29 @@
     # notifications.
     # Set to 0 to disable.
     # If gap_size is greater than 0, this setting will be ignored.
-    separator_height = 2
+    separator_height = 0
 
     # Padding between text and separator.
-    padding = 8
+    padding = 12
 
     # Horizontal padding.
-    horizontal_padding = 8
+    horizontal_padding = 14
 
     # Padding between text and icon.
-    text_icon_padding = 8
+    text_icon_padding = 10
 
     # Defines width in pixels of frame around the notification window.
     # Set to 0 to disable.
-    frame_width = 0
+    frame_width = 1
 
     # Defines color of the frame around the notification window.
-    frame_color = "#181825"
+    frame_color = "{{ colors.outline_variant.default.hex }}"
 
     # Size of gap to display between notifications - requires a compositor.
     # If value is greater than 0, separator_height will be ignored and a border
     # of size frame_width will be drawn around each notification instead.
     # Click events on gaps do not currently propagate to applications below.
-    gap_size = 10
+    gap_size = 8
 
     # Define a color for the separator.
     # possible values are:
@@ -123,7 +123,7 @@
 
     ### Text ###
 
-    font = JetBrainsMono 12
+    font = JetBrainsMono Nerd Font 11
 
     # The spacing between lines.  If the height is smaller than the
     # font height, it will get raised to the font height.
@@ -250,7 +250,7 @@
     # corners.
     # The radius will be automatically lowered if it exceeds half of the
     # notification height to avoid clipping text and/or icons.
-    corner_radius = 8
+    corner_radius = 12
 
     # Ignore the dbus closeNotification message.
     # Useful to enforce the timeout set by dunst configuration. Without this
@@ -313,15 +313,16 @@
 [urgency_low]
     # IMPORTANT: colors have to be defined in quotation marks.
     # Otherwise the "#" and following would be interpreted as a comment.
-    background = "{{ colors.secondary.default.hex }}"
-    foreground = "{{ colors.on_secondary.default.hex }}"
+    background = "{{ colors.secondary_container.default.hex }}"
+    foreground = "{{ colors.on_secondary_container.default.hex }}"
     timeout = 10
     # Icon for notifications with low urgency, uncomment to enable
     default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
 
 [urgency_normal]
-    background = "{{ colors.surface.default.hex }}"
+    background = "{{ colors.surface_container.default.hex }}"
     foreground = "{{ colors.on_surface.default.hex }}"
+    frame_color = "{{ colors.outline_variant.default.hex }}"
     frame_color = "#94e2d5"
     timeout = 30
     # Icon for notifications with normal urgency, uncomment to enable
