@@ -12,7 +12,7 @@ options=(
   "󰜺  Cancel"
 )
 
-choice=$(printf '%s\n' "${options[@]}" | rofi -dmenu -i -p "$menu_prompt")
+choice=$(printf '%s\n' "${options[@]}" | /home/robin/.local/bin/rofi -dmenu -i -p "$menu_prompt")
 # Extract the trailing label (text after the icon) so matching is stable even if fonts change.
 choice=${choice#*  }
 

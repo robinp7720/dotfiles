@@ -1,0 +1,5 @@
+@import "default.rasi"
+
+* {
+    background: @surface-container;
+}

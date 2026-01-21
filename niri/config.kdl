@@ -75,6 +75,29 @@ input {
     focus-follows-mouse max-scroll-amount="80%"
 }
 
+// Add a shadow for rofi.
+layer-rule {
+    match namespace="^rofi$"
+
+    shadow {
+        on
+    }
+
+    geometry-corner-radius 10
+}
+
+// Add a shadow for waybar.
+layer-rule {
+    match namespace="^waybar$"
+
+    shadow {
+        on
+    }
+
+    geometry-corner-radius 10
+}
+
+
 // You can configure outputs by their name, which you can find
 // by running `niri msg outputs` while inside a niri instance.
 // The built-in laptop monitor is usually called "eDP-1".
@@ -134,6 +157,7 @@ gestures {
     }
 }
 
+
 // Settings that influence how windows are positioned and sized.
 // Find more information on the wiki:
 // https://yalter.github.io/niri/Configuration:-Layout
@@ -180,7 +204,7 @@ layout {
     //
     // Alternatively, you can override it with a window rule called
     // `draw-border-with-background`.
-
+    
     // You can change how the focus ring looks.
     focus-ring {
         // Uncomment this line to disable the focus ring.
@@ -400,8 +424,8 @@ binds {
     Mod+Shift+Slash { show-hotkey-overlay; }
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
-    Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "kitty"; }
-    Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "kitty"; }
+    Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
+    Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
     Mod+Space hotkey-overlay-title="Run an Application: rofi" { spawn "~/.config/rofi/launcher.sh"; }
     Mod+P hotkey-overlay-title="Passwords: tessen" { spawn "tessen"; }
     Super+L hotkey-overlay-title="Lock the Screen: swaylock" { spawn "~/.dotfiles/scripts/hyprlock_with_art.sh"; }
