@@ -1,5 +1,5 @@
 configuration {
-    terminal: "~/.dotfiles/scripts/launch_kitty.sh";
+    terminal: "kitty";
 
     ssh-command: "{terminal} -e {ssh-client} {host} [-p {port}]";
     run-shell-command: "{terminal} -e {cmd}";

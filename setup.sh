@@ -42,6 +42,34 @@ for dir in "${directories[@]}"; do
   ln -sfn "$DIR/$dir" "$target"
 done
 
+# Setup custom scripts in ~/.local/bin
+echo "Setting up scripts in ~/.local/bin"
+mkdir -p "$HOME/.local/bin"
+
+scripts=(
+  "scripts/launch_kitty.sh:kitty"
+  "scripts/rofi_wrapper.sh:rofi"
+)
+
+for script_pair in "${scripts[@]}"; do
+  src_rel="${script_pair%%:*}"
+  name="${script_pair##*:}"
+  
+  src="$DIR/$src_rel"
+  target="$HOME/.local/bin/$name"
+
+  if [[ -L "$target" ]]; then
+    rm -f -- "$target"
+  elif [[ -e "$target" ]]; then
+    backup="${target}.bak.$(date +%s)"
+    echo "Backing up existing $target to $backup"
+    mv -- "$target" "$backup"
+  fi
+  
+  ln -sfn "$src" "$target"
+  echo "Linked $target -> $src"
+done
+
 # Link user systemd units
 mkdir -p "$HOME/.config/systemd/user"
 for unit in "$DIR"/systemd/user/*.service; do
