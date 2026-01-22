@@ -3,6 +3,6 @@ type = custom/text
 
 content = 
 
-click-left = termite -t Music -e "ncmpcpp"
+click-left = kitty --title Music -e "ncmpcpp"
 
 # vi: ft=dosini

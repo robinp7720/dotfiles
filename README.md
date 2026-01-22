@@ -15,7 +15,7 @@ These dotfiles assume an Arch Linux (or derivative) system with the following co
 - Window managers and daemons: `hyprland`, `hypridle`, `hyprpaper`, `hyprsunset`, `bspwm`, `sxhkd`, `nitrogen`
 - Greeter: `greetd`, `nwg-hello`
 - Bars and launchers: `polybar`, `waybar`, `rofi`, `dunst`, `rofi-wayland` (or equivalent), `cairo-dock`
-- Terminals and utilities: `kitty`, `alacritty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `xclip`, `dunstify`
+- Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `xclip`, `dunstify`
 - Theming and helpers: `matugen`, `sgpt` (placed at `~/.local/bin/sgpt` for the GPT clipboard module), `checkupdates` (from `pacman-contrib`)
 - AUR helper configured through the `AURHELPER` variable (`paru` by default, `yay` supported); both are used by Polybar and `scripts/update.sh`
 
@@ -42,7 +42,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `polybar/` – Shared colors, modules, and scripts (including the clipboard-to-GPT helper and update notifications).
 - `waybar/` – Waybar configuration and CSS theme generated via Matugen, with a custom power button wired to `scripts/power_menu.sh`.
 - `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Dunst, and greetd/nwg-hello.
-- `rofi/`, `kitty/`, `dunst/`, `termite/` – Application-specific themes.
+- `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `update.sh` (runs `paru`/`yay` with notifications), `update-notification.sh` (launches an update terminal via Dunst actions), and `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi).
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/` and setup links it into `/etc/nwg-hello`.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.

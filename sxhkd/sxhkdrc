@@ -6,8 +6,8 @@ ctrl + Escape
 	find-cursor -d 10 -s 100 -w 0 -f -c "#333333"
 
 # program launcher
-super + r
-	rofi -show run
+super + d
+	~/.config/rofi/launcher.sh
 
 # Program launcher has been replaced with albert
 super + space

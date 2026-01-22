@@ -12,6 +12,6 @@ format-padding = 4
 format-prefix = " "
 format-prefix-foreground = ${color.accent}
 
-click-left = termite -t Calendar -e "/home/robin/.scripts/calendar.sh" --hold
+click-left = kitty --title Calendar --hold -e cal
 
 # vi: ft=dosini

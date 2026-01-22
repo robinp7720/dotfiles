@@ -23,7 +23,6 @@ directories=(
   "polybar"
   "rofi"
   "sxhkd"
-  "termite"
   "waybar"
   "nwg-hello"
   "greetd"
