@@ -1,8 +1,0 @@
-[module/mpd-open]
-type = custom/text
-
-content = 
-
-click-left = kitty --title Music -e "ncmpcpp"
-
-# vi: ft=dosini

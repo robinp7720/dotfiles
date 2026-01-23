@@ -20,8 +20,8 @@ output_path = '~/.config/rofi/colors.rasi'
 
 [templates.polybar]
 input_path = '~/.config/matugen/templates/polybar.ini'
-output_path = '~/.config/polybar/colors'
-post_hook = '~/.config/polybar/launch.sh'
+output_path = '~/.dotfiles/polybar/colors.ini'
+post_hook = '~/.dotfiles/polybar/launch.sh'
 
 [templates.dunst]
 input_path = '~/.config/matugen/templates/dunstrc'
