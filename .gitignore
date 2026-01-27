@@ -9,3 +9,5 @@ hypr/colors.conf
 kitty/colors.conf
 rofi/colors.rasi
 eww/colors.scss
+niri/colors.kdl
+polybar/colors.ini
