@@ -29,7 +29,7 @@ refind_dir="/boot/efi/EFI/BOOT"
 theme_dir="${refind_dir}/refind-theme-matugen"
 
 # If we can't write to the ESP, re-exec via sudo (interactive prompt if needed).
-if [[ "${REFIND_MATUGEN_ESCALATED:-0}" != "1" && ! -w "${refind_dir}" ]]; then
+if [[ "${REFIND_MATUGEN_ESCALATED:-0}" != "1" && ! -w "${theme_dir}" ]]; then
   exec sudo REFIND_MATUGEN_ESCALATED=1 PATH="${PATH}" "$0" "$colors_json"
 fi
 
