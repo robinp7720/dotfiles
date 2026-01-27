@@ -18,5 +18,9 @@ layout {
 }
 
 overview {
-    backdrop-color "#0b0f12"
+    backdrop-color "#0e1415"
+
+    workspace-shadow {
+        color "#000000"
+    }
 }

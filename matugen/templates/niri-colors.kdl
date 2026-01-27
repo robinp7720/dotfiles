@@ -3,12 +3,12 @@
 layout {
     focus-ring {
         active-gradient from="{{ colors.primary.default.hex }}" to="{{ colors.tertiary.default.hex }}" angle=135 relative-to="workspace-view"
-        inactive-color "{{ colors.outline_variant.default.hex }}"
+        inactive-color "{{ colors.outline.default.hex }}"
     }
 
     border {
         active-gradient from="{{ colors.primary.default.hex }}" to="{{ colors.tertiary.default.hex }}" angle=135 relative-to="workspace-view"
-        inactive-color "{{ colors.outline_variant.default.hex }}"
+        inactive-color "{{ colors.outline.default.hex }}"
         urgent-color "{{ colors.error.default.hex }}"
     }
 
@@ -18,5 +18,9 @@ layout {
 }
 
 overview {
-    backdrop-color "{{ colors.surface_container_lowest.default.hex }}"
+    backdrop-color "{{ colors.background.default.hex }}"
+
+    workspace-shadow {
+        color "{{ colors.shadow.default.hex }}"
+    }
 }

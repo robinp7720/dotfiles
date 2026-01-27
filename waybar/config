@@ -75,7 +75,7 @@
 		}
     },
     "niri/workspaces": {
-        "all-outputs": true,
+        "all-outputs": false,
         "format": "{icon} {value}",
         "format-icons": {
             "focused": "",
