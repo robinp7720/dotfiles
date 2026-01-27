@@ -2,13 +2,13 @@
 // This file is included by niri/config.kdl.
 layout {
     focus-ring {
-        active-gradient from="#bec2ff" to="#e8b9d5" angle=135 relative-to="workspace-view"
-        inactive-color "#46464f"
+        active-gradient from="#98ccf9" to="#d1bfe7" angle=135 relative-to="workspace-view"
+        inactive-color "#42474e"
     }
 
     border {
-        active-gradient from="#bec2ff" to="#e8b9d5" angle=135 relative-to="workspace-view"
-        inactive-color "#46464f"
+        active-gradient from="#98ccf9" to="#d1bfe7" angle=135 relative-to="workspace-view"
+        inactive-color "#42474e"
         urgent-color "#ffb4ab"
     }
 
@@ -18,5 +18,5 @@ layout {
 }
 
 overview {
-    backdrop-color "#0e0e13"
+    backdrop-color "#0b0f12"
 }

@@ -3,7 +3,6 @@
 [templates.waybar]
 input_path = '~/.config/matugen/templates/waybar.css'
 output_path = '~/.config/waybar/colors.css'
-post_hook = '~/.dotfiles/scripts/restart_waybar.sh'
 
 [templates.hyprland]
 input_path = '~/.config/matugen/templates/hyprland-colors.conf'
@@ -21,7 +20,7 @@ output_path = '~/.config/rofi/colors.rasi'
 [templates.polybar]
 input_path = '~/.config/matugen/templates/polybar.ini'
 output_path = '~/.dotfiles/polybar/colors.ini'
-post_hook = '~/.dotfiles/polybar/launch.sh'
+post_hook = 'polybar-msg cmd restart'
 
 [templates.dunst]
 input_path = '~/.config/matugen/templates/dunstrc'
