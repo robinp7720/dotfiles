@@ -13,7 +13,8 @@
       "Bash(killall:*)",
       "Bash(awww query:*)",
       "Bash(chmod:*)",
-      "Bash(awww kill)"
+      "Bash(awww kill)",
+      "Bash(/home/robin/.dotfiles/scripts/awww_wallpaper_watcher.sh:*)"
     ]
   }
 }
