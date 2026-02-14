@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec /home/robin/.local/bin/rofi -show run
+exec "$HOME/.local/bin/rofi" -show run

@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec /home/robin/.local/bin/rofi -show combi
+exec "$HOME/.local/bin/rofi" -show combi
