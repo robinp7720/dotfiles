@@ -10,7 +10,8 @@ DEFAULT_WALLPAPER_FALLBACK="${AWWW_DEFAULT_WALLPAPER:-$HOME/.wallpaper.png}"
 THEME_WALLPAPER_OVERRIDE="${AWWW_THEME_WALLPAPER:-}"
 RUN_MATUGEN=true
 WATCH=true
-LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/awww-wallpaper.lock"
+WAYLAND_DISPLAY_NAME="${WAYLAND_DISPLAY:-wayland-0}"
+LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/awww-wallpaper-${WAYLAND_DISPLAY_NAME}.lock"
 
 usage() {
   cat <<'USAGE'
@@ -147,8 +148,12 @@ ensure_daemon() {
   local wayland_display
   runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   wayland_display="${WAYLAND_DISPLAY:-wayland-0}"
-  rm -f "$runtime_dir/${wayland_display}-awww-daemon..sock" "$runtime_dir/${wayland_display}-awww-daemon..socket"
-  awww-daemon -q >"$runtime_dir/awww-daemon.log" 2>&1 &
+  rm -f \
+    "$runtime_dir/${wayland_display}-awww-daemon.sock" \
+    "$runtime_dir/${wayland_display}-awww-daemon.socket" \
+    "$runtime_dir/${wayland_display}-awww-daemon..sock" \
+    "$runtime_dir/${wayland_display}-awww-daemon..socket"
+  awww-daemon -q >"$runtime_dir/awww-daemon-${wayland_display}.log" 2>&1 &
 
   local i
   for i in {1..20}; do
@@ -209,8 +214,26 @@ get_hypr_outputs_sorted() {
 
 outputs_from_workspaces_line() {
   printf '%s\n' "$1" \
-    | grep -oE 'output: Some\\(\"[^\"]+\"\)' \
-    | sed -E 's/^output: Some\\(\"|\"\)$//g' \
+    | awk '{
+        line = $0
+        needle = "output: Some(\""
+        while (1) {
+          start = index(line, needle)
+          if (start == 0) {
+            break
+          }
+          line = substr(line, start + length(needle))
+          finish = index(line, "\")")
+          if (finish == 0) {
+            break
+          }
+          output = substr(line, 1, finish - 1)
+          if (output != "") {
+            print output
+          }
+          line = substr(line, finish + 2)
+        }
+      }' \
     | sort -u
 }
 
