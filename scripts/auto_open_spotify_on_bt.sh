@@ -45,7 +45,7 @@ else
 fi
 
 # Listen for new/changed sinks; fire when a Bluetooth sink appears.
-pactl subscribe | while read -r line; do
+while read -r line; do
   case "$line" in
     *"on sink"*|*"on server"*)
       log_event "event received: $line"
@@ -64,4 +64,4 @@ pactl subscribe | while read -r line; do
       fi
       ;;
   esac
-done
+done < <(pactl subscribe)

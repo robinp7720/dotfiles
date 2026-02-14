@@ -167,20 +167,26 @@ ensure_daemon() {
 }
 
 apply_wallpaper() {
-  local args=(--resize crop --transition-type simple --transition-step 255)
-
-  if [ -n "$DEFAULT_WALLPAPER" ]; then
-    awww img "${args[@]}" "$DEFAULT_WALLPAPER" >/dev/null 2>&1 || true
+  if ! ensure_daemon; then
+    return 1
   fi
 
-  if [ "${#OUTPUT_WALLPAPERS[@]}" -gt 0 ]; then
-    for output in "${!OUTPUT_WALLPAPERS[@]}"; do
-      local path
-      path="${OUTPUT_WALLPAPERS[$output]}"
-      if [ -f "$path" ]; then
+  local args=(--resize crop --transition-type simple --transition-step 255)
+  local connected_outputs
+  connected_outputs="$(get_connected_outputs)"
+
+  if [ -n "$connected_outputs" ]; then
+    # Apply the correct wallpaper to each output directly (no default-then-override).
+    while IFS= read -r output; do
+      [ -z "$output" ] && continue
+      local path="${OUTPUT_WALLPAPERS[$output]:-$DEFAULT_WALLPAPER}"
+      if [ -n "$path" ] && [ -f "$path" ]; then
         awww img --outputs "$output" "${args[@]}" "$path" >/dev/null 2>&1 || true
       fi
-    done
+    done <<< "$connected_outputs"
+  elif [ -n "$DEFAULT_WALLPAPER" ]; then
+    # Fallback when we can't enumerate outputs (no compositor IPC available).
+    awww img "${args[@]}" "$DEFAULT_WALLPAPER" >/dev/null 2>&1 || true
   fi
 }
 
@@ -210,6 +216,14 @@ get_niri_outputs_sorted() {
 
 get_hypr_outputs_sorted() {
   hyprctl monitors 2>/dev/null | awk '/^Monitor /{print $2}' | sort -u
+}
+
+get_connected_outputs() {
+  if command -v hyprctl >/dev/null 2>&1 && hyprctl monitors >/dev/null 2>&1; then
+    get_hypr_outputs_sorted
+  elif command -v niri >/dev/null 2>&1 && niri msg outputs >/dev/null 2>&1; then
+    get_niri_outputs_sorted
+  fi
 }
 
 outputs_from_workspaces_line() {
