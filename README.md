@@ -17,7 +17,7 @@ These dotfiles assume an Arch Linux (or derivative) system with the following co
 - Bars and launchers: `polybar`, `waybar`, `rofi`, `dunst`, `rofi-wayland` (or equivalent), `cairo-dock`
 - Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `xclip`, `dunstify`
 - Theming and helpers: `matugen`, `sgpt` (placed at `~/.local/bin/sgpt` for the GPT clipboard module), `checkupdates` (from `pacman-contrib`)
-- AUR helper configured through the `AURHELPER` variable (`paru` by default, `yay` supported); both are used by Polybar and `scripts/update.sh`
+- AUR helper configured through the `AURHELPER` variable (`paru` by default, `yay` supported); used by Polybar and the automatic update service
 
 Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).
 
@@ -43,7 +43,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `waybar/` – Waybar configuration and CSS theme generated via Matugen, with a custom power button wired to `scripts/power_menu.sh`.
 - `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Dunst, and greetd/nwg-hello.
 - `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
-- `scripts/` – Utility scripts such as `update.sh` (runs `paru`/`yay` with notifications), `update-notification.sh` (launches an update terminal via Dunst actions), and `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi).
+- `scripts/` – Utility scripts such as `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi), `now_playing.sh` (current track for Hyprlock), and Bluetooth/wallpaper helpers.
 - `arch-auto-update/` – Template config for unattended background updates (`~/.config/arch-auto-update/config.env`).
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/` and setup links it into `/etc/nwg-hello`.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
@@ -57,14 +57,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
 
-## Updating Packages
-Use the Polybar update module (`updates-pacman-aurhelper`) or run the helper manually:
-```bash
-AURHELPER=paru ~/.dotfiles/scripts/update.sh
-```
-Successful runs fire a Dunst notification; failures notify as well. Set `AURHELPER` to `yay` if that’s your preferred helper.
-
-### Automatic background updates
+## Automatic Background Updates
 This repo also provides user-level `systemd` automation:
 
 - Service: `arch-auto-update.service`
