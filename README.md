@@ -44,6 +44,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Dunst, and greetd/nwg-hello.
 - `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `update.sh` (runs `paru`/`yay` with notifications), `update-notification.sh` (launches an update terminal via Dunst actions), and `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi).
+- `arch-auto-update/` – Template config for unattended background updates (`~/.config/arch-auto-update/config.env`).
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/` and setup links it into `/etc/nwg-hello`.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
@@ -62,6 +63,44 @@ Use the Polybar update module (`updates-pacman-aurhelper`) or run the helper man
 AURHELPER=paru ~/.dotfiles/scripts/update.sh
 ```
 Successful runs fire a Dunst notification; failures notify as well. Set `AURHELPER` to `yay` if that’s your preferred helper.
+
+### Automatic background updates
+This repo also provides user-level `systemd` automation:
+
+- Service: `arch-auto-update.service`
+- Timer: `arch-auto-update.timer` (daily at `03:00` with up to `2h` randomized delay)
+- Config: `~/.config/arch-auto-update/config.env`
+- Logs/state: `~/.local/state/arch-auto-update/`
+
+The updater:
+- Uses the configured `AURHELPER` (`paru` or `yay`)
+- Runs non-interactive `-Syu`
+- Stores full logs and JSON summaries
+- Sends Dunst notifications for success, failures, manual intervention hints, package notices, reboot-likely updates, and `.pacnew/.pacsave` files
+- Writes notification diagnostics to process stderr (visible in user journal)
+
+Requirement:
+- Non-interactive `sudo` for pacman must be available (`sudo -n /usr/bin/pacman -V`), otherwise the run is marked as manual-intervention-required and no updates are installed.
+- Helper script to configure this:
+  ```bash
+  sudo ~/.dotfiles/scripts/setup-arch-auto-update-sudo.sh --user "$USER"
+  ```
+  To remove the rule later:
+  ```bash
+  sudo ~/.dotfiles/scripts/setup-arch-auto-update-sudo.sh --remove --user "$USER"
+  ```
+
+Recommended background config (to avoid long "stuck" AUR rebuilds):
+- `AUTO_UPDATE_DEVEL=0` keeps VCS/devel packages out of automatic refresh.
+- `UPDATE_TIMEOUT=4h` limits maximum run time.
+- Both are configurable in `~/.config/arch-auto-update/config.env`.
+
+Manual controls:
+```bash
+systemctl --user status arch-auto-update.timer
+systemctl --user start arch-auto-update.service
+journalctl --user -u arch-auto-update.service -n 100 --no-pager
+```
 
 ## License
 No explicit license has been provided. Treat the contents as personal reference unless you have permission to reuse them.

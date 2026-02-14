@@ -71,7 +71,7 @@ done
 
 # Link user systemd units
 mkdir -p "$HOME/.config/systemd/user"
-for unit in "$DIR"/systemd/user/*.service; do
+for unit in "$DIR"/systemd/user/*.service "$DIR"/systemd/user/*.timer; do
   [[ -e "$unit" ]] || continue
   target="$HOME/.config/systemd/user/$(basename "$unit")"
   if [[ -L "$target" ]]; then
