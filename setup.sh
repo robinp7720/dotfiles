@@ -26,6 +26,7 @@ directories=(
   "waybar"
   "nwg-hello"
   "greetd"
+  "anyrun"
 )
 
 for dir in "${directories[@]}"; do

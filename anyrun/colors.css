@@ -1,0 +1,17 @@
+@define-color primary #86d992;
+@define-color on-primary #003915;
+@define-color primary-container #005321;
+@define-color on-primary-container #a1f6ac;
+@define-color secondary #9bd4a0;
+@define-color on-secondary #003915;
+@define-color secondary-container #1b5129;
+@define-color on-secondary-container #b6f1bb;
+@define-color surface #091516;
+@define-color on-surface #d7e5e6;
+@define-color on-surface-variant #b1cccd;
+@define-color surface-container #152222;
+@define-color surface-container-high #1f2c2d;
+@define-color surface-container-highest #2a3738;
+@define-color outline #7b9697;
+@define-color outline-variant #324b4c;
+@define-color shadow #000000;

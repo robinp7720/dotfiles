@@ -1,0 +1,73 @@
+@import url("colors.css");
+
+window {
+  background: transparent;
+}
+
+box.main {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background-color: alpha(@surface-container, 0.92);
+  box-shadow: 0 4px 12px alpha(@shadow, 0.4);
+}
+
+entry {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background-color: @primary;
+  color: @on-primary;
+  caret-color: @on-primary;
+  font-size: 15px;
+}
+
+entry placeholder {
+  color: alpha(@on-primary, 0.6);
+}
+
+.matches {
+  background: transparent;
+  margin-top: 6px;
+}
+
+box.plugin:first-child {
+  margin-top: 0;
+}
+
+box.plugin.info {
+  min-width: 200px;
+}
+
+list.plugin {
+  background: transparent;
+}
+
+label.match {
+  color: @on-surface;
+  font-size: 14px;
+}
+
+label.match.description {
+  font-size: 11px;
+  color: @on-surface-variant;
+}
+
+label.plugin.info {
+  font-size: 14px;
+  color: @on-surface;
+}
+
+.match {
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 150ms ease-in-out;
+}
+
+.match:selected {
+  border: 1px solid @outline-variant;
+  background: transparent;
+}

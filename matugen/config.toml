@@ -38,6 +38,10 @@ output_path = '~/.config/eww/colors.scss'
 input_path = '~/.config/matugen/templates/greetd.css'
 output_path = '/var/cache/matugen/greetd.css'
 
+[templates.anyrun]
+input_path = '~/.config/matugen/templates/anyrun.css'
+output_path = '~/.config/anyrun/colors.css'
+
 [templates.refind]
 input_path = '~/.config/matugen/templates/refind.json'
 output_path = '/var/cache/matugen/refind-colors.json'
