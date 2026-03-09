@@ -33,7 +33,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
    chmod +x setup.sh
    ./setup.sh
    ```
-   The script will link `zshrc` to `~/.zshrc` and replace the directories listed in `setup.sh` inside `~/.config/`. If `sudo` is available and `/etc/{nwg-hello,greetd}` exist, it will also install/link the greetd + nwg-hello configs and point their CSS to Matugen’s cache.
+   The script will link `zshrc` to `~/.zshrc` and replace the directories listed in `setup.sh` inside `~/.config/`. If `sudo` is available and `/etc/{nwg-hello,greetd}` exist, it will also install/link the greetd + nwg-hello configs, install a shared Hypr base config for both sessions, and point CSS to Matugen’s cache.
 4. **Restart your session** or reload individual applications (e.g. `polybar`, `waybar`, `hyprland reload`) to pick up the new configuration.
 
 ## Repo Layout
@@ -45,7 +45,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi), `now_playing.sh` (current track for Hyprlock), and Bluetooth/wallpaper helpers.
 - `arch-auto-update/` – Template config for unattended background updates (`~/.config/arch-auto-update/config.env`).
-- `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/` and setup links it into `/etc/nwg-hello`.
+- `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
 ## Customization Notes
@@ -53,7 +53,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Hyprland modes**: Run the scripts from `hypr/scripts/modes/` to swap monitor layouts (`default.sh`, `game.sh`, `game_external.sh`). Each overwrites `~/.config/hypr/monitors.conf`.
 - **BSPWM modes**: Trigger the scripts in `bspwm/modes/` (e.g. `all_monitors.sh`, `external_only.sh`) to adjust workspace assignments, padding, and Polybar/Nitrogen behavior.
 - **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Kitty, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
-- **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml` and `nwg-hello/hyprland.conf` into `/etc`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
+- **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
 

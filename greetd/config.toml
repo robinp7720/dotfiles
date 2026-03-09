@@ -5,5 +5,5 @@ vt = 1
 # The default session, also known as the greeter.
 [default_session]
 # `agreety` is the bundled agetty/login-lookalike. We start Hyprland with nwg-hello instead.
-command = "env AQ_DRM_DEVICES=/dev/dri/card2:/dev/dri/card1 AQ_MGPU_NO_EXPLICIT=1 AQ_NO_MODIFIERS=1 AQ_FORCE_LINEAR_BLIT=1 Hyprland --config /etc/nwg-hello/hyprland.conf"
+command = "Hyprland --config /etc/nwg-hello/hyprland.conf"
 user = "greeter"

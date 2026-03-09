@@ -96,6 +96,7 @@ if command -v sudo >/dev/null 2>&1 && [[ -d /etc/nwg-hello ]]; then
   cache_css="${cache_dir}/greetd.css"
   target_css="/etc/nwg-hello/nwg-hello.css"
   target_hypr="/etc/nwg-hello/hyprland.conf"
+  target_base="/etc/nwg-hello/base.conf"
   target_monitors="/etc/nwg-hello/monitors.conf"
 
   sudo mkdir -p "$cache_dir"
@@ -115,6 +116,17 @@ if command -v sudo >/dev/null 2>&1 && [[ -d /etc/nwg-hello ]]; then
     fi
     sudo install -m 644 "$DIR/nwg-hello/hyprland.conf" "$target_hypr"
     echo "Installed greetd Hyprland config to $target_hypr"
+  fi
+
+  # Install shared Hyprland base for greetd/nwg-hello
+  if [[ -e "$DIR/hypr/hyprland-config/base.conf" ]]; then
+    if [[ -L "$target_base" || -e "$target_base" ]]; then
+      backup="${target_base}.bak.$(date +%s)"
+      echo "Backing up existing $target_base to $backup (requires sudo)"
+      sudo mv -- "$target_base" "$backup"
+    fi
+    sudo install -m 644 "$DIR/hypr/hyprland-config/base.conf" "$target_base"
+    echo "Installed greetd shared Hyprland base to $target_base"
   fi
 
   # Install monitor layout for greetd Hyprland (copied from main Hypr config)
