@@ -14,7 +14,9 @@
       "Bash(awww query:*)",
       "Bash(chmod:*)",
       "Bash(awww kill)",
-      "Bash(/home/robin/.dotfiles/scripts/awww_wallpaper_watcher.sh:*)"
+      "Bash(/home/robin/.dotfiles/scripts/awww_wallpaper_watcher.sh:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
