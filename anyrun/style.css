@@ -1,35 +1,58 @@
 @import url("colors.css");
 
+* {
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono", "FiraCode Nerd Font";
+  font-size: 14px;
+  font-weight: 500;
+}
+
 window {
   background: transparent;
 }
 
 box.main {
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background-color: alpha(@surface-container, 0.92);
-  box-shadow: 0 4px 12px alpha(@shadow, 0.4);
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid alpha(@outline-variant, 0.65);
+  background-color: alpha(@surface-container-high, 0.9);
+  box-shadow: 0 6px 18px alpha(@shadow, 0.35);
 }
 
+text,
 entry {
-  min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: none;
-  background-color: @primary;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid alpha(@primary, 0.9);
+  background-color: alpha(@primary, 0.96);
   color: @on-primary;
   caret-color: @on-primary;
-  font-size: 15px;
+  box-shadow: 0 4px 12px alpha(@primary, 0.3);
+  font-size: 16px;
+  font-weight: 600;
 }
 
+text:focus,
+entry:focus {
+  border-color: @primary;
+  box-shadow: 0 0 0 2px alpha(@primary, 0.3), 0 6px 16px alpha(@primary, 0.38);
+}
+
+text placeholder,
 entry placeholder {
-  color: alpha(@on-primary, 0.6);
+  color: alpha(@on-primary, 0.72);
 }
 
 .matches {
   background: transparent;
-  margin-top: 6px;
+  margin-top: 8px;
+  padding: 0;
+}
+
+box.plugin {
+  margin: 0;
+  padding: 0;
+  spacing: 10px;
 }
 
 box.plugin:first-child {
@@ -37,20 +60,30 @@ box.plugin:first-child {
 }
 
 box.plugin.info {
-  min-width: 200px;
+  min-width: 220px;
+  margin-left: 0;
+  margin-right: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid alpha(@outline-variant, 0.6);
+  background-color: alpha(@surface-container, 0.95);
 }
 
 list.plugin {
   background: transparent;
+  margin: 0;
+  padding: 0;
 }
 
-label.match {
+.match .title,
+label.title {
   color: @on-surface;
   font-size: 14px;
 }
 
-label.match.description {
-  font-size: 11px;
+.match .description,
+label.description {
+  font-size: 12px;
   color: @on-surface-variant;
 }
 
@@ -60,14 +93,30 @@ label.plugin.info {
 }
 
 .match {
-  padding: 5px 8px;
-  border-radius: 4px;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
   transition: all 150ms ease-in-out;
 }
 
+.match:hover {
+  border: 1px solid alpha(@outline-variant, 0.55);
+  background: alpha(@surface-container-highest, 0.72);
+}
+
 .match:selected {
-  border: 1px solid @outline-variant;
-  background: transparent;
+  border: 1px solid alpha(@primary, 0.55);
+  background: alpha(@primary-container, 0.92);
+}
+
+.match:selected .title,
+.match:selected label.title {
+  color: @on-primary-container;
+}
+
+.match:selected .description,
+.match:selected label.description {
+  color: alpha(@on-primary-container, 0.78);
 }
