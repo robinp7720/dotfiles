@@ -1,8 +1,8 @@
 use crate::monitor::Monitor;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -40,10 +40,12 @@ impl Config {
 
         let content = fs::read_to_string(path)?;
         let config: Config = toml::from_str(&content).context("Failed to parse config.toml")?;
+        config.validate()?;
         Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
+        self.validate()?;
         let path = get_config_path()?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -84,6 +86,56 @@ impl Config {
 
         self.profiles.insert(hash, profile);
     }
+
+    fn validate(&self) -> Result<()> {
+        for (hardware_hash, profile) in &self.profiles {
+            let mut stable_ids = HashSet::new();
+
+            for monitor in &profile.monitors {
+                ensure!(
+                    !monitor.stable_id.trim().is_empty(),
+                    "Profile '{}' ({hardware_hash}) has a monitor with an empty stable_id",
+                    profile.name
+                );
+                ensure!(
+                    monitor.width > 0 && monitor.height > 0,
+                    "Profile '{}' ({hardware_hash}) has invalid monitor dimensions for '{}'",
+                    profile.name,
+                    monitor.stable_id
+                );
+                ensure!(
+                    monitor.scale.is_finite() && monitor.scale > 0.0,
+                    "Profile '{}' ({hardware_hash}) has invalid scale for '{}'",
+                    profile.name,
+                    monitor.stable_id
+                );
+                ensure!(
+                    monitor.transform <= 7,
+                    "Profile '{}' ({hardware_hash}) has invalid transform for '{}'",
+                    profile.name,
+                    monitor.stable_id
+                );
+                ensure!(
+                    stable_ids.insert(monitor.stable_id.clone()),
+                    "Profile '{}' ({hardware_hash}) contains duplicate monitor stable_id '{}'",
+                    profile.name,
+                    monitor.stable_id
+                );
+            }
+
+            if let Some(commands) = &profile.commands {
+                for command in commands {
+                    ensure!(
+                        !command.trim().is_empty(),
+                        "Profile '{}' ({hardware_hash}) contains an empty command",
+                        profile.name
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn generate_hardware_hash(monitors: &[Monitor]) -> String {
@@ -103,4 +155,58 @@ fn get_config_path() -> Result<PathBuf> {
     path.push("session-manager");
     path.push("config.toml");
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_monitor(stable_id: &str) -> MonitorConfig {
+        MonitorConfig {
+            stable_id: stable_id.to_string(),
+            x: 0,
+            y: 0,
+            scale: 1.0,
+            transform: 0,
+            primary: false,
+            width: 1920,
+            height: 1080,
+            refresh_rate: 60000,
+        }
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_stable_ids() {
+        let config = Config {
+            profiles: HashMap::from([(
+                "hash".to_string(),
+                Profile {
+                    name: "desk".to_string(),
+                    monitors: vec![sample_monitor("DP_1"), sample_monitor("DP_1")],
+                    commands: None,
+                },
+            )]),
+        };
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_invalid_transform() {
+        let mut monitor = sample_monitor("DP_1");
+        monitor.transform = 8;
+
+        let config = Config {
+            profiles: HashMap::from([(
+                "hash".to_string(),
+                Profile {
+                    name: "desk".to_string(),
+                    monitors: vec![monitor],
+                    commands: None,
+                },
+            )]),
+        };
+
+        assert!(config.validate().is_err());
+    }
 }

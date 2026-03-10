@@ -226,6 +226,11 @@ fn get_x11_monitors() -> Result<Vec<Monitor>> {
         .output()
         .context("Failed to execute xrandr")?;
 
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("xrandr --prop failed: {}", stderr.trim());
+    }
+
     let output_str = String::from_utf8_lossy(&output.stdout);
 
     // Primitive parser for xrandr

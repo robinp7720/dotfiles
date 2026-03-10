@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use config::Config;
 use monitor::Monitor;
+use std::ffi::OsString;
 use std::process::Command;
 
 #[derive(Parser)]
@@ -35,7 +36,7 @@ fn main() -> Result<()> {
         Commands::List => {
             let monitors = monitor::get_connected_monitors()?;
             println!("Connected Monitors:");
-            for m in monitors {
+            for m in &monitors {
                 println!("  Interface: {}", m.interface);
                 println!("  Description: {}", m.description);
                 println!("  Stable ID: {}", m.get_stable_id());
@@ -52,7 +53,7 @@ fn main() -> Result<()> {
                 }
                 println!("---");
             }
-            let hash = config::generate_hardware_hash(&monitor::get_connected_monitors()?);
+            let hash = config::generate_hardware_hash(&monitors);
             println!("Current Hardware Hash: {}", hash);
         }
         Commands::Save { name } => {
@@ -124,6 +125,24 @@ fn is_niri() -> bool {
     std::env::var("NIRI_SOCKET").is_ok()
 }
 
+fn run_command<I, S>(program: &str, args: I) -> Result<()>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+{
+    let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
+    let status = Command::new(program)
+        .args(&args)
+        .status()
+        .with_context(|| format!("Failed to run {}", program))?;
+
+    if status.success() {
+        return Ok(());
+    }
+
+    anyhow::bail!("{} exited with status {}", program, status);
+}
+
 fn apply_niri(
     profile: &config::Profile,
     interface_map: &std::collections::HashMap<String, String>,
@@ -172,7 +191,7 @@ fn apply_niri(
                 if dry_run {
                     println!("niri {}", full_args.join(" "));
                 } else {
-                    Command::new("niri").args(&full_args).status()?;
+                    run_command("niri", full_args)?;
                 }
             }
 
@@ -181,7 +200,7 @@ fn apply_niri(
             if dry_run {
                 println!("niri {}", transform_args.join(" "));
             } else {
-                Command::new("niri").args(&transform_args).status()?;
+                run_command("niri", transform_args)?;
             }
         }
     }
@@ -294,7 +313,7 @@ fn apply_xrandr(
     if dry_run {
         println!("xrandr {}", args.join(" "));
     } else {
-        Command::new("xrandr").args(&args).status()?;
+        run_command("xrandr", args)?;
     }
 
     Ok(())
