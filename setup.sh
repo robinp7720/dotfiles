@@ -33,9 +33,29 @@ sudo_backup_existing() {
   fi
 }
 
+symlink_points_to() {
+  local target="$1"
+  local expected="$2"
+
+  [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$expected" ]]
+}
+
+sudo_symlink_points_to() {
+  local target="$1"
+  local expected="$2"
+  local current
+
+  current="$(sudo readlink "$target" 2>/dev/null || true)"
+  [[ -n "$current" ]] && [[ "$current" == "$expected" ]]
+}
+
 link_path() {
   local src="$1"
   local target="$2"
+
+  if symlink_points_to "$target" "$src"; then
+    return 0
+  fi
 
   backup_existing "$target"
   ln -sfn "$src" "$target"
@@ -45,6 +65,10 @@ sudo_link_path() {
   local src="$1"
   local target="$2"
 
+  if sudo_symlink_points_to "$target" "$src"; then
+    return 0
+  fi
+
   sudo_backup_existing "$target"
   sudo ln -sfn "$src" "$target"
 }
@@ -52,6 +76,10 @@ sudo_link_path() {
 sudo_install_file() {
   local src="$1"
   local target="$2"
+
+  if sudo test -e "$target" && sudo cmp -s "$src" "$target"; then
+    return 0
+  fi
 
   sudo_backup_existing "$target"
   sudo install -m 644 "$src" "$target"
@@ -119,8 +147,14 @@ if command -v systemctl >/dev/null 2>&1; then
   if ! systemctl --user daemon-reload; then
     warn "systemctl --user daemon-reload failed"
   fi
-  if ! systemctl --user enable --now auto-spotify.service; then
-    warn "failed to enable/start auto-spotify.service"
+  if [[ "${AUTO_ENABLE_SPOTIFY_SERVICE:-1}" == "1" ]]; then
+    if command -v pactl >/dev/null 2>&1 && command -v spotify >/dev/null 2>&1; then
+      if ! systemctl --user enable --now auto-spotify.service; then
+        warn "failed to enable/start auto-spotify.service"
+      fi
+    else
+      warn "skipping auto-spotify.service enablement because pactl or spotify is unavailable"
+    fi
   fi
 fi
 

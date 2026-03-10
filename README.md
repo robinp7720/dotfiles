@@ -1,23 +1,24 @@
 # Robin's Dotfiles
 
-Personal configuration files that power both my Wayland (Hyprland) and X11 (bspwm) desktops. The repo bundles window manager layouts, status bars, launchers, terminal themes, and helper scripts so the environment can be reproduced quickly on a fresh Arch-based install.
+Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) desktops. The repo bundles monitor layouts, status bars, launchers, terminal themes, helper scripts, and a small Rust tool for session-aware monitor profile switching.
 
 ## Highlights
 - **Hyprland setup** with shared configuration, multi-monitor layouts (`hypr/monitor_layouts`), and scripts for switching between default, game, and external display modes. Cursor theme is enforced via env vars to avoid the Hypr logo pointer.
-- **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, and `nitrogen`.
+- **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, `nitrogen`, and `superpaper`.
 - **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Waybar, Kitty (with an automatic USR1 reload hook), Rofi, Dunst, and greetd/nwg-hello from a single template directory.
-- **Productivity bars**: Polybar modules cover GPU-friendly clipboard-to-GPT prompts, pacman/AUR update counters with notifications, bluetooth, MPD, and more; Waybar styles live alongside Wayland configs and include a clickable power menu.
+- **Productivity bars**: Polybar and Waybar configs live alongside the compositor configs, with custom power, Bluetooth, profile, and media helpers.
 - **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
+- **Native tools** under `tools/`: `session-manager` for hardware-aware display profiles and `launcher` for a Rust-backed app launcher source.
 
 ## Requirements
 These dotfiles assume an Arch Linux (or derivative) system with the following core packages available:
 
 - Window managers and daemons: `hyprland`, `hypridle`, `hyprpaper`, `hyprsunset`, `bspwm`, `sxhkd`, `nitrogen`
 - Greeter: `greetd`, `nwg-hello`
-- Bars and launchers: `polybar`, `waybar`, `rofi`, `dunst`, `rofi-wayland` (or equivalent), `cairo-dock`
-- Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `xclip`, `dunstify`
-- Theming and helpers: `matugen`, `sgpt` (placed at `~/.local/bin/sgpt` for the GPT clipboard module), `checkupdates` (from `pacman-contrib`)
-- AUR helper configured through the `AURHELPER` variable (`paru` by default, `yay` supported); used by Polybar and the automatic update service
+- Bars and launchers: `polybar`, `waybar`, `rofi` or `rofi-wayland`, `dunst`, `anyrun`, `eww`, `cairo-dock`
+- Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `playerctl`, `xclip`, `dunstify`, `bluetoothctl`, `powerprofilesctl`, `pactl`
+- Theming and helpers: `matugen`, `swww`/`awww` wallpaper tooling, `superpaper`, `sgpt` (for clipboard-to-GPT helpers)
+- Optional Rust toolchain: required only if you want to rebuild binaries in `tools/`
 
 Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).
 
@@ -27,13 +28,13 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
    git clone https://github.com/robinp7720/dotfiles.git ~/.dotfiles
    cd ~/.dotfiles
    ```
-2. **Back up existing config** – the setup script removes `~/.config/<dir>` before recreating the symlink. Make a copy if you have existing settings you care about.
+2. **Back up existing config** – `setup.sh` replaces conflicting files or directories with timestamped backups before linking. Review anything already living under `~/.config` if you care about preserving it.
 3. **Run the linker**
    ```bash
    chmod +x setup.sh
    ./setup.sh
    ```
-   The script will link `zshrc` to `~/.zshrc` and replace the directories listed in `setup.sh` inside `~/.config/`. If `sudo` is available and `/etc/{nwg-hello,greetd}` exist, it will also install/link the greetd + nwg-hello configs, install a shared Hypr base config for both sessions, and point CSS to Matugen’s cache.
+   The script links `zshrc` to `~/.zshrc`, symlinks the configured directories into `~/.config/`, links user `systemd` units, and reloads the user daemon. If `sudo` is available and `/etc/{nwg-hello,greetd}` exist, it also installs the greetd + nwg-hello files and links CSS to Matugen’s cache.
 4. **Restart your session** or reload individual applications (e.g. `polybar`, `waybar`, `hyprland reload`) to pick up the new configuration.
 
 ## Repo Layout
@@ -44,8 +45,8 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Dunst, and greetd/nwg-hello.
 - `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi), `now_playing.sh` (current track for Hyprlock), and Bluetooth/wallpaper helpers.
-- `arch-auto-update/` – Template config for unattended background updates (`~/.config/arch-auto-update/config.env`).
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
+- `tools/` – Rust utilities such as `session-manager` and `launcher`.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
 ## Customization Notes
@@ -54,46 +55,11 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **BSPWM modes**: Trigger the scripts in `bspwm/modes/` (e.g. `all_monitors.sh`, `external_only.sh`) to adjust workspace assignments, padding, and Polybar/Nitrogen behavior.
 - **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Kitty, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
 - **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
+- **Rofi wrapper**: `setup.sh` links `scripts/rofi_wrapper.sh` to `~/.local/bin/rofi`, so custom Rofi scripts can always call `rofi` while still applying the Niri-specific theme automatically.
+- **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
-
-## Automatic Background Updates
-This repo also provides user-level `systemd` automation:
-
-- Service: `arch-auto-update.service`
-- Timer: `arch-auto-update.timer` (daily at `03:00` with up to `2h` randomized delay)
-- Config: `~/.config/arch-auto-update/config.env`
-- Logs/state: `~/.local/state/arch-auto-update/`
-
-The updater:
-- Uses the configured `AURHELPER` (`paru` or `yay`)
-- Runs non-interactive `-Syu`
-- Stores full logs and JSON summaries
-- Sends Dunst notifications for success, failures, manual intervention hints, package notices, reboot-likely updates, and `.pacnew/.pacsave` files
-- Writes notification diagnostics to process stderr (visible in user journal)
-
-Requirement:
-- Non-interactive `sudo` for pacman must be available (`sudo -n /usr/bin/pacman -V`), otherwise the run is marked as manual-intervention-required and no updates are installed.
-- Helper script to configure this:
-  ```bash
-  sudo ~/.dotfiles/scripts/setup-arch-auto-update-sudo.sh --user "$USER"
-  ```
-  To remove the rule later:
-  ```bash
-  sudo ~/.dotfiles/scripts/setup-arch-auto-update-sudo.sh --remove --user "$USER"
-  ```
-
-Recommended background config (to avoid long "stuck" AUR rebuilds):
-- `AUTO_UPDATE_DEVEL=0` keeps VCS/devel packages out of automatic refresh.
-- `UPDATE_TIMEOUT=4h` limits maximum run time.
-- Both are configurable in `~/.config/arch-auto-update/config.env`.
-
-Manual controls:
-```bash
-systemctl --user status arch-auto-update.timer
-systemctl --user start arch-auto-update.service
-journalctl --user -u arch-auto-update.service -n 100 --no-pager
-```
+- **Session manager**: Build `tools/session-manager` if you want to save and reapply monitor profiles across X11, Hyprland, and Niri sessions.
 
 ## License
 No explicit license has been provided. Treat the contents as personal reference unless you have permission to reuse them.

@@ -4,6 +4,11 @@ set -euo pipefail
 # Query or toggle power-profilesctl for Waybar
 PPCTL=powerprofilesctl
 
+if ! command -v "$PPCTL" >/dev/null 2>&1; then
+    printf '{"text":"","tooltip":"powerprofilesctl not installed"}\n'
+    exit 0
+fi
+
 current="$($PPCTL get)"
 
 readarray -t profiles < <($PPCTL list | awk '/^[* ] *(balanced|power-saver|performance)/ {name=$1=="*"?$2:$1; gsub(":","",name); print name}')
