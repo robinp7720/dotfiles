@@ -1,21 +1,21 @@
-#! /bin/sh
+#!/usr/bin/env bash
 
-source ~/.config/environment
+set -euo pipefail
+
+source "$HOME/.config/bspwm/helpers/mode_common.sh"
+
+load_environment
 
 bspc monitor primary -d "main"
-
-~/.config/bspwm/helpers/clear_mode.sh
+clear_mode
 
 # Set the screen resolution and layout
-~/.screenlayout/game_seperate.sh
+run_screenlayout "$HOME/.screenlayout/game_seperate.sh"
 
 # Start polybar
 #~/.config/polybar/launch.sh &
 
-bspc config top_padding     0
-bspc config bottom_padding  0
-bspc config left_padding    0
-bspc config right_padding   0
+set_global_padding 0 0 0 0
 
 #superpaper &
 

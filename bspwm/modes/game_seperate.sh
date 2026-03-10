@@ -1,9 +1,11 @@
-#! /bin/sh
+#!/usr/bin/env bash
 
-source ~/.config/environment
+set -euo pipefail
 
-~/.config/bspwm/modes/external_only.sh
+source "$HOME/.config/bspwm/helpers/mode_common.sh"
 
+load_environment
+"$HOME/.config/bspwm/modes/external_only.sh"
 bspc desktop -l monocle
 
 # Start steam in big picture mode

@@ -1,4 +1,6 @@
-#! /bin/sh
+#!/usr/bin/env bash
 
-pkill -f polybar
-pkill -f superpaper
+set -euo pipefail
+
+pkill -x polybar >/dev/null 2>&1 || true
+pkill -x superpaper >/dev/null 2>&1 || true

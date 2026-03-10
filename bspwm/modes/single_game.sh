@@ -1,20 +1,20 @@
-#! /bin/sh
+#!/usr/bin/env bash
 
-source ~/.config/environment
+set -euo pipefail
 
-~/.config/bspwm/helpers/clear_mode.sh
+source "$HOME/.config/bspwm/helpers/mode_common.sh"
 
-bspc config top_padding     40
-bspc config bottom_padding  0
-bspc config left_padding    0
-bspc config right_padding   0
+load_environment
+clear_mode
+
+set_global_padding 40 0 0 0
 
 # Set the screen resolution and layout
-~/.screenlayout/single.sh
+run_screenlayout "$HOME/.screenlayout/single.sh"
 
 # Start polybar
-~/.config/polybar/launch.sh &
+start_polybar
 
-bspc monitor DP-2-2 -d  "I" "II" "III" "IV" "V" 
+assign_desktops_if_present DP-2-2 "I" "II" "III" "IV" "V"
 
-superpaper &
+start_background superpaper
