@@ -137,12 +137,18 @@ fn build_ui(
     {
         let sources = sources.clone();
         let entry = entry.clone();
+        let list = list.clone();
         let window = window.clone();
         let activate_entry = entry.clone();
         entry.connect_activate(move |_| {
             let query = activate_entry.text().to_string();
             let results = sources.search(&query, mode);
-            if let Some(item) = results.first().cloned() {
+            let selected = list
+                .selected_row()
+                .and_then(|row| results.get(row.index() as usize).cloned())
+                .or_else(|| results.first().cloned());
+
+            if let Some(item) = selected {
                 let _ = execute_action(&window, item.action);
             }
         });
@@ -304,11 +310,9 @@ fn launch_desktop_app(desktop_id: &str) -> Result<()> {
 }
 
 fn launch_ssh(host: &str) -> Result<()> {
-    let terminal = dirs::home_dir()
-        .map(|path| path.join(".dotfiles/scripts/launch_kitty.sh"))
-        .context("home directory not available")?;
+    let terminal = std::env::var("DOT_LAUNCHER_TERMINAL").unwrap_or_else(|_| "kitty".to_string());
 
-    Command::new(terminal)
+    Command::new(&terminal)
         .args(["-e", "ssh", host])
         .spawn()
         .context("failed to launch ssh session")?;

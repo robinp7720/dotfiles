@@ -1,10 +1,10 @@
+use crate::monitor::Monitor;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use sha2::{Sha256, Digest};
-use crate::monitor::Monitor;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -60,18 +60,21 @@ impl Config {
 
     pub fn add_profile(&mut self, name: String, monitors: &[Monitor]) {
         let hash = generate_hardware_hash(monitors);
-        
-        let monitor_configs = monitors.iter().map(|m| MonitorConfig {
-            stable_id: m.get_stable_id(),
-            x: m.x,
-            y: m.y,
-            scale: m.scale.unwrap_or(1.0),
-            transform: m.transform.unwrap_or(0),
-            primary: false, // TODO: Detect primary
-            width: m.width,
-            height: m.height,
-            refresh_rate: m.refresh_rate,
-        }).collect();
+
+        let monitor_configs = monitors
+            .iter()
+            .map(|m| MonitorConfig {
+                stable_id: m.get_stable_id(),
+                x: m.x,
+                y: m.y,
+                scale: m.scale.unwrap_or(1.0),
+                transform: m.transform.unwrap_or(0),
+                primary: false, // TODO: Detect primary
+                width: m.width,
+                height: m.height,
+                refresh_rate: m.refresh_rate,
+            })
+            .collect();
 
         let profile = Profile {
             name,
@@ -87,7 +90,7 @@ pub fn generate_hardware_hash(monitors: &[Monitor]) -> String {
     // Sort stable IDs to ensure consistent hash regardless of plug order
     let mut ids: Vec<String> = monitors.iter().map(|m| m.get_stable_id()).collect();
     ids.sort();
-    
+
     let joined = ids.join("|");
     let mut hasher = Sha256::new();
     hasher.update(joined);

@@ -458,12 +458,31 @@ fn parse_tracker_line(line: &str) -> Option<String> {
         .map(|(_, rest)| rest.trim())
         .unwrap_or(trimmed);
 
-    if let Some(path) = candidate.strip_prefix("file://") {
-        let path = path.replace("%20", " ");
-        return Some(path);
+    if candidate.starts_with("file://") {
+        let file = gio::File::for_uri(candidate);
+        if let Some(path) = file.path() {
+            return Some(path.to_string_lossy().to_string());
+        }
+
+        let decoded = urlencoding::decode(candidate.strip_prefix("file://")?).ok()?;
+        return Some(decoded.into_owned());
     }
 
     Some(candidate.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_tracker_line;
+
+    #[test]
+    fn tracker_paths_are_uri_decoded() {
+        let line = "file:///tmp/with%20space%23hash.txt";
+        assert_eq!(
+            parse_tracker_line(line).as_deref(),
+            Some("/tmp/with space#hash.txt")
+        );
+    }
 }
 
 fn command_exists(binary: &str) -> bool {
