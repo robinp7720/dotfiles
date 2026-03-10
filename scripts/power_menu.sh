@@ -33,7 +33,8 @@ case "$choice" in
     elif command -v loginctl >/dev/null 2>&1 && [[ -n "${XDG_SESSION_ID:-}" ]]; then
       loginctl terminate-session "$XDG_SESSION_ID"
     else
-      pkill -KILL -u "$USER"
+      printf 'No safe logout method found for the current session.\n' >&2
+      exit 1
     fi
     ;;
   *)

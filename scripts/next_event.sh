@@ -8,6 +8,16 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/next-event"
 CACHE_FILE="$CACHE_DIR/next_event.txt"
 CACHE_TTL_SECS=120
 
+write_cache() {
+  local value="$1"
+  local tmp
+
+  mkdir -p "$CACHE_DIR"
+  tmp="$(mktemp "$CACHE_DIR/next_event.XXXXXX")"
+  printf '%s\n' "$value" > "$tmp"
+  mv "$tmp" "$CACHE_FILE"
+}
+
 now_epoch=$(date +%s)
 
 if [ -f "$CACHE_FILE" ]; then
@@ -20,14 +30,12 @@ if [ -f "$CACHE_FILE" ]; then
   fi
 fi
 
-# Ensure cache dir exists
-mkdir -p "$CACHE_DIR"
-
 # Try khal first (commonly used with vdirsyncer)
 if command -v khal >/dev/null 2>&1; then
   # 'khal list' prints lines like: 2025-11-24 09:00-10:00  Event name
   line="$(khal list now 7d 2>/dev/null | sed -n '1p')"
   if [ -n "$line" ]; then
+    write_cache "$line"
     printf "%s" "$line"
     exit 0
   fi
@@ -71,9 +79,11 @@ if command -v gcalcli >/dev/null 2>&1; then
       out="${out} at ${location}"
     fi
 
-    printf "%s" "$out" | tee "$CACHE_FILE"
+    write_cache "$out"
+    printf "%s" "$out"
     exit 0
   fi
 fi
 
-echo "No upcoming events" | tee "$CACHE_FILE"
+write_cache "No upcoming events"
+echo "No upcoming events"
