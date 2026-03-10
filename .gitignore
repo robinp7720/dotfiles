@@ -11,3 +11,9 @@ rofi/colors.rasi
 eww/colors.scss
 niri/colors.kdl
 polybar/colors.ini
+
+# Local workspace metadata
+AGENTS.md
+
+# Rust build artifacts
+tools/*/target/

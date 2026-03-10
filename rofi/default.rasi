@@ -21,7 +21,7 @@ window {
     y-offset:                    0px;
 
     enabled:                     true;
-    margin:                      60px;
+    margin:                      0px;
     padding:                     0px;
     border:                      0px solid;
     border-radius:               8px;
