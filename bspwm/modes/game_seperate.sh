@@ -2,11 +2,13 @@
 
 set -euo pipefail
 
-source "$HOME/.config/bspwm/helpers/mode_common.sh"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../helpers/mode_common.sh"
 
 load_environment
-"$HOME/.config/bspwm/modes/external_only.sh"
+"$SCRIPT_DIR/external_only.sh"
 bspc desktop -l monocle
 
-# Start steam in big picture mode
-steam -start steam://open/bigpicture -fulldesktopres
+if command -v steam >/dev/null 2>&1; then
+  steam -start steam://open/bigpicture -fulldesktopres
+fi

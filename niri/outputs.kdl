@@ -1,0 +1,3 @@
+// Output layout lives here so `config.kdl` can include it safely on every machine.
+// Leave this file empty to let Niri auto-place outputs, or add `output` nodes
+// for host-specific monitor positions, modes, scales, and transforms.

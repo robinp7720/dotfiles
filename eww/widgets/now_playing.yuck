@@ -2,5 +2,5 @@
 
 (defwidget now-playing []
   (image :class "now-art-only"
-         :path (string "/home/robin/.cache/hyprlock/album.jpg?" album_mtime)
+         :path album_art_path
          :width 120 :height 120 :keep-aspect true))

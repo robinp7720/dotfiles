@@ -2,22 +2,13 @@
 
 set -euo pipefail
 
-source "$HOME/.config/bspwm/helpers/mode_common.sh"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../helpers/mode_common.sh"
 
-load_environment
+prepare_mode
 
 bspc monitor primary -d "main"
-clear_mode
-
-# Set the screen resolution and layout
 run_screenlayout "$HOME/.screenlayout/game_seperate.sh"
 
-# Start polybar
-#~/.config/polybar/launch.sh &
-
 set_global_padding 0 0 0 0
-
-#superpaper &
-
-xset -dpms
-xset s off
+disable_display_power_saving

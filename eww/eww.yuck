@@ -2,7 +2,10 @@
 
 (include "./vars/next_event.yuck")
 (include "./vars/agenda.yuck")
+(include "./vars/now_playing.yuck")
 (include "./widgets/next_event.yuck")
 (include "./widgets/agenda.yuck")
+(include "./widgets/now_playing.yuck")
 (include "./windows/next_event.yuck")
 (include "./windows/agenda.yuck")
+(include "./windows/now_playing.yuck")

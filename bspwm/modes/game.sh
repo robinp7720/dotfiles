@@ -2,15 +2,12 @@
 
 set -euo pipefail
 
-source "$HOME/.config/bspwm/helpers/mode_common.sh"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../helpers/mode_common.sh"
 
-load_environment
-clear_mode
+prepare_mode
 
-# Set the screen resolution and layout
 run_screenlayout "$HOME/.screenlayout/game.sh"
-
-# Start polybar
 start_polybar
 
 assign_desktops_if_present DP-2-2 "I" "II" "III" "IV" "V"

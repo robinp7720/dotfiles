@@ -2,4 +2,6 @@
 
 set -euo pipefail
 
-cp -- ~/.config/hypr/monitor_layouts/game.conf ~/.config/hypr/monitors.conf
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+exec "$SCRIPT_DIR/apply_layout.sh" game.conf

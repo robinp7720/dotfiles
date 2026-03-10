@@ -1,6 +1,5 @@
 hypr/hyprland.conf
 hypr/monitors.conf
-niri/outputs.kdl
 dunst/dunstrc
 colors.conf
 waybar/colors.css

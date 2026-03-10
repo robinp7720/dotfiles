@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 load_environment() {
   local env_file="$HOME/.config/environment"
   if [[ -f "$env_file" ]]; then
@@ -11,7 +13,7 @@ load_environment() {
 }
 
 clear_mode() {
-  "$HOME/.config/bspwm/helpers/clear_mode.sh"
+  "$SCRIPT_DIR/clear_mode.sh"
 }
 
 run_screenlayout() {
@@ -19,8 +21,13 @@ run_screenlayout() {
   "$script"
 }
 
+prepare_mode() {
+  load_environment
+  clear_mode
+}
+
 start_polybar() {
-  "$HOME/.config/polybar/launch.sh" &
+  "$SCRIPT_DIR/../../polybar/launch.sh" &
 }
 
 set_global_padding() {
@@ -39,6 +46,13 @@ start_background() {
   "$@" &
 }
 
+disable_display_power_saving() {
+  if command -v xset >/dev/null 2>&1; then
+    xset -dpms
+    xset s off
+  fi
+}
+
 monitor_exists() {
   bspc query -M --names | grep -Fxq -- "$1"
 }
@@ -49,5 +63,14 @@ assign_desktops_if_present() {
 
   if monitor_exists "$monitor"; then
     bspc monitor "$monitor" -d "$@"
+  fi
+}
+
+set_monitor_top_padding_if_present() {
+  local monitor="$1"
+  local top_padding="$2"
+
+  if monitor_exists "$monitor"; then
+    bspc config -m "$monitor" top_padding "$top_padding"
   fi
 }

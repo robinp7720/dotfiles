@@ -2,7 +2,10 @@
 
 # SET DESKTOP ENVIRONMENT VARIABLES
 
-source ~/.config/environment
+if [[ -f "$HOME/.config/environment" ]]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.config/environment"
+fi
 
 # LAUNCH SERVICES
 picom &
@@ -19,7 +22,7 @@ thunar --daemon &
 cairo-dock &
 
 # Scripts to automate desktop actions
-/home/robin/.config/bspwm/focus_watcher &
+"$HOME/.config/bspwm/focus_watcher" &
 
 # Set the border colors.
 bspc config normal_border_color "#2a2a2a"
@@ -50,7 +53,7 @@ bspc rule -a Pinentry state=floating
 bspc rule -a Plank layer=above manage=on border=off
 bspc rule -a Nightly state=tiling
 
-bspc config external_rules_command "/home/robin/.config/bspwm/external_rules"
+bspc config external_rules_command "$HOME/.config/bspwm/external_rules"
 
 # Start polkit authentication daemon.
 # This allows us to use thunar and gparted without starting them as root

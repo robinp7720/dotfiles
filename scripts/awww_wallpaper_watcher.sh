@@ -218,6 +218,16 @@ get_hypr_outputs_sorted() {
   hyprctl monitors 2>/dev/null | awk '/^Monitor /{print $2}' | sort -u
 }
 
+get_hypr_socket2_path() {
+  if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    return 1
+  fi
+
+  printf '%s/hypr/%s/.socket2.sock\n' \
+    "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+    "$HYPRLAND_INSTANCE_SIGNATURE"
+}
+
 get_connected_outputs() {
   if command -v hyprctl >/dev/null 2>&1 && hyprctl monitors >/dev/null 2>&1; then
     get_hypr_outputs_sorted
@@ -285,10 +295,35 @@ watch_niri() {
 }
 
 watch_hypr() {
+  local socket_path
   local known_outputs
   local current_outputs
+  local event_reader=()
 
   known_outputs="$(get_hypr_outputs_sorted || true)"
+
+  if socket_path="$(get_hypr_socket2_path 2>/dev/null)" && [ -S "$socket_path" ]; then
+    if command -v socat >/dev/null 2>&1; then
+      event_reader=(socat -u "UNIX-CONNECT:$socket_path" -)
+    elif command -v nc >/dev/null 2>&1; then
+      event_reader=(nc -U "$socket_path")
+    fi
+  fi
+
+  if [ "${#event_reader[@]}" -gt 0 ]; then
+    "${event_reader[@]}" 2>/dev/null | while IFS= read -r line; do
+      case "$line" in
+        monitoradded*|monitorremoved*|monitoraddedv2*|monitorremovedv2*)
+          current_outputs="$(get_hypr_outputs_sorted || true)"
+          if [ "$current_outputs" != "$known_outputs" ]; then
+            apply_wallpaper
+            known_outputs="$current_outputs"
+          fi
+          ;;
+      esac
+    done
+    return 0
+  fi
 
   while true; do
     sleep 2

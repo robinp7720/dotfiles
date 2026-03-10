@@ -8,6 +8,12 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/next-event"
 CACHE_FILE="$CACHE_DIR/next_event.txt"
 CACHE_TTL_SECS=120
 
+mtime_epoch() {
+  local path="$1"
+
+  stat -c %Y "$path" 2>/dev/null || stat -f %m "$path" 2>/dev/null || echo 0
+}
+
 write_cache() {
   local value="$1"
   local tmp
@@ -18,13 +24,41 @@ write_cache() {
   mv "$tmp" "$CACHE_FILE"
 }
 
-now_epoch=$(date +%s)
+print_and_exit() {
+  local value="$1"
+  printf '%s\n' "$value"
+  exit 0
+}
+
+format_eta() {
+  local start_epoch="$1"
+  local now_epoch diff mins hours rem_mins
+
+  now_epoch=$(date +%s)
+  diff=$(( start_epoch - now_epoch ))
+  (( diff < 0 )) && diff=0
+  mins=$(( (diff + 59) / 60 ))
+
+  if (( mins >= 90 )); then
+    hours=$(( mins / 60 ))
+    rem_mins=$(( mins % 60 ))
+    if (( rem_mins == 0 )); then
+      printf '%sh\n' "$hours"
+    else
+      printf '%sh %sm\n' "$hours" "$rem_mins"
+    fi
+    return
+  fi
+
+  printf '%s mins\n' "$mins"
+}
+
+now_epoch="$(date +%s)"
 
 if [ -f "$CACHE_FILE" ]; then
-  # shellcheck disable=SC2012
-  mtime_epoch=$(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)
-  age=$(( now_epoch - mtime_epoch ))
-  if [ $age -lt $CACHE_TTL_SECS ] && [ -s "$CACHE_FILE" ]; then
+  cache_mtime="$(mtime_epoch "$CACHE_FILE")"
+  age=$(( now_epoch - cache_mtime ))
+  if [ "$age" -lt "$CACHE_TTL_SECS" ] && [ -s "$CACHE_FILE" ]; then
     cat "$CACHE_FILE"
     exit 0
   fi
@@ -36,8 +70,7 @@ if command -v khal >/dev/null 2>&1; then
   line="$(khal list now 7d 2>/dev/null | sed -n '1p')"
   if [ -n "$line" ]; then
     write_cache "$line"
-    printf "%s" "$line"
-    exit 0
+    print_and_exit "$line"
   fi
 fi
 
@@ -47,28 +80,12 @@ if command -v gcalcli >/dev/null 2>&1; then
   line="$(gcalcli --nocolor agenda --tsv --details=location now 7d 2>/dev/null | awk -F '\t' 'NR>1 && NF>=5 {print; exit}')"
   if [ -n "${line:-}" ]; then
     IFS=$'\t' read -r start_date start_time end_date end_time summary location <<<"$line"
-    # Compute time until start
     if start_epoch=$(date -d "$start_date $start_time" +%s 2>/dev/null); then
-      now_epoch=$(date +%s)
-      diff=$(( start_epoch - now_epoch ))
-      [ $diff -lt 0 ] && diff=0
-      mins=$(( (diff + 59) / 60 )) # round up to next minute
-      if [ $mins -ge 90 ]; then
-        hours=$(( mins / 60 ))
-        rem_mins=$(( mins % 60 ))
-        if [ $rem_mins -eq 0 ]; then
-          eta="${hours}h"
-        else
-          eta="${hours}h ${rem_mins}m"
-        fi
-      else
-        eta="${mins} mins"
-      fi
+      eta="$(format_eta "$start_epoch")"
     else
       eta="soon"
     fi
 
-    # Trim trailing details after a comma to keep names short
     summary="${summary%%,*}"
 
     out="${summary}"
@@ -80,10 +97,9 @@ if command -v gcalcli >/dev/null 2>&1; then
     fi
 
     write_cache "$out"
-    printf "%s" "$out"
-    exit 0
+    print_and_exit "$out"
   fi
 fi
 
 write_cache "No upcoming events"
-echo "No upcoming events"
+print_and_exit "No upcoming events"
