@@ -6,7 +6,7 @@
 window {
   background-color: transparent;
   color: $on_surface;
-  font-family: Museo Sans;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
 }
 
 .next-window {
@@ -116,4 +116,247 @@ window {
 .now-art-only {
   border-radius: 12px;
   border: 1px solid $outline_variant;
+}
+
+/* Control center */
+.control-center-window {
+  background-color: transparent;
+}
+
+.control-center {
+  background-color: rgba($surface_container_low, 0.94);
+  background-image: linear-gradient(180deg, rgba($surface_container_low, 0.96), rgba($surface_container, 0.96));
+  border: 1px solid rgba($outline_variant, 0.88);
+  border-radius: 30px;
+  box-shadow: 0 30px 72px rgba(0, 0, 0, 0.42);
+  padding: 20px;
+  min-width: 412px;
+}
+
+.cc-topline {
+  margin-bottom: 14px;
+}
+
+.cc-rail-pill {
+  background-color: rgba($tertiary_container, 0.9);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  color: $on_tertiary_container;
+}
+
+.cc-close {
+  background-color: rgba($surface_container_highest, 0.9);
+  border: 1px solid rgba($outline_variant, 0.82);
+  border-radius: 999px;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.cc-close-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: $on_surface;
+}
+
+.cc-hero {
+  background-color: rgba($secondary_container, 0.94);
+  background-image: linear-gradient(145deg, rgba($secondary_container, 0.98), rgba($tertiary_container, 0.88));
+  border: 1px solid rgba($secondary, 0.44);
+  border-radius: 26px;
+  padding: 18px 18px 20px;
+}
+
+.cc-hero-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: rgba($on_secondary_container, 0.78);
+}
+
+.cc-clock {
+  margin-top: 4px;
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: $on_secondary_container;
+}
+
+.cc-date {
+  margin-top: 2px;
+  font-size: 15px;
+  color: rgba($on_secondary_container, 0.9);
+}
+
+.cc-badges {
+  margin-top: 14px;
+}
+
+.cc-badge {
+  background-color: rgba($surface_container_highest, 0.26);
+  border: 1px solid rgba($on_secondary_container, 0.12);
+  border-radius: 999px;
+  padding: 7px 10px;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $on_secondary_container;
+}
+
+.cc-hero-label {
+  margin-top: 16px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  color: rgba($on_secondary_container, 0.74);
+}
+
+.cc-hero-event {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: $on_secondary_container;
+}
+
+.cc-section {
+  margin-top: 16px;
+}
+
+.cc-section-header {
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  color: $on_surface_variant;
+}
+
+.cc-primary-action,
+.cc-state-action,
+.cc-media-card,
+.cc-agenda-card {
+  background-color: rgba($surface_container_high, 0.94);
+  border: 1px solid rgba($outline_variant, 0.78);
+  border-radius: 22px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.cc-primary-action,
+.cc-state-action {
+  padding: 15px 16px;
+}
+
+.cc-primary-action + .cc-primary-action,
+.cc-state-action + .cc-state-action,
+.cc-agenda-item + .cc-agenda-item {
+  margin-top: 10px;
+}
+
+.cc-primary-icon-wrap {
+  background-color: rgba($primary_container, 0.96);
+  border-radius: 18px;
+  min-width: 52px;
+  min-height: 52px;
+  margin-right: 14px;
+}
+
+.cc-primary-icon {
+  font-size: 21px;
+  color: $on_primary_container;
+}
+
+.cc-primary-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+  color: $primary;
+}
+
+.cc-primary-title {
+  margin-top: 3px;
+  font-size: 16px;
+  font-weight: 700;
+  color: $on_surface;
+}
+
+.cc-primary-body {
+  margin-top: 5px;
+  font-size: 12px;
+  color: $on_surface_variant;
+}
+
+.cc-primary-hint,
+.cc-state-hint {
+  background-color: rgba($surface_container_highest, 0.92);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: $on_surface_variant;
+}
+
+.cc-state-icon {
+  min-width: 28px;
+  margin-right: 12px;
+  font-size: 18px;
+  color: $primary;
+}
+
+.cc-state-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: $on_surface;
+}
+
+.cc-state-value {
+  margin-top: 4px;
+  font-size: 12px;
+  color: $on_surface_variant;
+}
+
+.cc-media-card {
+  margin-top: 16px;
+  padding: 15px;
+}
+
+.cc-media-art {
+  border-radius: 18px;
+  border: 1px solid rgba($outline_variant, 0.75);
+  margin-right: 14px;
+}
+
+.cc-media-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: $primary;
+}
+
+.cc-media-title {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $on_surface;
+}
+
+.cc-agenda-card {
+  padding: 15px;
+}
+
+.cc-agenda-empty {
+  font-size: 13px;
+  color: $on_surface_variant;
+}
+
+.cc-agenda-item {
+  background-color: rgba($surface_container_highest, 0.72);
+  border: 1px solid rgba($outline_variant, 0.68);
+  border-radius: 16px;
+  padding: 11px 12px;
+}
+
+.cc-agenda-text {
+  font-size: 13px;
+  color: $on_surface;
 }

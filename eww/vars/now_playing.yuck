@@ -2,4 +2,4 @@
 
 (defpoll album_art_path
   :interval "2s"
-  "sh -lc 'art=\"${XDG_CACHE_HOME:-$HOME/.cache}/hyprlock/album.jpg\"; mtime=$(stat -c %Y \"$art\" 2>/dev/null || echo 0); printf \"%s?%s\\n\" \"$art\" \"$mtime\"'")
+  "~/.config/eww/scripts/album_art_path.sh")

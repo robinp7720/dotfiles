@@ -7,6 +7,7 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 - **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, `nitrogen`, and `superpaper`.
 - **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Waybar, Kitty (with an automatic USR1 reload hook), Rofi, Dunst, and greetd/nwg-hello from a single template directory.
 - **Productivity bars**: Polybar and Waybar configs live alongside the compositor configs, with custom power, Bluetooth, profile, and media helpers.
+- **Control center overlay**: Eww provides a toggleable quick-actions panel for calendar context, media, Bluetooth, power profile, and session actions across Hyprland and Niri.
 - **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
 - **Native tools** under `tools/`: `session-manager` for hardware-aware display profiles and `launcher` for a Rust-backed app launcher source.
 
@@ -42,6 +43,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `bspwm/` – Window manager config with per-mode scripts (`modes/`), helpers, and the main `bspwmrc`.
 - `polybar/` – Shared colors, modules, and scripts (including the clipboard-to-GPT helper and update notifications).
 - `waybar/` – Waybar configuration and CSS theme generated via Matugen, with a custom power button wired to `scripts/power_menu.sh`.
+- `eww/` – Optional control-center and glance widgets, including the toggleable `control_center` panel plus agenda / next-event / now-playing surfaces.
 - `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Dunst, and greetd/nwg-hello.
 - `rofi/`, `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi), `now_playing.sh` (current track for Hyprlock), and Bluetooth/wallpaper helpers.
@@ -56,6 +58,8 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Kitty, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
 - **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
 - **Rofi wrapper**: `setup.sh` links `scripts/rofi_wrapper.sh` to `~/.local/bin/rofi`, so custom Rofi scripts can always call `rofi` while still applying the Niri-specific theme automatically.
+- **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
+- **System palette**: Press `Super+B` in Hyprland or Niri to open the Rofi quick-actions menu provided by `scripts/system_palette.sh`.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.

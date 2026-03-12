@@ -1,0 +1,113 @@
+;; Narrow glance rail that favors quick actions over a dashboard layout.
+
+(defwidget cc-primary-action [icon kicker title body hint action]
+  (button :class "cc-primary-action" :onclick action
+    (box :orientation "horizontal" :space-evenly "false"
+      (box :class "cc-primary-icon-wrap"
+        (label :class "cc-primary-icon" :text icon))
+      (box :orientation "vertical" :space-evenly "false"
+        (label :class "cc-primary-kicker" :text kicker :halign "start")
+        (label :class "cc-primary-title" :text title :halign "start")
+        (label :class "cc-primary-body" :text body :halign "start" :wrap true :limit-width 28))
+      (box :hexpand true)
+      (label :class "cc-primary-hint" :text hint))))
+
+(defwidget cc-state-action [icon title value hint action]
+  (button :class "cc-state-action" :onclick action
+    (box :orientation "horizontal" :space-evenly "false"
+      (label :class "cc-state-icon" :text icon)
+      (box :class "cc-state-copy" :orientation "vertical" :space-evenly "false"
+        (label :class "cc-state-title" :text title :halign "start")
+        (label :class "cc-state-value" :text value :halign "start" :wrap true :limit-width 26))
+      (box :hexpand true)
+      (label :class "cc-state-hint" :text hint))))
+
+(defwidget control-center []
+  (box :class "control-center" :orientation "vertical" :space-evenly "false"
+    (box :class "cc-topline" :orientation "horizontal" :space-evenly "false"
+      (label :class "cc-rail-pill" :text "GLANCE RAIL")
+      (box :hexpand true)
+      (button :class "cc-close" :onclick "~/.dotfiles/scripts/control_center.sh close"
+        (label :class "cc-close-label" :text "x")))
+    (box :class "cc-hero" :orientation "vertical" :space-evenly "false"
+      (label :class "cc-hero-kicker" :text "Today" :halign "start")
+      (label :class "cc-clock" :text cc_clock :halign "start")
+      (label :class "cc-date" :text cc_date :halign "start")
+      (box :class "cc-badges" :orientation "horizontal" :space-evenly "false"
+        (label :class "cc-badge" :text cc_network)
+        (label :class "cc-badge" :text cc_battery))
+      (label :class "cc-hero-label" :text "Next up" :halign "start")
+      (label :class "cc-hero-event" :text cc_next_event :halign "start" :wrap true :limit-width 30))
+    (box :class "cc-section" :orientation "vertical" :space-evenly "false"
+      (label :class "cc-section-header" :text "Shortcuts" :halign "start")
+      (cc-primary-action
+        :icon ""
+        :kicker "Apps"
+        :title "Launcher"
+        :body "Open applications and commands."
+        :hint "Open"
+        :action "~/.dotfiles/scripts/control_center.sh launcher")
+      (cc-primary-action
+        :icon "󰍛"
+        :kicker "Session"
+        :title "Power menu"
+        :body "Suspend, reboot, shutdown, or log out."
+        :hint "Open"
+        :action "~/.dotfiles/scripts/control_center.sh session-menu")
+      (cc-primary-action
+        :icon "󰌾"
+        :kicker "Security"
+        :title "Lock now"
+        :body "Drop straight into the lock screen."
+        :hint "Lock"
+        :action "~/.dotfiles/scripts/control_center.sh lock"))
+    (box :class "cc-section" :orientation "vertical" :space-evenly "false"
+      (label :class "cc-section-header" :text "System" :halign "start")
+      (cc-state-action
+        :icon ""
+        :title "Bluetooth"
+        :value cc_bluetooth
+        :hint "Toggle"
+        :action "~/.dotfiles/scripts/control_center.sh bluetooth-toggle")
+      (cc-state-action
+        :icon ""
+        :title "Headphones"
+        :value cc_headphones
+        :hint "Toggle"
+        :action "~/.dotfiles/scripts/control_center.sh headphones-toggle")
+      (cc-state-action
+        :icon ""
+        :title "Power profile"
+        :value cc_power_profile
+        :hint "Cycle"
+        :action "~/.dotfiles/scripts/control_center.sh power-profile-cycle"))
+    (box :class "cc-media-card" :orientation "horizontal" :space-evenly "false"
+      (image :class "cc-media-art" :path album_art_path :width 72 :height 72 :keep-aspect true)
+      (box :class "cc-media-copy" :orientation "vertical" :space-evenly "false"
+        (label :class "cc-media-kicker" :text "Now playing" :halign "start")
+        (label :class "cc-media-title" :text cc_media :halign "start" :wrap true :limit-width 26)))
+    (box :class "cc-section cc-agenda-card" :orientation "vertical" :space-evenly "false"
+      (label :class "cc-section-header" :text "Agenda" :halign "start")
+      (label
+        :class "cc-agenda-empty"
+        :visible (eq agenda_item_0 "")
+        :text "Nothing queued right now."
+        :halign "start")
+      (box
+        :class "cc-agenda-item"
+        :visible (not (eq agenda_item_0 ""))
+        :orientation "vertical"
+        :space-evenly "false"
+        (label :class "cc-agenda-text" :text agenda_item_0 :halign "start" :wrap true :limit-width 30))
+      (box
+        :class "cc-agenda-item"
+        :visible (not (eq agenda_item_1 ""))
+        :orientation "vertical"
+        :space-evenly "false"
+        (label :class "cc-agenda-text" :text agenda_item_1 :halign "start" :wrap true :limit-width 30))
+      (box
+        :class "cc-agenda-item"
+        :visible (not (eq agenda_item_2 ""))
+        :orientation "vertical"
+        :space-evenly "false"
+        (label :class "cc-agenda-text" :text agenda_item_2 :halign "start" :wrap true :limit-width 30)))))

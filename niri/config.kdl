@@ -328,6 +328,7 @@ layout {
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
 spawn-at-startup "waybar"
+spawn-sh-at-startup "command -v eww >/dev/null 2>&1 && eww -c ~/.config/eww daemon"
 spawn-at-startup "~/.dotfiles/scripts/awww_wallpaper_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"
 
@@ -420,6 +421,7 @@ binds {
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
     Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
+    Mod+B hotkey-overlay-title="Open System Palette" { spawn "~/.dotfiles/scripts/system_palette.sh"; }
     Mod+Space hotkey-overlay-title="Run an Application: rofi" { spawn "~/.config/rofi/launcher.sh"; }
     Mod+P hotkey-overlay-title="Passwords: tessen" { spawn "tessen"; }
     Super+L hotkey-overlay-title="Lock the Screen: swaylock" { spawn "~/.dotfiles/scripts/hyprlock_with_art.sh"; }

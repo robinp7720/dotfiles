@@ -1,0 +1,8 @@
+;; Window placement for the control center.
+
+(defwindow control_center
+  :geometry (geometry :x "20px" :y "52px" :width "452px" :height "948px")
+  :monitor 0
+  :anchor "top right"
+  :class "control-center-window"
+  (control-center))
