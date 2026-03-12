@@ -14,6 +14,7 @@
         "hyprland/window"
     ],
     "modules-center": [
+        "custom/next-event",
         "custom/nowplaying"
     ],
     "modules-right": [
@@ -148,6 +149,13 @@
         "on-click": "playerctl --player=spotify play-pause",
         "on-scroll-up": "playerctl --player=spotify next",
         "on-scroll-down": "playerctl --player=spotify previous"
+    },
+    "custom/next-event": {
+        "exec": "~/.dotfiles/scripts/next_event.sh --waybar",
+        "return-type": "json",
+        "interval": 30,
+        "max-length": 48,
+        "tooltip": true
     },
     "custom/logo1": {
         "format": "  ",

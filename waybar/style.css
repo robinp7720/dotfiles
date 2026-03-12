@@ -80,6 +80,7 @@ window#waybar.hidden {
 #bluetooth,
 #custom-headphones,
 #custom-powerprofile,
+#custom-next-event,
 #custom-nowplaying,
 #custom-power,
 #window,
@@ -100,6 +101,22 @@ window#waybar.hidden {
   color: @on_primary_container;
   border: 1px solid alpha(@primary, 0.5);
   font-weight: 600;
+}
+
+#custom-next-event {
+  background-color: alpha(@secondary_container, 0.92);
+  color: @on_secondary_container;
+  border: 1px solid alpha(@secondary, 0.45);
+  font-weight: 600;
+}
+
+#custom-next-event.hidden {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
 }
 
 #custom-logo1 {

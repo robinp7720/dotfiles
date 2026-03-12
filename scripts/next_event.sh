@@ -7,6 +7,19 @@ set -euo pipefail
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/next-event"
 CACHE_FILE="$CACHE_DIR/next_event.txt"
 CACHE_TTL_SECS=120
+OUTPUT_MODE="text"
+
+if [[ "${1:-}" == "--waybar" ]]; then
+  OUTPUT_MODE="waybar"
+fi
+
+json_escape() {
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  printf '%s' "$s"
+}
 
 mtime_epoch() {
   local path="$1"
@@ -26,7 +39,24 @@ write_cache() {
 
 print_and_exit() {
   local value="$1"
-  printf '%s\n' "$value"
+
+  if [[ "$OUTPUT_MODE" == "waybar" ]]; then
+    local class="has-event"
+    local text="  $value"
+
+    if [[ "$value" == "No upcoming events" ]]; then
+      class="hidden"
+      text=""
+    fi
+
+    printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' \
+      "$(json_escape "$text")" \
+      "$(json_escape "$value")" \
+      "$class"
+  else
+    printf '%s\n' "$value"
+  fi
+
   exit 0
 }
 
@@ -59,8 +89,7 @@ if [ -f "$CACHE_FILE" ]; then
   cache_mtime="$(mtime_epoch "$CACHE_FILE")"
   age=$(( now_epoch - cache_mtime ))
   if [ "$age" -lt "$CACHE_TTL_SECS" ] && [ -s "$CACHE_FILE" ]; then
-    cat "$CACHE_FILE"
-    exit 0
+    print_and_exit "$(cat "$CACHE_FILE")"
   fi
 fi
 
