@@ -1,7 +1,7 @@
 mod model;
 mod sources;
 
-use crate::model::{Action, ResultItem, SearchMode};
+use crate::model::{Action, QueryInput, ResultItem, SearchMode};
 use crate::sources::Sources;
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -91,11 +91,20 @@ fn build_ui(
         entry.set_text(query);
     }
 
-    let hint = Label::new(Some(
-        "Type to search apps, files, SSH hosts, commands, web, and calculations",
-    ));
+    let hint = Label::new(Some("Prefixes: > commands, / files, @ ssh, ? web, = calc"));
     hint.add_css_class("launcher-hint");
     hint.set_halign(Align::Start);
+    hint.set_hexpand(true);
+    hint.set_wrap(true);
+
+    let mode_badge = Label::new(Some(mode.label()));
+    mode_badge.add_css_class("launcher-mode-badge");
+    mode_badge.set_halign(Align::End);
+
+    let meta = GtkBox::new(Orientation::Horizontal, 12);
+    meta.set_halign(Align::Fill);
+    meta.append(&hint);
+    meta.append(&mode_badge);
 
     let list = ListBox::new();
     list.set_selection_mode(SelectionMode::Single);
@@ -109,15 +118,18 @@ fn build_ui(
     scroller.add_css_class("launcher-scroller");
 
     outer.append(&entry);
-    outer.append(&hint);
+    outer.append(&meta);
     outer.append(&scroller);
     window.set_child(Some(&outer));
 
     {
         let sources = sources.clone();
         let list = list.clone();
+        let hint = hint.clone();
+        let mode_badge = mode_badge.clone();
         entry.connect_changed(move |entry| {
             let query = entry.text().to_string();
+            update_search_meta(&hint, &mode_badge, &query, mode);
             let results = sources.search(&query, mode);
             rebuild_results(&list, &results);
         });
@@ -126,17 +138,19 @@ fn build_ui(
     {
         let sources = sources.clone();
         let entry = entry.clone();
+        let hint = hint.clone();
         let window = window.clone();
         list.connect_row_activated(move |_, row| {
             let query = entry.text().to_string();
             let results = sources.search(&query, mode);
-            activate_row(row, &results, &window);
+            activate_row(row, &results, &window, &hint);
         });
     }
 
     {
         let sources = sources.clone();
         let entry = entry.clone();
+        let hint = hint.clone();
         let list = list.clone();
         let window = window.clone();
         let activate_entry = entry.clone();
@@ -149,7 +163,13 @@ fn build_ui(
                 .or_else(|| results.first().cloned());
 
             if let Some(item) = selected {
-                let _ = execute_action(&window, item.action);
+                if let Err(error) = execute_action(&window, item.action) {
+                    set_hint_state(
+                        &hint,
+                        &format!("Action failed: {}", error.root_cause()),
+                        true,
+                    );
+                }
             }
         });
     }
@@ -184,6 +204,12 @@ fn build_ui(
     }
 
     let initial_results = sources.search(initial_query.as_deref().unwrap_or_default(), mode);
+    update_search_meta(
+        &hint,
+        &mode_badge,
+        initial_query.as_deref().unwrap_or_default(),
+        mode,
+    );
     rebuild_results(&list, &initial_results);
 
     window.present();
@@ -208,6 +234,9 @@ fn rebuild_results(list: &ListBox, results: &[ResultItem]) {
 fn build_row(item: &ResultItem) -> ListBoxRow {
     let row = ListBoxRow::new();
     row.add_css_class("launcher-row");
+    if matches!(&item.action, Action::None) {
+        row.add_css_class("launcher-row-status");
+    }
 
     let layout = GtkBox::new(Orientation::Horizontal, 14);
     layout.set_margin_top(10);
@@ -224,6 +253,7 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     title.add_css_class("launcher-title");
     title.set_halign(Align::Start);
     title.set_xalign(0.0);
+    title.set_wrap(true);
 
     let subtitle = Label::new(Some(&format!("{}  •  {}", item.source, item.subtitle)));
     subtitle.add_css_class("launcher-subtitle");
@@ -252,10 +282,21 @@ fn move_selection(list: &ListBox, delta: i32, result_count: i32) {
     }
 }
 
-fn activate_row(row: &ListBoxRow, results: &[ResultItem], window: &ApplicationWindow) {
+fn activate_row(
+    row: &ListBoxRow,
+    results: &[ResultItem],
+    window: &ApplicationWindow,
+    hint: &Label,
+) {
     let index = row.index() as usize;
     if let Some(item) = results.get(index).cloned() {
-        let _ = execute_action(window, item.action);
+        if let Err(error) = execute_action(window, item.action) {
+            set_hint_state(
+                hint,
+                &format!("Action failed: {}", error.root_cause()),
+                true,
+            );
+        }
     }
 }
 
@@ -286,7 +327,7 @@ fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
                 display.clipboard().set_text(&text);
             }
         }
-        Action::None => {}
+        Action::None => return Ok(()),
     }
 
     window.close();
@@ -310,7 +351,10 @@ fn launch_desktop_app(desktop_id: &str) -> Result<()> {
 }
 
 fn launch_ssh(host: &str) -> Result<()> {
-    let terminal = std::env::var("DOT_LAUNCHER_TERMINAL").unwrap_or_else(|_| "kitty".to_string());
+    let terminal = std::env::var("DOT_LAUNCHER_TERMINAL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| default_ssh_terminal(dirs::home_dir().as_deref()));
 
     Command::new(&terminal)
         .args(["-e", "ssh", host])
@@ -328,6 +372,63 @@ fn placeholder_for_mode(mode: SearchMode) -> &'static str {
         SearchMode::Commands => "Run a command",
         SearchMode::Web => "Search the web",
         SearchMode::Calc => "Evaluate a libqalculate expression",
+    }
+}
+
+fn update_search_meta(hint: &Label, mode_badge: &Label, raw_query: &str, cli_mode: SearchMode) {
+    let query = QueryInput::parse(raw_query, cli_mode);
+    mode_badge.set_text(query.mode.label());
+
+    let hint_text = match query.mode {
+        SearchMode::All => "Prefixes: > commands, / files, @ ssh, ? web, = calc",
+        SearchMode::Apps => "Search installed desktop applications",
+        SearchMode::Files => "Search tracker3 indexed files",
+        SearchMode::Ssh => "Search aliases from ~/.ssh/config and known_hosts",
+        SearchMode::Commands => "Press Enter to run the command or choose a suggestion",
+        SearchMode::Web => "Press Enter to open the browser with your query",
+        SearchMode::Calc => "Press Enter to copy the calculated result",
+    };
+    set_hint_state(hint, hint_text, false);
+}
+
+fn set_hint_state(hint: &Label, message: &str, is_error: bool) {
+    hint.set_text(message);
+    if is_error {
+        hint.add_css_class("launcher-hint-error");
+    } else {
+        hint.remove_css_class("launcher-hint-error");
+    }
+}
+
+fn default_ssh_terminal(home: Option<&std::path::Path>) -> String {
+    if let Some(home) = home {
+        let launcher = home.join(".dotfiles/scripts/launch_kitty.sh");
+        if is_executable(&launcher) {
+            return launcher.to_string_lossy().to_string();
+        }
+    }
+
+    "kitty".to_string()
+}
+
+fn is_executable(path: &std::path::Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+
+    if !metadata.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
     }
 }
 
@@ -357,6 +458,21 @@ fn apply_css() {
         margin-left: 0.25rem;
       }
 
+      .launcher-hint-error {
+        color: rgba(255, 187, 187, 0.96);
+      }
+
+      .launcher-mode-badge {
+        background: rgba(148, 197, 255, 0.14);
+        border: 1px solid rgba(148, 197, 255, 0.26);
+        border-radius: 999px;
+        color: rgba(214, 231, 255, 0.96);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 0.3rem 0.8rem;
+      }
+
       .launcher-results {
         background: transparent;
       }
@@ -368,6 +484,15 @@ fn apply_css() {
 
       .launcher-row:selected {
         background: rgba(255, 255, 255, 0.10);
+      }
+
+      .launcher-row-status {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px dashed rgba(255, 255, 255, 0.08);
+      }
+
+      .launcher-row-status:selected {
+        background: rgba(255, 255, 255, 0.06);
       }
 
       .launcher-title {
@@ -388,4 +513,47 @@ fn apply_css() {
         &provider,
         gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_ssh_terminal;
+    use std::fs::{self, File};
+
+    #[test]
+    fn prefers_launch_kitty_wrapper_when_it_is_executable() {
+        let temp_home = std::env::temp_dir().join(format!(
+            "dot-launcher-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let wrapper = temp_home.join(".dotfiles/scripts/launch_kitty.sh");
+        fs::create_dir_all(wrapper.parent().expect("wrapper parent")).expect("create wrapper dir");
+        File::create(&wrapper).expect("create wrapper");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&wrapper)
+                .expect("wrapper metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&wrapper, permissions).expect("set executable bit");
+        }
+
+        assert_eq!(
+            default_ssh_terminal(Some(&temp_home)),
+            wrapper.to_string_lossy()
+        );
+
+        fs::remove_dir_all(&temp_home).expect("cleanup temp home");
+    }
+
+    #[test]
+    fn falls_back_to_kitty_without_wrapper() {
+        assert_eq!(default_ssh_terminal(None), "kitty");
+    }
 }

@@ -1,166 +1,133 @@
-/**
- *
- * Author : Aditya Shakya (adi1090x)
- * Github : @adi1090x
- * 
- * Rofi Theme File
- * Rofi Version: 1.7.3
- **/
+@import "colors.rasi"
 
-/*****----- Global Properties -----*****/
-@import                          "colors.rasi"
+* {
+    font: "JetBrainsMono Nerd Font 12";
+    background: #00000000;
+    surface: @surface-container-low;
+    surface-alt: @surface-container;
+    surface-strong: @surface-container-high;
+    foreground-muted: @on-surface-variant;
+    accent: @primary;
+    accent-soft: @primary-container;
+    accent-text: @on-primary-container;
+    urgent: @error;
+    border: @outline-variant;
+}
 
-/*****----- Main Window -----*****/
 window {
-    transparency:                "real";
-    location:                    center;
-    anchor:                      center;
-    fullscreen:                  false;
-    width:                       750px;
-    x-offset:                    0px;
-    y-offset:                    0px;
-
-    enabled:                     true;
-    margin:                      0px;
-    padding:                     0px;
-    border:                      0px solid;
-    border-radius:               8px;
-    border-color:                @selected;
-    background-color:            @background;
-    cursor:                      "default";
+    transparency: "real";
+    location: center;
+    anchor: center;
+    width: 880px;
+    padding: 24px;
+    border: 1px solid;
+    border-radius: 24px;
+    border-color: @border;
+    background-color: @surface;
 }
 
-/*****----- Main Box -----*****/
 mainbox {
-    enabled:                     true;
-    spacing:                     10px;
-    margin:                      0px;
-    padding:                     10px;
-    border:                      0px solid;
-    border-radius:               0; 
-    border-color:                @primary;
-    background-color:            @background;
-    children:                    [ "inputbar", "listview" ];
+    spacing: 18px;
+    children: [ "inputbar", "message", "listview" ];
+    background-color: transparent;
 }
 
-/*****----- Inputbar -----*****/
 inputbar {
-    enabled:                     true;
-    spacing:                     10px;
-    margin:                      0px;
-    padding:                     10px;
-    border:                      none;
-    border-radius:               8px;
-    border-color:                @on-primary-fixed;
-    background-color:            @primary;
-    text-color:                  @on-primary;
-    children:                    [ "prompt", "entry" ];
+    spacing: 14px;
+    padding: 18px 20px;
+    border: 1px solid;
+    border-radius: 18px;
+    border-color: @accent;
+    background-color: @accent;
+    text-color: @on-primary;
+    children: [ "prompt", "entry" ];
 }
 
 prompt {
-    enabled:                     true;
-    background-color:            inherit;
-    text-color:                  inherit;
+    enabled: true;
+    expand: false;
+    background-color: transparent;
+    text-color: inherit;
+    str: "apps";
 }
+
 textbox-prompt-colon {
-    enabled:                     true;
-    expand:                      false;
-    str:                         "::";
-    background-color:            inherit;
-    text-color:                  inherit;
+    enabled: false;
 }
+
 entry {
-    enabled:                     true;
-    background-color:            inherit;
-    text-color:                  inherit;
-    cursor:                      text;
-    placeholder:                 "Search";
-    placeholder-color:           inherit;
+    placeholder: "Search apps, windows, commands, SSH";
+    placeholder-color: @on-primary;
+    background-color: transparent;
+    text-color: inherit;
 }
 
-/*****----- Listview -----*****/
-listview {
-    enabled:                     true;
-    columns:                     1;
-    lines:                       7;
-    cycle:                       true;
-    dynamic:                     true;
-    scrollbar:                   false;
-    layout:                      vertical;
-    reverse:                     false;
-    fixed-height:                true;
-    fixed-columns:               true;
-    
-    spacing:                     0px;
-    margin:                      0px;
-    padding:                     0px;
-    border:                      0px solid;
-    border-radius:               0px;
-    border-color:                @selected;
-    background-color:            transparent;
-    text-color:                  @foreground;
-    cursor:                      "default";
-}
-scrollbar {
-    handle-width:                5px ;
-    handle-color:                @selected;
-    border-radius:               0px;
-    background-color:            @background-alt;
+message {
+    enabled: true;
+    padding: 2px 4px;
+    background-color: transparent;
+    text-color: @foreground-muted;
 }
 
-/*****----- Elements -----*****/
-element {
-    enabled:                     true;
-    spacing:                     10px;
-    margin:                      0px;
-    padding:                     5px;
-    border:                      0px solid;
-    border-radius:               0px;
-    border-color:                @tertiary;
-    background-color:            transparent;
-    text-color:                  @foreground;
-    orientation:                 horizontal;
-    cursor:                      pointer;
-}
-element normal.normal {
-    background-color:            transparent;
-    text-color:                  @foreground;
-}
-element selected.normal {
-    border:                      1px solid;
-    border-radius:               4px;
-    border-color:                @selected;
-    background-color:            @background;
-    text-color:                  @foreground;
-}
-element-icon {
-    background-color:            transparent;
-    text-color:                  inherit;
-    size:                        32px;
-    cursor:                      inherit;
-}
-element-text {
-    background-color:            transparent;
-    text-color:                  inherit;
-    highlight:                   inherit;
-    cursor:                      inherit;
-    vertical-align:              0.5;
-    horizontal-align:            0.0;
-}
-
-/*****----- Message -----*****/
-error-message {
-    padding:                     10px;
-    border:                      0px solid;
-    border-radius:               0px;
-    border-color:                @selected;
-    background-color:            black / 10%;
-    text-color:                  @foreground;
-}
 textbox {
-    background-color:            transparent;
-    text-color:                  @foreground;
-    vertical-align:              0.5;
-    horizontal-align:            0.0;
-    highlight:                   none;
+    background-color: transparent;
+    text-color: inherit;
+}
+
+listview {
+    lines: 8;
+    columns: 1;
+    cycle: true;
+    dynamic: true;
+    fixed-height: false;
+    scrollbar: false;
+    spacing: 10px;
+    background-color: transparent;
+}
+
+element {
+    spacing: 16px;
+    padding: 14px 16px;
+    border: 1px solid;
+    border-radius: 18px;
+    border-color: transparent;
+    background-color: @surface-alt;
+    text-color: @foreground;
+}
+
+element normal.normal {
+    background-color: @surface-alt;
+    text-color: @foreground;
+}
+
+element selected.normal {
+    border-color: @accent;
+    background-color: @accent-soft;
+    text-color: @accent-text;
+}
+
+element alternate.normal {
+    background-color: @surface-strong;
+}
+
+element-icon {
+    size: 28px;
+    background-color: transparent;
+    text-color: inherit;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: inherit;
+    highlight: inherit;
+    vertical-align: 0.5;
+}
+
+error-message {
+    padding: 18px;
+    border: 1px solid;
+    border-radius: 18px;
+    border-color: @urgent;
+    background-color: @error-container;
+    text-color: @on-error-container;
 }

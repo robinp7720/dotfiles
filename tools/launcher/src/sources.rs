@@ -63,7 +63,7 @@ impl Sources {
             results.extend(self.search_ssh(&query));
         }
 
-        if query.mode.includes(SearchMode::Commands) {
+        if query.mode == SearchMode::Commands {
             results.extend(self.search_commands(&query));
         }
 
@@ -73,7 +73,7 @@ impl Sources {
             }
         }
 
-        if query.mode.includes(SearchMode::Web) {
+        if query.mode == SearchMode::Web {
             results.push(ResultItem {
                 title: format!("Search the web for “{}”", query.text),
                 subtitle: "Open the default browser".to_string(),
@@ -93,6 +93,9 @@ impl Sources {
                 .then_with(|| left.title.cmp(&right.title))
         });
         results.truncate(24);
+        if results.is_empty() {
+            results.push(no_results_item(&query));
+        }
         results
     }
 
@@ -127,15 +130,64 @@ impl Sources {
             }));
         }
 
-        if mode == SearchMode::Files && !self.tracker3_available {
-            results.push(ResultItem {
-                title: "tracker3 is not installed".to_string(),
-                subtitle: "Install tracker3 to enable indexed file search".to_string(),
-                source: "Files",
-                icon_name: "system-search-symbolic".to_string(),
-                score: 65,
-                action: Action::None,
-            });
+        if mode == SearchMode::Files {
+            if self.tracker3_available {
+                results.push(instruction_result(
+                    "File mode",
+                    "Type a name or path fragment to search indexed files",
+                    "Files",
+                    "system-search-symbolic",
+                    65,
+                ));
+            } else {
+                results.push(instruction_result(
+                    "tracker3 is not installed",
+                    "Install tracker3 to enable indexed file search",
+                    "Files",
+                    "system-search-symbolic",
+                    65,
+                ));
+            }
+        }
+
+        if mode == SearchMode::Commands {
+            results.push(instruction_result(
+                "Command mode",
+                "Type a shell command and press Enter to run it",
+                "Commands",
+                "utilities-terminal-symbolic",
+                65,
+            ));
+        }
+
+        if mode == SearchMode::Web {
+            results.push(instruction_result(
+                "Web mode",
+                "Type a query and press Enter to search the web",
+                "Web",
+                "web-browser-symbolic",
+                65,
+            ));
+        }
+
+        if mode == SearchMode::Calc {
+            if self.qalc_available {
+                results.push(instruction_result(
+                    "Calculator mode",
+                    "Type an expression like 2+2 and press Enter to copy the result",
+                    "Calculator",
+                    "accessories-calculator-symbolic",
+                    65,
+                ));
+            } else {
+                results.push(instruction_result(
+                    "qalc is not installed",
+                    "Install libqalculate to enable calculator results",
+                    "Calculator",
+                    "accessories-calculator-symbolic",
+                    65,
+                ));
+            }
         }
 
         results
@@ -473,7 +525,8 @@ fn parse_tracker_line(line: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_tracker_line;
+    use super::{Sources, no_results_item, parse_tracker_line};
+    use crate::model::{Action, QueryInput, SearchMode};
 
     #[test]
     fn tracker_paths_are_uri_decoded() {
@@ -482,6 +535,34 @@ mod tests {
             parse_tracker_line(line).as_deref(),
             Some("/tmp/with space#hash.txt")
         );
+    }
+
+    #[test]
+    fn search_returns_status_item_when_no_matches_exist() {
+        let sources = Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            commands: Vec::new(),
+            tracker3_available: false,
+            qalc_available: false,
+        };
+
+        let results = sources.search("unlikely-query", SearchMode::Apps);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].source, "Status");
+        assert!(matches!(results[0].action, Action::None));
+    }
+
+    #[test]
+    fn no_results_item_uses_mode_specific_guidance() {
+        let item = no_results_item(&QueryInput {
+            mode: SearchMode::Files,
+            text: "report".to_string(),
+        });
+
+        assert_eq!(item.title, "No matches for \"report\"");
+        assert!(item.subtitle.contains("tracker3"));
+        assert!(matches!(item.action, Action::None));
     }
 }
 
@@ -501,6 +582,31 @@ fn looks_like_math(query: &str) -> bool {
         || query.contains(" to ")
 }
 
+fn no_results_item(query: &QueryInput) -> ResultItem {
+    let subtitle = match query.mode {
+        SearchMode::All => "Try a broader term or switch to a dedicated mode.".to_string(),
+        SearchMode::Apps => "Try a different app name or executable.".to_string(),
+        SearchMode::Files => {
+            "Try a different file name or ensure tracker3 has indexed it.".to_string()
+        }
+        SearchMode::Ssh => "Check ~/.ssh/config and known_hosts for the expected host.".to_string(),
+        SearchMode::Commands => {
+            "Try a different executable name or a full shell command.".to_string()
+        }
+        SearchMode::Web => "Press Enter to open a browser search result instead.".to_string(),
+        SearchMode::Calc => "Try a valid libqalculate expression such as 42/7.".to_string(),
+    };
+
+    ResultItem {
+        title: format!("No matches for \"{}\"", query.text),
+        subtitle,
+        source: "Status",
+        icon_name: "system-search-symbolic".to_string(),
+        score: 0,
+        action: Action::None,
+    }
+}
+
 fn sort_results(results: &mut Vec<ResultItem>, limit: usize) {
     results.sort_by(|left, right| {
         right
@@ -509,4 +615,21 @@ fn sort_results(results: &mut Vec<ResultItem>, limit: usize) {
             .then_with(|| left.title.cmp(&right.title))
     });
     results.truncate(limit);
+}
+
+fn instruction_result(
+    title: &str,
+    subtitle: &str,
+    source: &'static str,
+    icon_name: &str,
+    score: i32,
+) -> ResultItem {
+    ResultItem {
+        title: title.to_string(),
+        subtitle: subtitle.to_string(),
+        source,
+        icon_name: icon_name.to_string(),
+        score,
+        action: Action::None,
+    }
 }
