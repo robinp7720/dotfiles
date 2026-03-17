@@ -8,10 +8,20 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/next-event"
 CACHE_FILE="$CACHE_DIR/next_event.txt"
 CACHE_TTL_SECS=120
 OUTPUT_MODE="text"
+BLANK_WHEN_EMPTY=0
+NO_EVENT_TEXT="No upcoming events"
 
-if [[ "${1:-}" == "--waybar" ]]; then
-  OUTPUT_MODE="waybar"
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --waybar)
+      OUTPUT_MODE="waybar"
+      ;;
+    --blank-when-empty)
+      BLANK_WHEN_EMPTY=1
+      ;;
+  esac
+  shift
+done
 
 json_escape() {
   local s="$1"
@@ -39,21 +49,33 @@ write_cache() {
 
 print_and_exit() {
   local value="$1"
+  local is_empty=0
+
+  if [[ "$value" == "$NO_EVENT_TEXT" ]]; then
+    is_empty=1
+  fi
 
   if [[ "$OUTPUT_MODE" == "waybar" ]]; then
     local class="has-event"
     local text="  $value"
+    local tooltip="$value"
 
-    if [[ "$value" == "No upcoming events" ]]; then
+    if (( is_empty )); then
       class="hidden"
       text=""
+      tooltip=""
     fi
 
     printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' \
       "$(json_escape "$text")" \
-      "$(json_escape "$value")" \
+      "$(json_escape "$tooltip")" \
       "$class"
   else
+    if (( is_empty && BLANK_WHEN_EMPTY )); then
+      printf '\n'
+      exit 0
+    fi
+
     printf '%s\n' "$value"
   fi
 
@@ -106,13 +128,19 @@ fi
 # Fallback to gcalcli (Google Calendar CLI)
 if command -v gcalcli >/dev/null 2>&1; then
   # --tsv with details=location columns: start_date start_time end_date end_time summary location
-  line="$(gcalcli --nocolor agenda --tsv --details=location now 7d 2>/dev/null | awk -F '\t' 'NR>1 && NF>=5 {print; exit}')"
+  line="$(
+    gcalcli --nocolor agenda --tsv --details=location now 7d 2>/dev/null |
+      awk -F '\t' 'NR>1 && NF>=5 {
+        printf "%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n", $1, $2, $3, $4, $5, $6
+        exit
+      }'
+  )"
   if [ -n "${line:-}" ]; then
-    IFS=$'\t' read -r start_date start_time end_date end_time summary location <<<"$line"
-    if start_epoch=$(date -d "$start_date $start_time" +%s 2>/dev/null); then
+    IFS=$'\x1f' read -r start_date start_time end_date end_time summary location <<<"$line"
+    if [[ -n "${start_time:-}" ]] && start_epoch=$(date -d "$start_date $start_time" +%s 2>/dev/null); then
       eta="$(format_eta "$start_epoch")"
     else
-      eta="soon"
+      eta=""
     fi
 
     summary="${summary%%,*}"
@@ -130,5 +158,5 @@ if command -v gcalcli >/dev/null 2>&1; then
   fi
 fi
 
-write_cache "No upcoming events"
-print_and_exit "No upcoming events"
+write_cache "$NO_EVENT_TEXT"
+print_and_exit "$NO_EVENT_TEXT"
