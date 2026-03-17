@@ -31,7 +31,7 @@ window {
 	);
 	border: 1px solid {{colors.outline_variant.default.hex}};
 	border-radius: 24px;
-	padding: 36px 34px;
+	padding: 38px 36px;
 	box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
 }
 
@@ -43,13 +43,19 @@ entry {
 	color: {{colors.on_surface.default.hex}};
 }
 
+entry:hover {
+	border-color: {{colors.primary.default.hex}};
+	background-color: {{colors.surface_container_high.default.hex}};
+}
+
 entry:focus {
 	border-color: {{colors.primary.default.hex}};
 	box-shadow: 0 0 0 1px {{colors.primary.default.hex}};
+	background-color: {{colors.surface_container_high.default.hex}};
 }
 
 button {
-	border: none;
+	border: 1px solid transparent;
 	border-radius: 14px;
 	padding: 13px 16px;
 	font-weight: 700;
@@ -61,8 +67,32 @@ button {
 		{{colors.primary.default.hex}},
 		{{colors.tertiary.default.hex}}
 	);
+	border-color: {{colors.primary_container.default.hex}};
 	color: {{colors.on_primary.default.hex}};
 	box-shadow: 0 12px 28px #{{colors.primary.default.hex_stripped}}40;
+}
+
+#login-button:hover,
+#login-button:focus {
+	background-image: linear-gradient(
+		135deg,
+		{{colors.primary_fixed.default.hex}},
+		{{colors.secondary_fixed.default.hex}}
+	);
+	border-color: {{colors.primary_container.default.hex}};
+	box-shadow:
+		0 0 0 1px {{colors.primary_fixed.default.hex}},
+		0 16px 32px #{{colors.primary.default.hex_stripped}}55;
+}
+
+#login-button:active {
+	background-image: linear-gradient(
+		135deg,
+		{{colors.primary_container.default.hex}},
+		{{colors.tertiary_container.default.hex}}
+	);
+	border-color: {{colors.outline.default.hex}};
+	box-shadow: 0 8px 18px #{{colors.primary.default.hex_stripped}}35;
 }
 
 #power-button {
@@ -99,6 +129,8 @@ button {
 #form-label {
 	color: {{colors.on_surface_variant.default.hex}};
 	font-weight: 600;
+	font-size: 11px;
+	letter-spacing: 1.1px;
 	text-transform: uppercase;
 }
 
@@ -108,6 +140,17 @@ button {
 	border: 1px solid {{colors.outline_variant.default.hex}};
 	color: {{colors.on_surface.default.hex}};
 	padding: 10px 12px;
+}
+
+#form-combo:hover {
+	background-color: {{colors.surface_container_high.default.hex}};
+	border-color: {{colors.primary.default.hex}};
+}
+
+#form-combo:focus {
+	background-color: {{colors.surface_container_high.default.hex}};
+	border-color: {{colors.primary.default.hex}};
+	box-shadow: 0 0 0 1px {{colors.primary.default.hex}};
 }
 
 #form-combo * {
