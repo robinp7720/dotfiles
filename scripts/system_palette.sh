@@ -25,6 +25,34 @@ cleanup() {
   fi
 }
 
+escape_markup() {
+  local value="${1:-}"
+
+  value="${value//&/&amp;}"
+  value="${value//</&lt;}"
+  value="${value//>/&gt;}"
+
+  printf '%s' "$value"
+}
+
+render_row() {
+  local icon="$1"
+  local title="$2"
+  local description="$3"
+  local status="${4:-}"
+  local subtitle
+
+  subtitle="$description"
+  if [[ -n "$status" ]]; then
+    subtitle="${subtitle} · ${status}"
+  fi
+
+  printf '<span weight="700" size="110%%">%s  %s</span>&#10;<span size="90%%">%s</span>' \
+    "$icon" \
+    "$(escape_markup "$title")" \
+    "$(escape_markup "$subtitle")"
+}
+
 bluetooth_status() {
   if ! command -v bluetoothctl >/dev/null 2>&1; then
     printf 'Unavailable\n'
@@ -104,12 +132,12 @@ read_statuses() {
 show_menu() {
   local selection
   local -a options=(
-    "  Launcher             Open apps and commands"
-    "  Bluetooth            ${BLUETOOTH_STATUS}"
-    "  Headphones           ${HEADPHONES_STATUS}"
-    "  Power profile        ${POWER_STATUS}"
-    "󰌾  Lock now             Secure this session"
-    "󰍛  Power menu           Suspend, reboot, shutdown"
+    "$(render_row "" "Launcher" "Open apps, windows, commands, and SSH")"
+    "$(render_row "" "Bluetooth" "Toggle the adapter and paired devices" "$BLUETOOTH_STATUS")"
+    "$(render_row "" "Headphones" "Connect or disconnect the preferred headset" "$HEADPHONES_STATUS")"
+    "$(render_row "" "Power profile" "Cycle performance, balanced, or saver" "$POWER_STATUS")"
+    "$(render_row "󰌾" "Lock now" "Secure the current session immediately")"
+    "$(render_row "󰍛" "Power menu" "Suspend, reboot, or shut down")"
   )
 
   selection="$(
@@ -117,10 +145,11 @@ show_menu() {
       -theme "$ROFI_THEME" \
       -dmenu \
       -i \
+      -markup-rows \
       -no-custom \
       -p "system" \
       -mesg "Fast one-shot actions for Super+B" \
-      -l 6 \
+      -l "${#options[@]}" \
       -format i
   )"
 

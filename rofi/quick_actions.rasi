@@ -1,13 +1,13 @@
 @import "default.rasi"
 
 window {
-    width: 620px;
-    padding: 20px;
+    width: 700px;
+    padding: 22px;
     border-radius: 22px;
 }
 
 mainbox {
-    spacing: 14px;
+    spacing: 16px;
     children: [ "inputbar", "message", "listview" ];
 }
 
@@ -25,19 +25,20 @@ entry {
 }
 
 message {
-    padding: 0 4px;
+    padding: 0 4px 4px 4px;
 }
 
 listview {
     lines: 6;
-    spacing: 8px;
+    spacing: 10px;
 }
 
 element {
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-radius: 16px;
 }
 
 element-text {
-    font: "JetBrainsMono Nerd Font 11";
+    font: "JetBrainsMono Nerd Font 11.5";
+    vertical-align: 0.5;
 }

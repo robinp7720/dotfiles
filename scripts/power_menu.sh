@@ -1,20 +1,77 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+find_rofi_bin() {
+  local candidate="${ROFI_BIN:-$HOME/.local/bin/rofi}"
+
+  if [[ -x "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  command -v rofi || true
+}
+
+escape_markup() {
+  local value="${1:-}"
+
+  value="${value//&/&amp;}"
+  value="${value//</&lt;}"
+  value="${value//>/&gt;}"
+
+  printf '%s' "$value"
+}
+
+render_row() {
+  local icon="$1"
+  local title="$2"
+  local description="$3"
+
+  printf '<span weight="700" size="110%%">%s  %s</span>&#10;<span size="90%%">%s</span>' \
+    "$icon" \
+    "$(escape_markup "$title")" \
+    "$(escape_markup "$description")"
+}
+
+ROFI_BIN="$(find_rofi_bin)"
+if [[ -z "${ROFI_BIN:-}" ]]; then
+  printf 'rofi is not installed.\n' >&2
+  exit 1
+fi
+
+ROFI_THEME="${ROFI_THEME:-$HOME/.config/rofi/quick_actions.rasi}"
+if [[ ! -f "$ROFI_THEME" ]]; then
+  ROFI_THEME="$HOME/.dotfiles/rofi/quick_actions.rasi"
+fi
+
 menu() {
   local prompt="$1"
-  shift
+  local message="$2"
+  shift 2
 
-  printf '%s\n' "$@" | "$HOME/.local/bin/rofi" -dmenu -i -p "$prompt"
+  printf '%s\n' "$@" | "$ROFI_BIN" \
+    -theme "$ROFI_THEME" \
+    -dmenu \
+    -i \
+    -markup-rows \
+    -no-custom \
+    -p "$prompt" \
+    -mesg "$message" \
+    -l "$#" \
+    -format i
 }
 
 confirm() {
   local action="$1"
-  local answer
+  local answer_index
 
-  answer=$(menu "Confirm" "󰜺  No" "󰄬  Yes, ${action}")
-  answer=${answer#*  }
-  [[ "$answer" == "Yes, ${action}" ]]
+  answer_index="$(
+    menu "confirm" "This action runs immediately after confirmation" \
+      "$(render_row "󰜺" "Cancel" "Keep the current session untouched")" \
+      "$(render_row "󰄬" "Confirm ${action}" "Proceed with ${action} now")"
+  )" || true
+
+  [[ "$answer_index" == "1" ]]
 }
 
 lock_session() {
@@ -54,33 +111,32 @@ logout_session() {
 }
 
 options=(
-  "󰍁  Lock"
-  "󰤄  Suspend"
-  "󰍃  Logout"
-  "  Reboot"
-  "  Shutdown"
-  "󰜺  Cancel"
+  "$(render_row "󰍁" "Lock" "Blank the screen and keep the session running")"
+  "$(render_row "󰤄" "Suspend" "Lock first, then suspend the machine")"
+  "$(render_row "󰍃" "Logout" "Close the current desktop session")"
+  "$(render_row "" "Reboot" "Restart the system")"
+  "$(render_row "" "Shutdown" "Power off the system")"
+  "$(render_row "󰜺" "Cancel" "Close this menu")"
 )
 
-choice=$(menu "Session" "${options[@]}")
-choice=${choice#*  }
+choice="$(menu "session" "Session controls with confirmation for destructive actions" "${options[@]}")" || true
 
 case "$choice" in
-  Lock)
+  0)
     lock_session
     ;;
-  Suspend)
+  1)
     lock_session || true
     sleep 1
     systemctl suspend
     ;;
-  Logout)
+  2)
     confirm "logout" && logout_session
     ;;
-  Reboot)
+  3)
     confirm "reboot" && systemctl reboot
     ;;
-  Shutdown)
+  4)
     confirm "shutdown" && systemctl poweroff
     ;;
   *)
