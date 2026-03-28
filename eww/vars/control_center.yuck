@@ -1,11 +1,12 @@
-;; Polls for the control center surface.
+;; State for the control center surface. Values are refreshed on demand by
+;; scripts/control_center.sh so the daemon stays idle while the panel is closed.
 
-(defpoll cc_clock :interval "15s" "~/.config/eww/scripts/control_center_status.sh clock")
-(defpoll cc_date :interval "5m" "~/.config/eww/scripts/control_center_status.sh date")
-(defpoll cc_next_event :interval "60s" "~/.dotfiles/scripts/next_event.sh")
-(defpoll cc_media :interval "2s" "~/.config/eww/scripts/control_center_status.sh media")
-(defpoll cc_bluetooth :interval "10s" "~/.config/eww/scripts/control_center_status.sh bluetooth")
-(defpoll cc_headphones :interval "10s" "~/.config/eww/scripts/control_center_status.sh headphones")
-(defpoll cc_power_profile :interval "15s" "~/.config/eww/scripts/control_center_status.sh power")
-(defpoll cc_battery :interval "30s" "~/.config/eww/scripts/control_center_status.sh battery")
-(defpoll cc_network :interval "15s" "~/.config/eww/scripts/control_center_status.sh network")
+(defvar cc_clock "Loading...")
+(defvar cc_date "Loading...")
+(defvar cc_next_event "Checking calendar...")
+(defvar cc_media "Nothing playing")
+(defvar cc_bluetooth "Checking...")
+(defvar cc_headphones "Checking...")
+(defvar cc_power_profile "Checking...")
+(defvar cc_battery "Checking...")
+(defvar cc_network "Checking...")
