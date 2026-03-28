@@ -119,6 +119,15 @@ window#waybar.hidden {
   color: transparent;
 }
 
+#custom-keyboard-layout.hidden {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
+}
+
 #custom-logo1 {
   padding-right: 10px;
   padding-left: 10px;

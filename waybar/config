@@ -87,9 +87,9 @@
     "custom/keyboard-layout": {
         "exec": "~/.dotfiles/waybar/scripts/keyboard_layout.py",
         "return-type": "json",
-        "interval": 1,
+        "interval": 2,
         "tooltip": true,
-        "on-click": "niri msg action switch-layout next"
+        "on-click": "~/.dotfiles/waybar/scripts/keyboard_layout.py --toggle"
     },
 	"hyprland/window": {
 		"format": "{}",
@@ -146,9 +146,9 @@
         "interval": 2,
         "max-length": 45,
         "tooltip": true,
-        "on-click": "playerctl --player=spotify play-pause",
-        "on-scroll-up": "playerctl --player=spotify next",
-        "on-scroll-down": "playerctl --player=spotify previous"
+        "on-click": "~/.dotfiles/scripts/now_playing.sh --toggle",
+        "on-scroll-up": "~/.dotfiles/scripts/now_playing.sh --next",
+        "on-scroll-down": "~/.dotfiles/scripts/now_playing.sh --previous"
     },
     "custom/next-event": {
         "exec": "~/.dotfiles/scripts/next_event.sh --waybar",

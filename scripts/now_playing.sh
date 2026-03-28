@@ -11,9 +11,25 @@ OUT="$CACHE_DIR/album.jpg"
 mkdir -p "$CACHE_DIR"
 
 output_mode="text"
-if [[ ${1:-} == "--quiet" ]]; then
-  output_mode="quiet"
-fi
+action_mode=""
+
+while [[ $# -gt 0 ]]; do
+  case "${1:-}" in
+    --quiet)
+      output_mode="quiet"
+      ;;
+    --toggle)
+      action_mode="play-pause"
+      ;;
+    --next)
+      action_mode="next"
+      ;;
+    --previous)
+      action_mode="previous"
+      ;;
+  esac
+  shift
+done
 
 # Exit silently if playerctl is unavailable.
 if ! command -v playerctl >/dev/null 2>&1; then
@@ -107,6 +123,11 @@ fi
 # Treat Stopped as no output to avoid stale info
 if [[ "$chosen_status" == "Stopped" ]]; then
   rm -f "$OUT"
+  exit 0
+fi
+
+if [[ -n "$action_mode" ]]; then
+  playerctl --player="$chosen_player" "$action_mode" >/dev/null 2>&1 || exit 0
   exit 0
 fi
 
