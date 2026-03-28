@@ -6,6 +6,7 @@
 }
 
 window {
+	background-color: {{colors.surface_container_highest.default.hex}};
 	background-image:
 		linear-gradient(
 			125deg,

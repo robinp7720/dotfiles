@@ -126,9 +126,11 @@ case "$choice" in
     lock_session
     ;;
   1)
-    lock_session || true
-    sleep 1
-    systemctl suspend
+    if confirm "suspend"; then
+      lock_session || true
+      sleep 1
+      systemctl suspend
+    fi
     ;;
   2)
     confirm "logout" && logout_session
