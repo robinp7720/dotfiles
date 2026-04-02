@@ -6,6 +6,7 @@ pub enum SearchMode {
     Apps,
     Files,
     Ssh,
+    Pass,
     Commands,
     Web,
     Calc,
@@ -22,6 +23,7 @@ impl SearchMode {
             SearchMode::Apps => "Applications",
             SearchMode::Files => "Files",
             SearchMode::Ssh => "SSH",
+            SearchMode::Pass => "Passwords",
             SearchMode::Commands => "Commands",
             SearchMode::Web => "Web",
             SearchMode::Calc => "Calculator",
@@ -44,7 +46,9 @@ pub enum Action {
     LaunchApp { desktop_id: String },
     OpenFile { path: String },
     Ssh { host: String },
+    CopyPass { entry: String },
     RunCommand { command: String },
+    OpenUrl { url: String },
     WebSearch { query: String },
     CopyText { text: String },
     None,
@@ -79,6 +83,7 @@ fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
     match first {
         '>' => return Some((SearchMode::Commands, rest.trim_start())),
         '@' => return Some((SearchMode::Ssh, rest.trim_start())),
+        '!' => return Some((SearchMode::Pass, rest.trim_start())),
         '?' => return Some((SearchMode::Web, rest.trim_start())),
         '=' => return Some((SearchMode::Calc, rest.trim_start())),
         '/' => {
@@ -91,12 +96,14 @@ fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
     }
 
     let lowered = raw.to_ascii_lowercase();
-    const PREFIXES: [(&str, SearchMode); 9] = [
+    const PREFIXES: [(&str, SearchMode); 11] = [
         ("apps:", SearchMode::Apps),
         ("app:", SearchMode::Apps),
         ("files:", SearchMode::Files),
         ("file:", SearchMode::Files),
         ("ssh:", SearchMode::Ssh),
+        ("pass:", SearchMode::Pass),
+        ("password:", SearchMode::Pass),
         ("cmd:", SearchMode::Commands),
         ("command:", SearchMode::Commands),
         ("web:", SearchMode::Web),
@@ -153,9 +160,83 @@ fn is_subsequence(haystack: &str, needle: &str) -> bool {
     current.is_none()
 }
 
+pub fn browser_target(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.chars().any(char::is_whitespace) {
+        return None;
+    }
+
+    if has_uri_scheme(trimmed) {
+        return Some(trimmed.to_string());
+    }
+
+    if trimmed.starts_with("www.") && looks_like_web_host(trimmed) {
+        return Some(format!("https://{trimmed}"));
+    }
+
+    if looks_like_web_host(trimmed) {
+        return Some(format!("https://{trimmed}"));
+    }
+
+    None
+}
+
+fn has_uri_scheme(value: &str) -> bool {
+    let Some((scheme, rest)) = value.split_once("://") else {
+        return false;
+    };
+
+    !scheme.is_empty()
+        && !rest.is_empty()
+        && scheme
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+}
+
+fn looks_like_web_host(value: &str) -> bool {
+    let authority = value
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.');
+
+    if authority.is_empty() {
+        return false;
+    }
+
+    let host = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    let host = host
+        .rsplit_once(':')
+        .filter(|(_, port)| !port.is_empty() && port.chars().all(|ch| ch.is_ascii_digit()))
+        .map(|(host, _)| host)
+        .unwrap_or(host);
+
+    if host.eq_ignore_ascii_case("localhost") || host.parse::<std::net::Ipv4Addr>().is_ok() {
+        return true;
+    }
+
+    if !host.contains('.') {
+        return false;
+    }
+
+    host.split('.').all(valid_domain_label)
+}
+
+fn valid_domain_label(label: &str) -> bool {
+    !label.is_empty()
+        && !label.starts_with('-')
+        && !label.ends_with('-')
+        && label
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{QueryInput, SearchMode};
+    use super::{QueryInput, SearchMode, browser_target};
 
     #[test]
     fn symbol_prefixes_override_the_default_mode() {
@@ -172,6 +253,17 @@ mod tests {
     }
 
     #[test]
+    fn pass_prefixes_override_the_default_mode() {
+        let symbol_prefixed = QueryInput::parse("! github/work", SearchMode::All);
+        assert_eq!(symbol_prefixed.mode, SearchMode::Pass);
+        assert_eq!(symbol_prefixed.text, "github/work");
+
+        let text_prefixed = QueryInput::parse("PASS: github/work", SearchMode::Apps);
+        assert_eq!(text_prefixed.mode, SearchMode::Pass);
+        assert_eq!(text_prefixed.text, "github/work");
+    }
+
+    #[test]
     fn empty_symbol_prefix_keeps_the_target_mode() {
         let query = QueryInput::parse("=", SearchMode::All);
         assert_eq!(query.mode, SearchMode::Calc);
@@ -183,5 +275,27 @@ mod tests {
         let query = QueryInput::parse("/etc", SearchMode::All);
         assert_eq!(query.mode, SearchMode::All);
         assert_eq!(query.text, "/etc");
+    }
+
+    #[test]
+    fn browser_target_recognizes_full_urls() {
+        assert_eq!(
+            browser_target("https://example.com/docs?q=1").as_deref(),
+            Some("https://example.com/docs?q=1")
+        );
+    }
+
+    #[test]
+    fn browser_target_adds_https_for_bare_domains() {
+        assert_eq!(
+            browser_target("example.com/notes").as_deref(),
+            Some("https://example.com/notes")
+        );
+    }
+
+    #[test]
+    fn browser_target_rejects_plain_search_terms() {
+        assert_eq!(browser_target("firefox"), None);
+        assert_eq!(browser_target("two words"), None);
     }
 }

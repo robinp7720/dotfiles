@@ -14,12 +14,18 @@ use gtk4::{
     ListBox, ListBoxRow, Orientation, ScrolledWindow, SelectionMode,
 };
 use gtk4_layer_shell::LayerShell;
+use std::cell::Cell;
+use std::cell::RefCell;
 use std::process::Command;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(name = "dot-launcher")]
-#[command(about = "Unified desktop launcher for apps, files, SSH, commands, web, and libqalculate")]
+#[command(
+    about = "Unified desktop launcher for apps, files, passwords, SSH, commands, web, and libqalculate"
+)]
 struct Cli {
     #[arg(long, value_enum, default_value_t = SearchMode::All)]
     mode: SearchMode,
@@ -38,6 +44,7 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let sources = Arc::new(Sources::load());
+    sources.warm_external_sources();
     let application = Application::builder()
         .application_id("me.robindecker.DotLauncher")
         .build();
@@ -58,8 +65,8 @@ fn build_ui(
 ) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .default_width(820)
-        .default_height(520)
+        .default_width(860)
+        .default_height(560)
         .decorated(false)
         .resizable(false)
         .title("Launcher")
@@ -67,31 +74,56 @@ fn build_ui(
 
     window.init_layer_shell();
     window.set_layer(gtk4_layer_shell::Layer::Overlay);
-    window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::OnDemand);
+    // The launcher should behave like a modal overlay. On-demand focus is
+    // compositor-defined and can leave the entry without a working key grab.
+    window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::Exclusive);
     window.set_namespace(Some("dot-launcher"));
     window.set_anchor(gtk4_layer_shell::Edge::Top, true);
-    window.set_margin(gtk4_layer_shell::Edge::Top, 140);
+    window.set_margin(gtk4_layer_shell::Edge::Top, 112);
 
     apply_css();
 
-    let outer = GtkBox::new(Orientation::Vertical, 14);
+    let outer = GtkBox::new(Orientation::Vertical, 18);
     outer.add_css_class("launcher-shell");
     outer.set_halign(Align::Center);
-    outer.set_size_request(820, -1);
-    outer.set_margin_top(22);
-    outer.set_margin_bottom(22);
-    outer.set_margin_start(22);
-    outer.set_margin_end(22);
+    outer.set_size_request(860, -1);
+    outer.set_margin_top(26);
+    outer.set_margin_bottom(26);
+    outer.set_margin_start(26);
+    outer.set_margin_end(26);
+
+    let header = GtkBox::new(Orientation::Vertical, 6);
+    header.add_css_class("launcher-header");
+
+    let kicker = Label::new(Some("Desktop Launchpad"));
+    kicker.add_css_class("launcher-kicker");
+    kicker.set_halign(Align::Start);
+
+    let headline = Label::new(Some(
+        "Apps, files, passwords, hosts, commands, and quick math in one overlay",
+    ));
+    headline.add_css_class("launcher-headline");
+    headline.set_halign(Align::Start);
+    headline.set_wrap(true);
+
+    header.append(&kicker);
+    header.append(&headline);
 
     let entry = Entry::builder()
         .placeholder_text(placeholder_for_mode(mode))
         .build();
     entry.add_css_class("launcher-entry");
+    entry.set_icon_from_icon_name(
+        gtk4::EntryIconPosition::Primary,
+        Some("system-search-symbolic"),
+    );
     if let Some(query) = initial_query.as_deref() {
         entry.set_text(query);
     }
 
-    let hint = Label::new(Some("Prefixes: > commands, / files, @ ssh, ? web, = calc"));
+    let hint = Label::new(Some(
+        "Prefixes: > commands, / files, @ ssh, ! pass, ? web, = calc",
+    ));
     hint.add_css_class("launcher-hint");
     hint.set_halign(Align::Start);
     hint.set_hexpand(true);
@@ -106,61 +138,85 @@ fn build_ui(
     meta.append(&hint);
     meta.append(&mode_badge);
 
+    let shortcuts = GtkBox::new(Orientation::Horizontal, 8);
+    shortcuts.add_css_class("launcher-shortcuts");
+    shortcuts.set_halign(Align::Start);
+    for chip in [
+        "Applications",
+        "/ Files",
+        "@ SSH",
+        "! Pass",
+        "> Commands",
+        "? Web",
+        "= Calc",
+    ] {
+        shortcuts.append(&build_shortcut_chip(chip));
+    }
+
     let list = ListBox::new();
     list.set_selection_mode(SelectionMode::Single);
     list.add_css_class("launcher-results");
 
     let scroller = ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
-        .min_content_height(360)
+        .min_content_height(380)
         .child(&list)
         .build();
     scroller.add_css_class("launcher-scroller");
 
+    outer.append(&header);
     outer.append(&entry);
     outer.append(&meta);
+    outer.append(&shortcuts);
     outer.append(&scroller);
     window.set_child(Some(&outer));
+
+    let current_results = Rc::new(RefCell::new(Vec::<ResultItem>::new()));
 
     {
         let sources = sources.clone();
         let list = list.clone();
         let hint = hint.clone();
         let mode_badge = mode_badge.clone();
+        let current_results = current_results.clone();
         entry.connect_changed(move |entry| {
             let query = entry.text().to_string();
             update_search_meta(&hint, &mode_badge, &query, mode);
             let results = sources.search(&query, mode);
             rebuild_results(&list, &results);
+            current_results.replace(results);
         });
     }
 
     {
-        let sources = sources.clone();
-        let entry = entry.clone();
         let hint = hint.clone();
         let window = window.clone();
+        let current_results = current_results.clone();
         list.connect_row_activated(move |_, row| {
-            let query = entry.text().to_string();
-            let results = sources.search(&query, mode);
+            let results = current_results.borrow();
             activate_row(row, &results, &window, &hint);
         });
     }
 
     {
-        let sources = sources.clone();
-        let entry = entry.clone();
         let hint = hint.clone();
         let list = list.clone();
         let window = window.clone();
         let activate_entry = entry.clone();
+        let current_results = current_results.clone();
         entry.connect_activate(move |_| {
             let query = activate_entry.text().to_string();
-            let results = sources.search(&query, mode);
+            let results = current_results.borrow();
             let selected = list
                 .selected_row()
                 .and_then(|row| results.get(row.index() as usize).cloned())
-                .or_else(|| results.first().cloned());
+                .or_else(|| {
+                    if query.is_empty() {
+                        None
+                    } else {
+                        results.first().cloned()
+                    }
+                });
 
             if let Some(item) = selected {
                 if let Err(error) = execute_action(&window, item.action) {
@@ -177,8 +233,7 @@ fn build_ui(
     {
         let entry = entry.clone();
         let list = list.clone();
-        let sources = sources.clone();
-        let window = window.clone();
+        let current_results = current_results.clone();
         let keys = EventControllerKey::new();
         let key_window = window.clone();
         keys.connect_key_pressed(move |_, key, _, _| match key {
@@ -187,20 +242,45 @@ fn build_ui(
                 glib::Propagation::Stop
             }
             gdk::Key::Down => {
-                let results = sources.search(&entry.text(), mode);
-                move_selection(&list, 1, results.len() as i32);
+                let result_count = current_results.borrow().len() as i32;
+                move_selection(&list, 1, result_count);
                 entry.grab_focus();
                 glib::Propagation::Stop
             }
             gdk::Key::Up => {
-                let results = sources.search(&entry.text(), mode);
-                move_selection(&list, -1, results.len() as i32);
+                let result_count = current_results.borrow().len() as i32;
+                move_selection(&list, -1, result_count);
                 entry.grab_focus();
                 glib::Propagation::Stop
             }
             _ => glib::Propagation::Proceed,
         });
         window.add_controller(keys);
+    }
+
+    {
+        let focus_armed = Rc::new(Cell::new(false));
+
+        {
+            let focus_armed = focus_armed.clone();
+            let window = window.clone();
+            entry.connect_has_focus_notify(move |entry| {
+                if entry.has_focus() {
+                    focus_armed.set(true);
+                } else if focus_armed.get() && window.is_visible() {
+                    window.close();
+                }
+            });
+        }
+
+        {
+            let focus_armed = focus_armed.clone();
+            window.connect_is_active_notify(move |window| {
+                if focus_armed.get() && !window.is_active() && window.is_visible() {
+                    window.close();
+                }
+            });
+        }
     }
 
     let initial_results = sources.search(initial_query.as_deref().unwrap_or_default(), mode);
@@ -211,9 +291,31 @@ fn build_ui(
         mode,
     );
     rebuild_results(&list, &initial_results);
+    current_results.replace(initial_results);
 
     window.present();
-    entry.grab_focus();
+    request_initial_focus(&window, &entry);
+}
+
+fn request_initial_focus(window: &ApplicationWindow, entry: &Entry) {
+    for delay_ms in [0_u64, 25, 100, 250] {
+        let window = window.clone();
+        let entry = entry.clone();
+        glib::timeout_add_local_once(Duration::from_millis(delay_ms), move || {
+            if !window.is_visible() || entry.has_focus() {
+                return;
+            }
+
+            window.present();
+            entry.grab_focus_without_selecting();
+        });
+    }
+}
+
+fn build_shortcut_chip(label: &str) -> Label {
+    let chip = Label::new(Some(label));
+    chip.add_css_class("launcher-shortcut-chip");
+    chip
 }
 
 fn rebuild_results(list: &ListBox, results: &[ResultItem]) {
@@ -239,15 +341,25 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     }
 
     let layout = GtkBox::new(Orientation::Horizontal, 14);
-    layout.set_margin_top(10);
-    layout.set_margin_bottom(10);
-    layout.set_margin_start(12);
-    layout.set_margin_end(12);
+    layout.set_margin_top(12);
+    layout.set_margin_bottom(12);
+    layout.set_margin_start(14);
+    layout.set_margin_end(14);
 
     let icon = Image::from_icon_name(&item.icon_name);
     icon.set_pixel_size(28);
+    icon.add_css_class("launcher-icon");
+    icon.set_halign(Align::Center);
+    icon.set_valign(Align::Center);
+
+    let icon_wrap = GtkBox::new(Orientation::Vertical, 0);
+    icon_wrap.add_css_class("launcher-icon-wrap");
+    icon_wrap.set_valign(Align::Center);
+    icon_wrap.set_halign(Align::Center);
+    icon_wrap.append(&icon);
 
     let text_box = GtkBox::new(Orientation::Vertical, 4);
+    text_box.set_hexpand(true);
 
     let title = Label::new(Some(&item.title));
     title.add_css_class("launcher-title");
@@ -255,17 +367,22 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     title.set_xalign(0.0);
     title.set_wrap(true);
 
-    let subtitle = Label::new(Some(&format!("{}  •  {}", item.source, item.subtitle)));
+    let subtitle = Label::new(Some(&item.subtitle));
     subtitle.add_css_class("launcher-subtitle");
     subtitle.set_halign(Align::Start);
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
 
+    let source_badge = Label::new(Some(item.source));
+    source_badge.add_css_class("launcher-source-badge");
+    source_badge.set_valign(Align::Center);
+
     text_box.append(&title);
     text_box.append(&subtitle);
 
-    layout.append(&icon);
+    layout.append(&icon_wrap);
     layout.append(&text_box);
+    layout.append(&source_badge);
     row.set_child(Some(&layout));
     row
 }
@@ -309,6 +426,10 @@ fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
                 .context("failed to open file")?;
         }
         Action::Ssh { host } => launch_ssh(&host)?,
+        Action::CopyPass { entry } => {
+            let secret = load_pass_secret(&entry)?;
+            copy_to_clipboard(&secret);
+        }
         Action::RunCommand { command } => {
             Command::new("sh")
                 .args(["-lc", &command])
@@ -322,10 +443,12 @@ fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
             gio::AppInfo::launch_default_for_uri(&url, gio::AppLaunchContext::NONE)
                 .context("failed to open search URL")?;
         }
+        Action::OpenUrl { url } => {
+            gio::AppInfo::launch_default_for_uri(&url, gio::AppLaunchContext::NONE)
+                .context("failed to open URL")?;
+        }
         Action::CopyText { text } => {
-            if let Some(display) = gdk::Display::default() {
-                display.clipboard().set_text(&text);
-            }
+            copy_to_clipboard(&text);
         }
         Action::None => return Ok(()),
     }
@@ -365,12 +488,13 @@ fn launch_ssh(host: &str) -> Result<()> {
 
 fn placeholder_for_mode(mode: SearchMode) -> &'static str {
     match mode {
-        SearchMode::All => "Search apps, files, SSH, commands, web, and calculations",
+        SearchMode::All => "Search apps, files, passwords, SSH, commands, web, and calculations",
         SearchMode::Apps => "Launch an application",
-        SearchMode::Files => "Search files with tracker3",
+        SearchMode::Files => "Search files with LocalSearch",
         SearchMode::Ssh => "Search SSH hosts",
+        SearchMode::Pass => "Search password-store entries",
         SearchMode::Commands => "Run a command",
-        SearchMode::Web => "Search the web",
+        SearchMode::Web => "Search the web or open a URL",
         SearchMode::Calc => "Evaluate a libqalculate expression",
     }
 }
@@ -380,12 +504,13 @@ fn update_search_meta(hint: &Label, mode_badge: &Label, raw_query: &str, cli_mod
     mode_badge.set_text(query.mode.label());
 
     let hint_text = match query.mode {
-        SearchMode::All => "Prefixes: > commands, / files, @ ssh, ? web, = calc",
+        SearchMode::All => "Prefixes: > commands, / files, @ ssh, ! pass, ? web, = calc",
         SearchMode::Apps => "Search installed desktop applications",
-        SearchMode::Files => "Search tracker3 indexed files",
+        SearchMode::Files => "Search LocalSearch indexed files",
         SearchMode::Ssh => "Search aliases from ~/.ssh/config and known_hosts",
+        SearchMode::Pass => "Press Enter to copy the first line from pass show",
         SearchMode::Commands => "Press Enter to run the command or choose a suggestion",
-        SearchMode::Web => "Press Enter to open the browser with your query",
+        SearchMode::Web => "Press Enter to search the web or open a URL directly",
         SearchMode::Calc => "Press Enter to copy the calculated result",
     };
     set_hint_state(hint, hint_text, false);
@@ -398,6 +523,39 @@ fn set_hint_state(hint: &Label, message: &str, is_error: bool) {
     } else {
         hint.remove_css_class("launcher-hint-error");
     }
+}
+
+fn copy_to_clipboard(text: &str) {
+    if let Some(display) = gdk::Display::default() {
+        display.clipboard().set_text(text);
+    }
+}
+
+fn load_pass_secret(entry: &str) -> Result<String> {
+    let output = Command::new("pass")
+        .args(["show", entry])
+        .output()
+        .context("failed to run pass")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        anyhow::bail!(
+            "{}",
+            if stderr.is_empty() {
+                "pass failed to decrypt the selected entry"
+            } else {
+                stderr.as_str()
+            }
+        );
+    }
+
+    String::from_utf8(output.stdout)
+        .context("pass returned non-UTF-8 output")?
+        .lines()
+        .next()
+        .map(|line| line.to_string())
+        .filter(|line| !line.is_empty())
+        .context("pass entry did not contain a password on the first line")
 }
 
 fn default_ssh_terminal(home: Option<&std::path::Path>) -> String {
@@ -439,22 +597,52 @@ fn apply_css() {
       }
 
       .launcher-shell {
-        background: rgba(18, 20, 28, 0.90);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+        background: linear-gradient(180deg, rgba(19, 23, 33, 0.78), rgba(12, 15, 24, 0.92));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 24px;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+        padding: 1.35rem;
+      }
+
+      .launcher-header {
+        padding: 0.1rem 0.15rem 0.2rem;
+      }
+
+      .launcher-kicker {
+        color: rgba(188, 214, 255, 0.72);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .launcher-headline {
+        color: rgba(245, 248, 255, 0.98);
+        font-size: 1.34rem;
+        font-weight: 700;
       }
 
       .launcher-entry {
-        min-height: 58px;
-        font-size: 1.28rem;
-        padding: 0.35rem 0.8rem;
-        border-radius: 10px;
+        min-height: 64px;
+        font-size: 1.18rem;
+        padding: 0.45rem 0.95rem;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: rgba(255, 255, 255, 0.07);
+        color: rgba(247, 249, 255, 0.98);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+
+      .launcher-entry:focus-within {
+        border-color: rgba(142, 188, 255, 0.55);
+        background: rgba(255, 255, 255, 0.10);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                    0 0 0 3px rgba(106, 160, 255, 0.14);
       }
 
       .launcher-hint {
         color: rgba(255, 255, 255, 0.68);
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         margin-left: 0.25rem;
       }
 
@@ -473,26 +661,55 @@ fn apply_css() {
         padding: 0.3rem 0.8rem;
       }
 
+      .launcher-shortcuts {
+        margin-top: -0.1rem;
+      }
+
+      .launcher-shortcut-chip {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 999px;
+        color: rgba(233, 238, 248, 0.82);
+        font-size: 0.83rem;
+        font-weight: 600;
+        padding: 0.3rem 0.72rem;
+      }
+
       .launcher-results {
         background: transparent;
       }
 
       .launcher-row {
-        margin-bottom: 6px;
-        border-radius: 10px;
+        margin-bottom: 8px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.02);
+        background: rgba(255, 255, 255, 0.02);
       }
 
       .launcher-row:selected {
-        background: rgba(255, 255, 255, 0.10);
+        background: linear-gradient(90deg, rgba(120, 168, 255, 0.16), rgba(255, 255, 255, 0.08));
+        border-color: rgba(142, 188, 255, 0.22);
       }
 
       .launcher-row-status {
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(255, 255, 255, 0.04);
         border: 1px dashed rgba(255, 255, 255, 0.08);
       }
 
       .launcher-row-status:selected {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .launcher-icon-wrap {
+        min-width: 44px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 8px;
+      }
+
+      .launcher-icon {
+        color: rgba(240, 244, 255, 0.96);
       }
 
       .launcher-title {
@@ -503,6 +720,17 @@ fn apply_css() {
       .launcher-subtitle {
         color: rgba(255, 255, 255, 0.70);
         font-size: 0.92rem;
+      }
+
+      .launcher-source-badge {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        color: rgba(233, 238, 248, 0.74);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 0.28rem 0.72rem;
       }
     "#;
 

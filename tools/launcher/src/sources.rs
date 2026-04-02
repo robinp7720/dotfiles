@@ -1,4 +1,4 @@
-use crate::model::{Action, QueryInput, ResultItem, SearchMode, score_text};
+use crate::model::{Action, QueryInput, ResultItem, SearchMode, browser_target, score_text};
 use gtk4::gio;
 use gtk4::prelude::*;
 use std::collections::{BTreeSet, HashSet};
@@ -6,11 +6,43 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 
 const MAX_APPS: usize = 8;
 const MAX_FILES: usize = 8;
 const MAX_SSH: usize = 6;
+const MAX_PASS: usize = 8;
 const MAX_COMMANDS: usize = 8;
+const MIN_FILE_QUERY_CHARS: usize = 2;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileSearchBackend {
+    LocalSearch,
+    Tracker3,
+}
+
+impl FileSearchBackend {
+    fn detect() -> Option<Self> {
+        if command_exists("localsearch") {
+            Some(Self::LocalSearch)
+        } else if command_exists("tracker3") {
+            Some(Self::Tracker3)
+        } else {
+            None
+        }
+    }
+
+    fn run_search(self, query: &str, limit: usize) -> std::io::Result<std::process::Output> {
+        match self {
+            Self::LocalSearch => Command::new("localsearch")
+                .args(["search", "-f", "--limit", &limit.to_string(), query])
+                .output(),
+            Self::Tracker3 => Command::new("tracker3")
+                .args(["search", "--limit", &limit.to_string(), query])
+                .output(),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct AppEntry {
@@ -23,11 +55,19 @@ pub struct AppEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct PassEntry {
+    pub name: String,
+    pub search_blob: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Sources {
     apps: Vec<AppEntry>,
     ssh_hosts: Vec<String>,
+    pass_entries: Vec<PassEntry>,
     commands: Vec<String>,
-    tracker3_available: bool,
+    file_search_backend: Option<FileSearchBackend>,
+    pass_available: bool,
     qalc_available: bool,
 }
 
@@ -36,9 +76,19 @@ impl Sources {
         Self {
             apps: load_applications(),
             ssh_hosts: load_ssh_hosts(),
+            pass_entries: load_pass_entries(),
             commands: load_commands(),
-            tracker3_available: command_exists("tracker3"),
+            file_search_backend: FileSearchBackend::detect(),
+            pass_available: command_exists("pass"),
             qalc_available: command_exists("qalc"),
+        }
+    }
+
+    pub fn warm_external_sources(&self) {
+        if let Some(backend) = self.file_search_backend {
+            thread::spawn(move || {
+                let _ = backend.run_search("a", 1);
+            });
         }
     }
 
@@ -63,6 +113,10 @@ impl Sources {
             results.extend(self.search_ssh(&query));
         }
 
+        if query.mode.includes(SearchMode::Pass) {
+            results.extend(self.search_pass(&query));
+        }
+
         if query.mode == SearchMode::Commands {
             results.extend(self.search_commands(&query));
         }
@@ -73,17 +127,12 @@ impl Sources {
             }
         }
 
+        if let Some(result) = self.search_url(&query) {
+            results.push(result);
+        }
+
         if query.mode == SearchMode::Web {
-            results.push(ResultItem {
-                title: format!("Search the web for “{}”", query.text),
-                subtitle: "Open the default browser".to_string(),
-                source: "Web",
-                icon_name: "web-browser-symbolic".to_string(),
-                score: 120,
-                action: Action::WebSearch {
-                    query: query.text.clone(),
-                },
-            });
+            results.push(self.search_web(&query));
         }
 
         results.sort_by(|left, right| {
@@ -130,8 +179,36 @@ impl Sources {
             }));
         }
 
+        if mode == SearchMode::Pass {
+            if !self.pass_available {
+                results.push(instruction_result(
+                    "pass is not installed",
+                    "Install pass to search password-store entries",
+                    "Passwords",
+                    "dialog-password-symbolic",
+                    65,
+                ));
+            } else if self.pass_entries.is_empty() {
+                results.push(instruction_result(
+                    "Password store is empty",
+                    "Add entries to ~/.password-store or set PASSWORD_STORE_DIR",
+                    "Passwords",
+                    "dialog-password-symbolic",
+                    65,
+                ));
+            } else {
+                results.push(instruction_result(
+                    "Password mode",
+                    "Type an entry name and press Enter to copy its password",
+                    "Passwords",
+                    "dialog-password-symbolic",
+                    65,
+                ));
+            }
+        }
+
         if mode == SearchMode::Files {
-            if self.tracker3_available {
+            if self.file_search_backend.is_some() {
                 results.push(instruction_result(
                     "File mode",
                     "Type a name or path fragment to search indexed files",
@@ -141,8 +218,8 @@ impl Sources {
                 ));
             } else {
                 results.push(instruction_result(
-                    "tracker3 is not installed",
-                    "Install tracker3 to enable indexed file search",
+                    "Indexed file search unavailable",
+                    "Install LocalSearch to enable indexed file search",
                     "Files",
                     "system-search-symbolic",
                     65,
@@ -221,11 +298,24 @@ impl Sources {
     }
 
     fn search_files(&self, query: &QueryInput) -> Vec<ResultItem> {
-        if !self.tracker3_available {
+        if query.text.chars().count() < MIN_FILE_QUERY_CHARS {
+            if query.mode == SearchMode::Files {
+                return vec![instruction_result(
+                    "Keep typing to search files",
+                    "Type at least 2 characters before querying the file index",
+                    "Files",
+                    "system-search-symbolic",
+                    520,
+                )];
+            }
+            return Vec::new();
+        }
+
+        let Some(backend) = self.file_search_backend else {
             if query.mode == SearchMode::Files {
                 return vec![ResultItem {
-                    title: "tracker3 is not installed".to_string(),
-                    subtitle: "Install tracker3 to enable indexed file search".to_string(),
+                    title: "Indexed file search unavailable".to_string(),
+                    subtitle: "Install LocalSearch to enable indexed file search".to_string(),
                     source: "Files",
                     icon_name: "system-search-symbolic".to_string(),
                     score: 500,
@@ -233,12 +323,9 @@ impl Sources {
                 }];
             }
             return Vec::new();
-        }
+        };
 
-        let Ok(output) = Command::new("tracker3")
-            .args(["search", "--limit", &MAX_FILES.to_string(), &query.text])
-            .output()
-        else {
+        let Ok(output) = backend.run_search(&query.text, MAX_FILES) else {
             return Vec::new();
         };
 
@@ -248,7 +335,7 @@ impl Sources {
 
         String::from_utf8_lossy(&output.stdout)
             .lines()
-            .filter_map(parse_tracker_line)
+            .filter_map(parse_file_search_line)
             .take(MAX_FILES)
             .map(|path| {
                 let file_name = Path::new(&path)
@@ -286,6 +373,43 @@ impl Sources {
             .collect::<Vec<_>>();
 
         sort_results(&mut items, MAX_SSH);
+        items
+    }
+
+    fn search_pass(&self, query: &QueryInput) -> Vec<ResultItem> {
+        if !self.pass_available {
+            if query.mode == SearchMode::Pass {
+                return vec![ResultItem {
+                    title: "pass is not installed".to_string(),
+                    subtitle: "Install pass to search password-store entries".to_string(),
+                    source: "Passwords",
+                    icon_name: "dialog-password-symbolic".to_string(),
+                    score: 500,
+                    action: Action::None,
+                }];
+            }
+            return Vec::new();
+        }
+
+        let mut items = self
+            .pass_entries
+            .iter()
+            .filter_map(|entry| {
+                let score = score_text(&entry.search_blob, &query.text)?;
+                Some(ResultItem {
+                    title: entry.name.clone(),
+                    subtitle: "Copy the first line from pass show".to_string(),
+                    source: "Passwords",
+                    icon_name: "dialog-password-symbolic".to_string(),
+                    score: score + 880,
+                    action: Action::CopyPass {
+                        entry: entry.name.clone(),
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+
+        sort_results(&mut items, MAX_PASS);
         items
     }
 
@@ -356,6 +480,35 @@ impl Sources {
             score: 1_100,
             action: Action::CopyText { text: result },
         })
+    }
+
+    fn search_url(&self, query: &QueryInput) -> Option<ResultItem> {
+        if !matches!(query.mode, SearchMode::All | SearchMode::Web) {
+            return None;
+        }
+
+        let url = browser_target(&query.text)?;
+        Some(ResultItem {
+            title: format!("Open {url}"),
+            subtitle: "Open URL in the default browser".to_string(),
+            source: "Web",
+            icon_name: "web-browser-symbolic".to_string(),
+            score: 1_200,
+            action: Action::OpenUrl { url },
+        })
+    }
+
+    fn search_web(&self, query: &QueryInput) -> ResultItem {
+        ResultItem {
+            title: format!("Search the web for “{}”", query.text),
+            subtitle: "Open the default browser".to_string(),
+            source: "Web",
+            icon_name: "web-browser-symbolic".to_string(),
+            score: 120,
+            action: Action::WebSearch {
+                query: query.text.clone(),
+            },
+        }
     }
 }
 
@@ -499,7 +652,68 @@ fn load_commands() -> Vec<String> {
     commands.into_iter().collect()
 }
 
-fn parse_tracker_line(line: &str) -> Option<String> {
+fn load_pass_entries() -> Vec<PassEntry> {
+    let Some(store_dir) = password_store_dir() else {
+        return Vec::new();
+    };
+
+    let mut stack = vec![store_dir.clone()];
+    let mut entries = Vec::new();
+
+    while let Some(dir) = stack.pop() {
+        let Ok(children) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for child in children.flatten() {
+            let path = child.path();
+            let Ok(file_type) = child.file_type() else {
+                continue;
+            };
+
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
+            }
+
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let Some(name) = pass_entry_name(&store_dir, &path) else {
+                continue;
+            };
+
+            entries.push(PassEntry {
+                search_blob: name.to_ascii_lowercase(),
+                name,
+            });
+        }
+    }
+
+    entries.sort_by(|left, right| left.name.cmp(&right.name));
+    entries
+}
+
+fn password_store_dir() -> Option<PathBuf> {
+    env::var_os("PASSWORD_STORE_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".password-store")))
+        .filter(|path| path.is_dir())
+}
+
+fn pass_entry_name(root: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(root).ok()?;
+    let relative = relative.to_string_lossy();
+    let name = relative.strip_suffix(".gpg")?;
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn parse_file_search_line(line: &str) -> Option<String> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return None;
@@ -525,14 +739,17 @@ fn parse_tracker_line(line: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Sources, no_results_item, parse_tracker_line};
+    use super::{
+        FileSearchBackend, Sources, no_results_item, parse_file_search_line, pass_entry_name,
+    };
     use crate::model::{Action, QueryInput, SearchMode};
+    use std::path::Path;
 
     #[test]
-    fn tracker_paths_are_uri_decoded() {
+    fn indexed_paths_are_uri_decoded() {
         let line = "file:///tmp/with%20space%23hash.txt";
         assert_eq!(
-            parse_tracker_line(line).as_deref(),
+            parse_file_search_line(line).as_deref(),
             Some("/tmp/with space#hash.txt")
         );
     }
@@ -542,8 +759,10 @@ mod tests {
         let sources = Sources {
             apps: Vec::new(),
             ssh_hosts: Vec::new(),
+            pass_entries: Vec::new(),
             commands: Vec::new(),
-            tracker3_available: false,
+            file_search_backend: None,
+            pass_available: false,
             qalc_available: false,
         };
 
@@ -554,6 +773,25 @@ mod tests {
     }
 
     #[test]
+    fn bare_urls_surface_as_browser_results_in_all_mode() {
+        let sources = Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            pass_entries: Vec::new(),
+            commands: Vec::new(),
+            file_search_backend: None,
+            pass_available: false,
+            qalc_available: false,
+        };
+
+        let results = sources.search("example.com/docs", SearchMode::All);
+        assert!(matches!(
+            results.first().map(|item| &item.action),
+            Some(Action::OpenUrl { url }) if url == "https://example.com/docs"
+        ));
+    }
+
+    #[test]
     fn no_results_item_uses_mode_specific_guidance() {
         let item = no_results_item(&QueryInput {
             mode: SearchMode::Files,
@@ -561,8 +799,59 @@ mod tests {
         });
 
         assert_eq!(item.title, "No matches for \"report\"");
-        assert!(item.subtitle.contains("tracker3"));
+        assert!(item.subtitle.contains("file indexer"));
         assert!(matches!(item.action, Action::None));
+    }
+
+    #[test]
+    fn file_mode_requires_a_minimum_query_length_before_shelling_out() {
+        let sources = Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            pass_entries: Vec::new(),
+            commands: Vec::new(),
+            file_search_backend: Some(FileSearchBackend::LocalSearch),
+            pass_available: false,
+            qalc_available: false,
+        };
+
+        let results = sources.search("/ a", SearchMode::All);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].source, "Files");
+        assert_eq!(results[0].title, "Keep typing to search files");
+        assert!(matches!(results[0].action, Action::None));
+    }
+
+    #[test]
+    fn pass_entries_are_searchable_and_copyable() {
+        let sources = Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            pass_entries: vec![super::PassEntry {
+                name: "github/work".to_string(),
+                search_blob: "github/work".to_string(),
+            }],
+            commands: Vec::new(),
+            file_search_backend: None,
+            pass_available: true,
+            qalc_available: false,
+        };
+
+        let results = sources.search("pass: github", SearchMode::All);
+        assert!(matches!(
+            results.first().map(|item| &item.action),
+            Some(Action::CopyPass { entry }) if entry == "github/work"
+        ));
+    }
+
+    #[test]
+    fn pass_entry_names_are_derived_from_store_paths() {
+        let root = Path::new("/tmp/store");
+        let path = Path::new("/tmp/store/personal/github.gpg");
+        assert_eq!(
+            pass_entry_name(root, path).as_deref(),
+            Some("personal/github")
+        );
     }
 }
 
@@ -587,9 +876,10 @@ fn no_results_item(query: &QueryInput) -> ResultItem {
         SearchMode::All => "Try a broader term or switch to a dedicated mode.".to_string(),
         SearchMode::Apps => "Try a different app name or executable.".to_string(),
         SearchMode::Files => {
-            "Try a different file name or ensure tracker3 has indexed it.".to_string()
+            "Try a different file name or ensure the file indexer has indexed it.".to_string()
         }
         SearchMode::Ssh => "Check ~/.ssh/config and known_hosts for the expected host.".to_string(),
+        SearchMode::Pass => "Try a different password-store entry name.".to_string(),
         SearchMode::Commands => {
             "Try a different executable name or a full shell command.".to_string()
         }
