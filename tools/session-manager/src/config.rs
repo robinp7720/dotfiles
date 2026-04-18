@@ -71,7 +71,7 @@ impl Config {
                 y: m.y,
                 scale: m.scale.unwrap_or(1.0),
                 transform: m.transform.unwrap_or(0),
-                primary: false, // TODO: Detect primary
+                primary: m.primary,
                 width: m.width,
                 height: m.height,
                 refresh_rate: m.refresh_rate,
@@ -90,6 +90,7 @@ impl Config {
     fn validate(&self) -> Result<()> {
         for (hardware_hash, profile) in &self.profiles {
             let mut stable_ids = HashSet::new();
+            let mut primary_monitor: Option<String> = None;
 
             for monitor in &profile.monitors {
                 ensure!(
@@ -121,6 +122,17 @@ impl Config {
                     profile.name,
                     monitor.stable_id
                 );
+
+                if monitor.primary {
+                    ensure!(
+                        primary_monitor.is_none(),
+                        "Profile '{}' ({hardware_hash}) contains multiple primary monitors ('{}' and '{}')",
+                        profile.name,
+                        primary_monitor.as_deref().unwrap_or(""),
+                        monitor.stable_id
+                    );
+                    primary_monitor = Some(monitor.stable_id.clone());
+                }
             }
 
             if let Some(commands) = &profile.commands {
@@ -202,6 +214,28 @@ mod tests {
                 Profile {
                     name: "desk".to_string(),
                     monitors: vec![monitor],
+                    commands: None,
+                },
+            )]),
+        };
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_multiple_primary_monitors() {
+        let mut first = sample_monitor("DP_1");
+        first.primary = true;
+
+        let mut second = sample_monitor("HDMI_1");
+        second.primary = true;
+
+        let config = Config {
+            profiles: HashMap::from([(
+                "hash".to_string(),
+                Profile {
+                    name: "desk".to_string(),
+                    monitors: vec![first, second],
                     commands: None,
                 },
             )]),

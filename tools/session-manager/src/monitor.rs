@@ -14,6 +14,7 @@ pub struct Monitor {
     pub transform: Option<u8>,
     pub x: i32,
     pub y: i32,
+    pub primary: bool,
     pub active: bool,
 }
 
@@ -155,6 +156,7 @@ fn get_niri_monitors() -> Result<Vec<Monitor>> {
             transform: Some(transform_byte),
             x: raw.logical.x,
             y: raw.logical.y,
+            primary: false,
             active: true, // If it's in the list it's likely active
         });
     }
@@ -207,6 +209,7 @@ fn get_hyprland_monitors() -> Result<Vec<Monitor>> {
             transform: Some(raw.transform),
             x: raw.x,
             y: raw.y,
+            primary: false,
             active: raw.active,
         });
     }
@@ -241,40 +244,12 @@ fn get_x11_monitors() -> Result<Vec<Monitor>> {
     let mut current_monitor: Option<Monitor> = None;
 
     for line in output_str.lines() {
-        if line.contains(" connected ") {
-            // e.g. "DP-1 connected primary 1920x1080+0+0 ..."
+        if let Some(parsed_monitor) = parse_xrandr_connected_line(line) {
             if let Some(m) = current_monitor.take() {
                 monitors.push(m);
             }
 
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            let interface = parts[0].to_string();
-
-            // Check if active (has resolution like 1920x1080+0+0)
-            let active = line.contains("+");
-
-            // Try to extract resolution
-            let (w, h, x, y) =
-                if let Some(res_str) = parts.iter().find(|p| p.contains("x") && p.contains("+")) {
-                    // 1920x1080+0+0
-                    parse_xrandr_geometry(res_str).unwrap_or((0, 0, 0, 0))
-                } else {
-                    (0, 0, 0, 0)
-                };
-
-            current_monitor = Some(Monitor {
-                interface,
-                description: "Unknown X11 Display".to_string(), // xrandr often hides model in EDID
-                width: w,
-                height: h,
-                refresh_rate: 60000, // Default fallback
-                serial: None,
-                scale: Some(1.0),
-                transform: None,
-                x,
-                y,
-                active,
-            });
+            current_monitor = Some(parsed_monitor);
         } else if let Some(_) = current_monitor {
             // Try to find EDID or other props
             // This is where we would parse EDID to get the real name/serial
@@ -290,6 +265,39 @@ fn get_x11_monitors() -> Result<Vec<Monitor>> {
     }
 
     Ok(monitors)
+}
+
+fn parse_xrandr_connected_line(line: &str) -> Option<Monitor> {
+    if !line.contains(" connected ") {
+        return None;
+    }
+
+    // e.g. "DP-1 connected primary 1920x1080+0+0 ..."
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let interface = parts.first()?.to_string();
+    let primary = parts.contains(&"primary");
+
+    // Check if active (has geometry like 1920x1080+0+0).
+    let (width, height, x, y, active) = parts
+        .iter()
+        .find_map(|part| parse_xrandr_geometry(part).map(|geometry| (geometry, true)))
+        .map(|((w, h, x, y), active)| (w, h, x, y, active))
+        .unwrap_or((0, 0, 0, 0, false));
+
+    Some(Monitor {
+        interface,
+        description: "Unknown X11 Display".to_string(), // xrandr often hides model in EDID
+        width,
+        height,
+        refresh_rate: 60000, // Default fallback
+        serial: None,
+        scale: Some(1.0),
+        transform: None,
+        x,
+        y,
+        primary,
+        active,
+    })
 }
 
 fn parse_xrandr_geometry(s: &str) -> Option<(u32, u32, i32, i32)> {
@@ -310,6 +318,7 @@ fn parse_xrandr_geometry(s: &str) -> Option<(u32, u32, i32, i32)> {
 #[cfg(test)]
 mod tests {
     use super::Monitor;
+    use super::parse_xrandr_connected_line;
 
     #[test]
     fn stable_id_uses_interface_for_unknown_x11_displays() {
@@ -324,6 +333,7 @@ mod tests {
             transform: Some(0),
             x: 0,
             y: 0,
+            primary: true,
             active: true,
         };
 
@@ -331,5 +341,21 @@ mod tests {
             monitor.get_stable_id(),
             "Unknown_X11_Display_DP_1_1920x1080_60000"
         );
+    }
+
+    #[test]
+    fn parse_xrandr_connected_line_detects_primary_monitor() {
+        let monitor = parse_xrandr_connected_line(
+            "DP-1 connected primary 2560x1440+1920+0 (normal left inverted right x axis y axis)",
+        )
+        .expect("expected connected monitor");
+
+        assert_eq!(monitor.interface, "DP-1");
+        assert_eq!(monitor.width, 2560);
+        assert_eq!(monitor.height, 1440);
+        assert_eq!(monitor.x, 1920);
+        assert_eq!(monitor.y, 0);
+        assert!(monitor.primary);
+        assert!(monitor.active);
     }
 }

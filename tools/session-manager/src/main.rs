@@ -48,6 +48,9 @@ fn main() -> Result<()> {
                     m.scale.unwrap_or(1.0)
                 );
                 println!("  Position: {},{}", m.x, m.y);
+                if m.primary {
+                    println!("  Primary: yes");
+                }
                 if let Some(s) = &m.serial {
                     println!("  Serial: {}", s);
                 }
