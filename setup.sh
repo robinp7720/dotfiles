@@ -77,7 +77,7 @@ sudo_install_file() {
   local src="$1"
   local target="$2"
 
-  if sudo test -e "$target" && sudo cmp -s "$src" "$target"; then
+  if ! sudo test -L "$target" && sudo test -e "$target" && sudo cmp -s "$src" "$target"; then
     return 0
   fi
 
@@ -159,51 +159,69 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # Configure greetd/nwg-hello CSS to point at matugen output (requires sudo)
-if command -v sudo >/dev/null 2>&1 && [[ -d /etc/nwg-hello ]]; then
-  cache_dir="/var/cache/matugen"
-  cache_css="${cache_dir}/greetd.css"
-  target_css="/etc/nwg-hello/nwg-hello.css"
-  target_hypr="/etc/nwg-hello/hyprland.conf"
-  target_base="/etc/nwg-hello/base.conf"
-  target_monitors="/etc/nwg-hello/monitors.conf"
+if command -v sudo >/dev/null 2>&1; then
+  if sudo install -d -m 755 /etc/nwg-hello; then
+    cache_dir="/var/cache/matugen"
+    cache_css="${cache_dir}/greetd.css"
+    target_css="/etc/nwg-hello/nwg-hello.css"
+    target_hypr="/etc/nwg-hello/hyprland.conf"
+    target_base="/etc/nwg-hello/base.conf"
+    target_monitors="/etc/nwg-hello/monitors.conf"
+    source_hypr="$DIR/nwg-hello/hyprland.conf"
+    source_base="$DIR/hypr/hyprland-config/base.conf"
+    source_monitors="$DIR/hypr/monitors.conf"
 
-  sudo mkdir -p "$cache_dir"
-  sudo chown "$USER":"$USER" "$cache_dir"
+    if [[ ! -e "$source_monitors" ]]; then
+      source_monitors="$DIR/hypr/monitor_layouts/default.conf"
+    fi
 
-  if [[ ! -f "$cache_css" ]]; then
-    sudo cp "$DIR/matugen/templates/greetd.css" "$cache_css"
-    sudo chown "$USER":"$USER" "$cache_css"
+    sudo mkdir -p "$cache_dir"
+    sudo chown "$USER":"$USER" "$cache_dir"
+
+    if [[ ! -f "$cache_css" ]]; then
+      sudo cp "$DIR/matugen/templates/greetd.css" "$cache_css"
+      sudo chown "$USER":"$USER" "$cache_css"
+    fi
+
+    # Install Hyprland config for greetd/nwg-hello as real files so the
+    # greeter does not depend on being able to traverse /home.
+    if [[ -e "$source_hypr" ]]; then
+      sudo_install_file "$source_hypr" "$target_hypr"
+      echo "Installed greetd Hyprland config to $target_hypr"
+    fi
+
+    # Install shared Hyprland base for greetd/nwg-hello as a real file.
+    if [[ -e "$source_base" ]]; then
+      sudo_install_file "$source_base" "$target_base"
+      echo "Installed greetd shared Hyprland base to $target_base"
+    fi
+
+    # Keep greetd aligned with the current Hypr monitor layout when present,
+    # otherwise fall back to the tracked default layout. Install a real file
+    # for the same reason as the other greeter-side config.
+    if [[ -e "$source_monitors" ]]; then
+      sudo_install_file "$source_monitors" "$target_monitors"
+      echo "Installed greetd monitor config to $target_monitors"
+    fi
+
+    sudo_link_path "$cache_css" "$target_css"
+    echo "Linked greetd CSS: $target_css -> $cache_css"
+  else
+    warn "failed to create /etc/nwg-hello; skipping greetd CSS and Hyprland config"
   fi
-
-  # Install Hyprland config for greetd/nwg-hello
-  if [[ -e "$DIR/nwg-hello/hyprland.conf" ]]; then
-    sudo_install_file "$DIR/nwg-hello/hyprland.conf" "$target_hypr"
-    echo "Installed greetd Hyprland config to $target_hypr"
-  fi
-
-  # Install shared Hyprland base for greetd/nwg-hello
-  if [[ -e "$DIR/hypr/hyprland-config/base.conf" ]]; then
-    sudo_install_file "$DIR/hypr/hyprland-config/base.conf" "$target_base"
-    echo "Installed greetd shared Hyprland base to $target_base"
-  fi
-
-  # Install monitor layout for greetd Hyprland (copied from main Hypr config)
-  if [[ -e "$DIR/hypr/monitors.conf" ]]; then
-    sudo_install_file "$DIR/hypr/monitors.conf" "$target_monitors"
-    echo "Installed greetd monitor config to $target_monitors"
-  fi
-
-  sudo_link_path "$cache_css" "$target_css"
-  echo "Linked greetd CSS: $target_css -> $cache_css"
 else
-  echo "Skipping greetd CSS link (sudo unavailable or /etc/nwg-hello missing)"
+  echo "Skipping greetd CSS link (sudo unavailable)"
 fi
 
 # Install greetd daemon config
-if command -v sudo >/dev/null 2>&1 && [[ -d /etc/greetd ]]; then
-  target_greetd_cfg="/etc/greetd/config.toml"
-  sudo_link_path "$DIR/greetd/config.toml" "$target_greetd_cfg"
-  echo "Linked greetd config: $target_greetd_cfg -> $DIR/greetd/config.toml"
+if command -v sudo >/dev/null 2>&1; then
+  if sudo install -d -m 755 /etc/greetd; then
+    target_greetd_cfg="/etc/greetd/config.toml"
+    sudo_install_file "$DIR/greetd/config.toml" "$target_greetd_cfg"
+    echo "Installed greetd config to $target_greetd_cfg"
+  else
+    warn "failed to create /etc/greetd; skipping greetd config"
+  fi
 else
-  echo "Skipping greetd config (sudo unavailable or /etc/greetd missing)"
+  echo "Skipping greetd config (sudo unavailable)"
 fi

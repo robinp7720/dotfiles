@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s\n' "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+. "$SCRIPT_DIR/session_common.sh"
+
 find_real_rofi() {
   if [[ -n "${ROFI_REAL_BIN:-}" ]]; then
     printf '%s\n' "$ROFI_REAL_BIN"
@@ -37,7 +41,7 @@ if [[ -z "$ROFI_REAL_BIN" ]]; then
   exit 1
 fi
 
-if [[ -n "${NIRI_SOCKET-}" ]] || pgrep -x niri >/dev/null 2>&1; then
+if is_niri_session; then
   exec "$ROFI_REAL_BIN" -theme "$HOME/.config/rofi/niri.rasi" "$@"
 else
   exec "$ROFI_REAL_BIN" "$@"

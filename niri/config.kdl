@@ -424,7 +424,7 @@ binds {
     Mod+B hotkey-overlay-title="Open System Palette" { spawn "~/.dotfiles/scripts/system_palette.sh"; }
     Mod+Space hotkey-overlay-title="Run an Application: rofi" { spawn "~/.config/rofi/launcher.sh"; }
     Mod+P hotkey-overlay-title="Passwords: tessen" { spawn "tessen"; }
-    Super+L hotkey-overlay-title="Lock the Screen: swaylock" { spawn "~/.dotfiles/scripts/hyprlock_with_art.sh"; }
+    Super+L hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument. It's passed verbatim to `sh -c`.

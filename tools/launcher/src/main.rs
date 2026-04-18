@@ -176,6 +176,7 @@ fn build_ui(
     {
         let sources = sources.clone();
         let list = list.clone();
+        let scroller = scroller.clone();
         let hint = hint.clone();
         let mode_badge = mode_badge.clone();
         let current_results = current_results.clone();
@@ -183,7 +184,7 @@ fn build_ui(
             let query = entry.text().to_string();
             update_search_meta(&hint, &mode_badge, &query, mode);
             let results = sources.search(&query, mode);
-            rebuild_results(&list, &results);
+            rebuild_results(&list, &scroller, &results);
             current_results.replace(results);
         });
     }
@@ -233,6 +234,7 @@ fn build_ui(
     {
         let entry = entry.clone();
         let list = list.clone();
+        let scroller = scroller.clone();
         let current_results = current_results.clone();
         let keys = EventControllerKey::new();
         let key_window = window.clone();
@@ -243,13 +245,13 @@ fn build_ui(
             }
             gdk::Key::Down => {
                 let result_count = current_results.borrow().len() as i32;
-                move_selection(&list, 1, result_count);
+                move_selection(&list, &scroller, 1, result_count);
                 entry.grab_focus();
                 glib::Propagation::Stop
             }
             gdk::Key::Up => {
                 let result_count = current_results.borrow().len() as i32;
-                move_selection(&list, -1, result_count);
+                move_selection(&list, &scroller, -1, result_count);
                 entry.grab_focus();
                 glib::Propagation::Stop
             }
@@ -290,7 +292,7 @@ fn build_ui(
         initial_query.as_deref().unwrap_or_default(),
         mode,
     );
-    rebuild_results(&list, &initial_results);
+    rebuild_results(&list, &scroller, &initial_results);
     current_results.replace(initial_results);
 
     window.present();
@@ -318,7 +320,7 @@ fn build_shortcut_chip(label: &str) -> Label {
     chip
 }
 
-fn rebuild_results(list: &ListBox, results: &[ResultItem]) {
+fn rebuild_results(list: &ListBox, scroller: &ScrolledWindow, results: &[ResultItem]) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
@@ -330,6 +332,7 @@ fn rebuild_results(list: &ListBox, results: &[ResultItem]) {
 
     if let Some(row) = list.row_at_index(0) {
         list.select_row(Some(&row));
+        scroll_row_into_view(list, scroller, &row);
     }
 }
 
@@ -387,7 +390,7 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     row
 }
 
-fn move_selection(list: &ListBox, delta: i32, result_count: i32) {
+fn move_selection(list: &ListBox, scroller: &ScrolledWindow, delta: i32, result_count: i32) {
     if result_count <= 0 {
         return;
     }
@@ -396,7 +399,30 @@ fn move_selection(list: &ListBox, delta: i32, result_count: i32) {
     let next = (current + delta).clamp(0, result_count - 1);
     if let Some(row) = list.row_at_index(next) {
         list.select_row(Some(&row));
+        scroll_row_into_view(list, scroller, &row);
     }
+}
+
+fn scroll_row_into_view(list: &ListBox, scroller: &ScrolledWindow, row: &ListBoxRow) {
+    let adjustment = scroller.vadjustment();
+    let visible_top = adjustment.value();
+    let visible_bottom = visible_top + adjustment.page_size();
+    let Some(bounds) = row.compute_bounds(list) else {
+        return;
+    };
+    let row_top = f64::from(bounds.y());
+    let row_bottom = row_top + f64::from(bounds.height());
+
+    let next_value = if row_top < visible_top {
+        row_top
+    } else if row_bottom > visible_bottom {
+        row_bottom - adjustment.page_size()
+    } else {
+        return;
+    };
+
+    let max_value = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+    adjustment.set_value(next_value.clamp(adjustment.lower(), max_value));
 }
 
 fn activate_row(

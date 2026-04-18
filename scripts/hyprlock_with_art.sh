@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Refresh album art, then launch hyprlock.
+# Compatibility wrapper for the shared session lock helper.
 
 set -euo pipefail
 
-"$(dirname "$0")/update_album_art.sh"
-exec hyprlock "$@"
+exec "$(dirname "$0")/session_lock.sh" "$@"

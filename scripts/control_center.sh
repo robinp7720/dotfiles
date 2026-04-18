@@ -210,7 +210,7 @@ case "${1:-toggle}" in
     ;;
   lock)
     close_center
-    exec "$HOME/.dotfiles/scripts/hyprlock_with_art.sh"
+    exec "$HOME/.dotfiles/scripts/session_lock.sh"
     ;;
   *)
     printf 'Usage: %s {toggle|open|close|refresh|bluetooth-toggle|headphones-toggle|power-profile-cycle|launcher|session-menu|lock}\n' "$0" >&2

@@ -178,7 +178,7 @@ case "$choice" in
     run_toggle_and_refresh "$HOME/.dotfiles/waybar/scripts/power_profile_toggle.sh" --toggle
     ;;
   4)
-    exec "$HOME/.dotfiles/scripts/hyprlock_with_art.sh"
+    exec "$HOME/.dotfiles/scripts/session_lock.sh"
     ;;
   5)
     exec "$HOME/.dotfiles/scripts/power_menu.sh"

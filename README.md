@@ -60,6 +60,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Rofi wrapper**: `setup.sh` links `scripts/rofi_wrapper.sh` to `~/.local/bin/rofi`, so custom Rofi scripts can always call `rofi` while still applying the Niri-specific theme automatically.
 - **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
 - **System palette**: Press `Super+B` in Hyprland or Niri to open the Rofi quick-actions menu provided by `scripts/system_palette.sh`.
+- **Session locking**: `scripts/session_lock.sh` is the shared entry point for keyboard shortcuts, the control center, and the power menu. It prefers `hyprlock` on Hyprland, otherwise falls back to the current logind session lock or a direct `hyprlock` invocation when available.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/session_common.sh"
+
 find_rofi_bin() {
   local candidate="${ROFI_BIN:-$HOME/.local/bin/rofi}"
 
@@ -75,35 +78,19 @@ confirm() {
 }
 
 lock_session() {
-  if pgrep -x Hyprland >/dev/null 2>&1 && command -v hyprlock >/dev/null 2>&1; then
-    "$HOME/.dotfiles/scripts/hyprlock_with_art.sh" &
-    disown
-    return 0
-  fi
-
-  if command -v loginctl >/dev/null 2>&1 && [[ -n "${XDG_SESSION_ID:-}" ]]; then
-    loginctl lock-session "$XDG_SESSION_ID"
-    return 0
-  fi
-
-  if command -v hyprlock >/dev/null 2>&1; then
-    hyprlock
-    return 0
-  fi
-
-  printf 'No lock command is available for the current session.\n' >&2
-  exit 1
+  "$SCRIPT_DIR/session_lock.sh" &
+  disown
 }
 
 logout_session() {
-  if pgrep -x Hyprland >/dev/null 2>&1 && command -v hyprctl >/dev/null 2>&1; then
+  if is_hyprland_session && command -v hyprctl >/dev/null 2>&1; then
     hyprctl dispatch exit
-  elif pgrep -x niri >/dev/null 2>&1 && command -v niri >/dev/null 2>&1; then
+  elif is_niri_session && command -v niri >/dev/null 2>&1; then
     niri msg action quit --skip-confirmation
-  elif pgrep -x bspwm >/dev/null 2>&1 && command -v bspc >/dev/null 2>&1; then
+  elif is_bspwm_session && command -v bspc >/dev/null 2>&1; then
     bspc quit
-  elif command -v loginctl >/dev/null 2>&1 && [[ -n "${XDG_SESSION_ID:-}" ]]; then
-    loginctl terminate-session "$XDG_SESSION_ID"
+  elif terminate_current_logind_session; then
+    :
   else
     printf 'No safe logout method found for the current session.\n' >&2
     exit 1
