@@ -13,6 +13,7 @@ polybar/colors.ini
 
 # Local workspace metadata
 AGENTS.md
+.codex
 
 # Rust build artifacts
 tools/*/target/

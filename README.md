@@ -8,6 +8,7 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 - **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Waybar, Kitty (with an automatic USR1 reload hook), Rofi, Dunst, and greetd/nwg-hello from a single template directory.
 - **Productivity bars**: Polybar and Waybar configs live alongside the compositor configs, with custom power, Bluetooth, profile, and media helpers.
 - **Control center overlay**: Eww provides a toggleable quick-actions panel for calendar context, media, Bluetooth, power profile, and session actions across Hyprland and Niri.
+- **Codex self-improvement**: on login, a guarded user service can let Codex pick one small dotfiles improvement, apply it, auto-commit it, and send a desktop notification with the summary.
 - **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
 - **Native tools** under `tools/`: `session-manager` for hardware-aware display profiles and `launcher` for a Rust-backed app launcher source.
 
@@ -19,6 +20,7 @@ These dotfiles assume an Arch Linux (or derivative) system with the following co
 - Bars and launchers: `polybar`, `waybar`, `rofi` or `rofi-wayland`, `dunst`, `anyrun`, `eww`, `cairo-dock`
 - Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `playerctl`, `xclip`, `dunstify`, `bluetoothctl`, `powerprofilesctl`, `pactl`
 - Theming and helpers: `matugen`, `swww`/`awww` wallpaper tooling, `superpaper`, `sgpt` (for clipboard-to-GPT helpers)
+- Optional automation: `codex` (required only for the login-time self-improvement flow)
 - Optional Rust toolchain: required only if you want to rebuild binaries in `tools/`
 
 Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).
@@ -49,6 +51,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `scripts/` – Utility scripts such as `power_menu.sh` (logout/shutdown/reboot via Waybar/Rofi), `now_playing.sh` (current track for Hyprlock), and Bluetooth/wallpaper helpers.
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
 - `tools/` – Rust utilities such as `session-manager` and `launcher`.
+- `tools/self-improve/` – Prompt assets for the login-time Codex automation.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
 ## Customization Notes
@@ -62,6 +65,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **System palette**: Press `Super+B` in Hyprland or Niri to open the Rofi quick-actions menu provided by `scripts/system_palette.sh`.
 - **Session locking**: `scripts/session_lock.sh` is the shared entry point for keyboard shortcuts, the control center, and the power menu. It prefers `hyprlock` on Hyprland, otherwise falls back to the current logind session lock or a direct `hyprlock` invocation when available.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
+- **Codex self-improvement**: Hyprland, Niri, and bspwm startup now call `scripts/start_codex_self_improve_service.sh`, which imports the live session environment, ensures `codex-self-improve.service` is linked into `~/.config/systemd/user/`, and starts it. The service runs `scripts/codex_self_improve.sh` at most once per boot and no more than once per `CODEX_SELF_IMPROVE_COOLDOWN_HOURS` hours (24 by default), skips dirty worktrees, writes logs under `~/.local/state/codex-self-improve/`, and auto-commits successful changes with a `chore(self-improve): ...` message. Use `CODEX_SELF_IMPROVE_DISABLED=1` to turn it off, `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to keep successful changes uncommitted, or run `~/.dotfiles/scripts/codex_self_improve.sh --force` for a manual pass.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
 - **Session manager**: Build `tools/session-manager` if you want to save and reapply monitor profiles across X11, Hyprland, and Niri sessions.

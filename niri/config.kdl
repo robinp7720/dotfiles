@@ -331,6 +331,7 @@ spawn-at-startup "waybar"
 spawn-sh-at-startup "command -v eww >/dev/null 2>&1 && eww -c ~/.config/eww daemon"
 spawn-at-startup "~/.dotfiles/scripts/awww_wallpaper_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"
+spawn-at-startup "~/.dotfiles/scripts/start_codex_self_improve_service.sh"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"

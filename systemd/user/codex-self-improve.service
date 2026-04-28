@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Codex against the dotfiles repo for one automatic improvement
+After=default.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.dotfiles
+ExecStart=%h/.dotfiles/scripts/codex_self_improve.sh
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+Nice=10
+TimeoutStartSec=2h
+
