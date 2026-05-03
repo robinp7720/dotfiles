@@ -327,7 +327,7 @@ layout {
 // See the binds section below for more spawn examples.
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
-spawn-at-startup "waybar"
+spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"
 spawn-sh-at-startup "command -v eww >/dev/null 2>&1 && eww -c ~/.config/eww daemon"
 spawn-at-startup "~/.dotfiles/scripts/awww_wallpaper_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"

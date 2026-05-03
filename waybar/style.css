@@ -75,7 +75,7 @@ window#waybar.hidden {
 
 #cpu,
 #memory,
-#battery,
+#custom-battery,
 #network,
 #bluetooth,
 #custom-headphones,
@@ -128,6 +128,15 @@ window#waybar.hidden {
   color: transparent;
 }
 
+#custom-battery.hidden {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
+}
+
 #custom-logo1 {
   padding-right: 10px;
   padding-left: 10px;
@@ -152,15 +161,15 @@ window#waybar.hidden {
   border: 1px solid alpha(@error, 0.6);
 }
 
-#battery.warning,
-#battery.critical,
-#battery.urgent {
+#custom-battery.warning,
+#custom-battery.critical,
+#custom-battery.urgent {
   background-color: @error;
   color: @on_error;
   border: 1px solid alpha(@error, 0.6);
 }
 
-#battery.charging {
+#custom-battery.charging {
   background-color: alpha(@secondary_container, 0.9);
   color: @on_secondary_container;
   border: 1px solid alpha(@secondary, 0.6);

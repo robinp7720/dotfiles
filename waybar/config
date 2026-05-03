@@ -25,7 +25,7 @@
         "bluetooth",
         "custom/headphones",
         "custom/powerprofile",
-        "battery",
+        "custom/battery",
         "custom/power",
         "clock"
     ],
@@ -67,13 +67,13 @@
 			"10": []
 		},
 		"window-rewrite-default": "",
-		"window-rewrite": {
-			"title<.*youtube.*>": "", // Windows whose titles contain "youtube"
-			"class<firefox>": "", // Windows whose classes are "firefox"
-			"class<firefox> title<.*github.*>": "", // Windows whose class is "firefox" and title contains "github". Note that "class" always comes first.
-			"kitty": "", // Windows that contain "foot" in either class or title. For optimization reasons, it will only match against a title if at least one other window explicitly matches against a title.
-			"code": "󰨞"
-		}
+        "window-rewrite": {
+            "title<.*youtube.*>": "",
+            "class<firefox>": "",
+            "class<firefox> title<.*github.*>": "",
+            "kitty": "",
+            "code": "󰨞"
+        }
     },
     "niri/workspaces": {
         "all-outputs": false,
@@ -162,41 +162,11 @@
         "tooltip": false,
         "on-click": "~/.config/rofi/launcher.sh"
     },
-    "battery": {
-        "format": "{capacity}% {icon}",
-        "format-icons": {
-            "charging": [
-                "󰢜",
-                "󰂆",
-                "󰂇",
-                "󰂈",
-                "󰢝",
-                "󰂉",
-                "󰢞",
-                "󰂊",
-                "󰂋",
-                "󰂅"
-            ],
-            "default": [
-                "󰁺",
-                "󰁻",
-                "󰁼",
-                "󰁽",
-                "󰁾",
-                "󰁿",
-                "󰂀",
-                "󰂁",
-                "󰂂",
-                "󰁹"
-            ]
-        },
-        "format-full": "Charged ",
-        "interval": 5,
-        "states": {
-            "warning": 20,
-            "critical": 10
-        },
-        "tooltip": false
+    "custom/battery": {
+        "exec": "~/.dotfiles/waybar/scripts/battery_status.py",
+        "return-type": "json",
+        "interval": 30,
+        "tooltip": true
     },
     "custom/power": {
         "format": "",
