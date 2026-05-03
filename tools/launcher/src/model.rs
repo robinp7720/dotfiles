@@ -1,9 +1,11 @@
 use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum SearchMode {
     All,
     Apps,
+    Windows,
     Files,
     Ssh,
     Pass,
@@ -21,6 +23,7 @@ impl SearchMode {
         match self {
             SearchMode::All => "All",
             SearchMode::Apps => "Applications",
+            SearchMode::Windows => "Windows",
             SearchMode::Files => "Files",
             SearchMode::Ssh => "SSH",
             SearchMode::Pass => "Passwords",
@@ -39,11 +42,19 @@ pub struct ResultItem {
     pub icon_name: String,
     pub score: i32,
     pub action: Action,
+    pub prediction_key: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum WindowFocusTarget {
+    Hyprland { address: String },
+    Niri { id: u64 },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Action {
     LaunchApp { desktop_id: String },
+    FocusWindow { target: WindowFocusTarget },
     OpenFile { path: String },
     Ssh { host: String },
     CopyPass { entry: String },
@@ -82,6 +93,7 @@ fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
 
     match first {
         '>' => return Some((SearchMode::Commands, rest.trim_start())),
+        '~' => return Some((SearchMode::Windows, rest.trim_start())),
         '@' => return Some((SearchMode::Ssh, rest.trim_start())),
         '!' => return Some((SearchMode::Pass, rest.trim_start())),
         '?' => return Some((SearchMode::Web, rest.trim_start())),
@@ -96,9 +108,12 @@ fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
     }
 
     let lowered = raw.to_ascii_lowercase();
-    const PREFIXES: [(&str, SearchMode); 11] = [
+    const PREFIXES: [(&str, SearchMode); 14] = [
         ("apps:", SearchMode::Apps),
         ("app:", SearchMode::Apps),
+        ("windows:", SearchMode::Windows),
+        ("window:", SearchMode::Windows),
+        ("win:", SearchMode::Windows),
         ("files:", SearchMode::Files),
         ("file:", SearchMode::Files),
         ("ssh:", SearchMode::Ssh),
@@ -261,6 +276,17 @@ mod tests {
         let text_prefixed = QueryInput::parse("PASS: github/work", SearchMode::Apps);
         assert_eq!(text_prefixed.mode, SearchMode::Pass);
         assert_eq!(text_prefixed.text, "github/work");
+    }
+
+    #[test]
+    fn window_prefixes_override_the_default_mode() {
+        let symbol_prefixed = QueryInput::parse("~ terminal", SearchMode::All);
+        assert_eq!(symbol_prefixed.mode, SearchMode::Windows);
+        assert_eq!(symbol_prefixed.text, "terminal");
+
+        let text_prefixed = QueryInput::parse("windows: firefox", SearchMode::Apps);
+        assert_eq!(text_prefixed.mode, SearchMode::Windows);
+        assert_eq!(text_prefixed.text, "firefox");
     }
 
     #[test]

@@ -1,8 +1,9 @@
 mod model;
+mod prediction;
 mod sources;
 
 use crate::model::{Action, QueryInput, ResultItem, SearchMode};
-use crate::sources::Sources;
+use crate::sources::{Sources, focus_window};
 use anyhow::{Context, Result};
 use clap::Parser;
 use gtk4::gdk;
@@ -24,7 +25,7 @@ use std::time::Duration;
 #[derive(Parser, Debug)]
 #[command(name = "dot-launcher")]
 #[command(
-    about = "Unified desktop launcher for apps, files, passwords, SSH, commands, web, and libqalculate"
+    about = "Unified predictive desktop launcher for apps, windows, files, passwords, SSH, commands, web, and libqalculate"
 )]
 struct Cli {
     #[arg(long, value_enum, default_value_t = SearchMode::All)]
@@ -100,7 +101,7 @@ fn build_ui(
     kicker.set_halign(Align::Start);
 
     let headline = Label::new(Some(
-        "Apps, files, passwords, hosts, commands, and quick math in one overlay",
+        "Apps, windows, files, passwords, hosts, commands, and quick math in one overlay",
     ));
     headline.add_css_class("launcher-headline");
     headline.set_halign(Align::Start);
@@ -122,7 +123,7 @@ fn build_ui(
     }
 
     let hint = Label::new(Some(
-        "Prefixes: > commands, / files, @ ssh, ! pass, ? web, = calc",
+        "Prefixes: ~ windows, > commands, / files, @ ssh, ! pass, ? web, = calc",
     ));
     hint.add_css_class("launcher-hint");
     hint.set_halign(Align::Start);
@@ -143,6 +144,7 @@ fn build_ui(
     shortcuts.set_halign(Align::Start);
     for chip in [
         "Applications",
+        "~ Windows",
         "/ Files",
         "@ SSH",
         "! Pass",
@@ -192,10 +194,11 @@ fn build_ui(
     {
         let hint = hint.clone();
         let window = window.clone();
+        let sources = sources.clone();
         let current_results = current_results.clone();
         list.connect_row_activated(move |_, row| {
             let results = current_results.borrow();
-            activate_row(row, &results, &window, &hint);
+            activate_row(row, &results, &window, &hint, &sources);
         });
     }
 
@@ -203,6 +206,7 @@ fn build_ui(
         let hint = hint.clone();
         let list = list.clone();
         let window = window.clone();
+        let sources = sources.clone();
         let activate_entry = entry.clone();
         let current_results = current_results.clone();
         entry.connect_activate(move |_| {
@@ -220,12 +224,14 @@ fn build_ui(
                 });
 
             if let Some(item) = selected {
-                if let Err(error) = execute_action(&window, item.action) {
+                if let Err(error) = execute_action(&window, item.action.clone()) {
                     set_hint_state(
                         &hint,
                         &format!("Action failed: {}", error.root_cause()),
                         true,
                     );
+                } else {
+                    sources.record_activation(&item);
                 }
             }
         });
@@ -430,15 +436,18 @@ fn activate_row(
     results: &[ResultItem],
     window: &ApplicationWindow,
     hint: &Label,
+    sources: &Sources,
 ) {
     let index = row.index() as usize;
     if let Some(item) = results.get(index).cloned() {
-        if let Err(error) = execute_action(window, item.action) {
+        if let Err(error) = execute_action(window, item.action.clone()) {
             set_hint_state(
                 hint,
                 &format!("Action failed: {}", error.root_cause()),
                 true,
             );
+        } else {
+            sources.record_activation(&item);
         }
     }
 }
@@ -446,6 +455,12 @@ fn activate_row(
 fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
     match action {
         Action::LaunchApp { desktop_id } => launch_desktop_app(&desktop_id)?,
+        Action::FocusWindow { target } => {
+            let status = focus_window(&target).context("failed to focus selected window")?;
+            if !status.success() {
+                anyhow::bail!("window focus command failed");
+            }
+        }
         Action::OpenFile { path } => {
             let file = gio::File::for_path(path);
             gio::AppInfo::launch_default_for_uri(&file.uri(), gio::AppLaunchContext::NONE)
@@ -516,6 +531,7 @@ fn placeholder_for_mode(mode: SearchMode) -> &'static str {
     match mode {
         SearchMode::All => "Search apps, files, passwords, SSH, commands, web, and calculations",
         SearchMode::Apps => "Launch an application",
+        SearchMode::Windows => "Switch to an active window",
         SearchMode::Files => "Search files with LocalSearch",
         SearchMode::Ssh => "Search SSH hosts",
         SearchMode::Pass => "Search password-store entries",
@@ -530,8 +546,9 @@ fn update_search_meta(hint: &Label, mode_badge: &Label, raw_query: &str, cli_mod
     mode_badge.set_text(query.mode.label());
 
     let hint_text = match query.mode {
-        SearchMode::All => "Prefixes: > commands, / files, @ ssh, ! pass, ? web, = calc",
+        SearchMode::All => "Prefixes: ~ windows, > commands, / files, @ ssh, ! pass, ? web, = calc",
         SearchMode::Apps => "Search installed desktop applications",
+        SearchMode::Windows => "Search active windows and press Enter to focus one",
         SearchMode::Files => "Search LocalSearch indexed files",
         SearchMode::Ssh => "Search aliases from ~/.ssh/config and known_hosts",
         SearchMode::Pass => "Press Enter to copy the first line from pass show",
