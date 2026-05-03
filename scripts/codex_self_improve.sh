@@ -290,7 +290,7 @@ fi
 log "running: ${codex_cmd[*]}"
 codex_exit=0
 if ! "${codex_cmd[@]}" - <"$PROMPT_FILE" >"$log_tmp" 2>&1; then
-  codex_exit=$?
+  codex_exit=${PIPESTATUS[0]}
 fi
 
 cp "$report_tmp" "$REPORT_FILE"

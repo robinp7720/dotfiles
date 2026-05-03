@@ -54,6 +54,9 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `tools/self-improve/` – Prompt assets for the login-time Codex automation.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
+## Testing
+- `bash tests/codex_self_improve_test.sh` – Exercises the Codex self-improvement wrapper with fake Codex binaries in temporary git repositories.
+
 ## Customization Notes
 - **Monitor naming**: Update `hypr/hyprland-config/desktop.conf` and the files under `hypr/monitor_layouts/` or `bspwm/modes/` if your outputs differ (`DP-5`, `DVI-D-2`, `HDMI-0`, etc.).
 - **Hyprland modes**: Run the scripts from `hypr/scripts/modes/` to swap monitor layouts (`default.sh`, `game.sh`, `game_external.sh`). Each overwrites `~/.config/hypr/monitors.conf`.
