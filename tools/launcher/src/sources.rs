@@ -1,5 +1,6 @@
 use crate::model::{
-    Action, QueryInput, ResultItem, SearchMode, WindowFocusTarget, browser_target, score_text,
+    Action, PasswordOperation, QueryInput, ResultItem, SearchMode, WindowFocusTarget,
+    browser_target, score_text,
 };
 use crate::prediction::{PredictionStore, StoredPrediction};
 use gtk4::gio;
@@ -270,7 +271,7 @@ impl Sources {
             } else {
                 results.push(instruction_result(
                     "Password mode",
-                    "Type an entry name and press Enter to copy its password",
+                    "Type an entry name and press Enter to autotype its login",
                     "Passwords",
                     "dialog-password-symbolic",
                     65,
@@ -484,25 +485,19 @@ impl Sources {
             return Vec::new();
         }
 
-        let mut items = self
-            .pass_entries
-            .iter()
-            .filter_map(|entry| {
-                let score = score_text(&entry.search_blob, &query.text)?;
-                let prediction_key = pass_prediction_key(&entry.name);
-                Some(ResultItem {
-                    prediction_key: Some(prediction_key.clone()),
-                    title: entry.name.clone(),
-                    subtitle: "Copy the first line from pass show".to_string(),
-                    source: "Passwords",
-                    icon_name: "dialog-password-symbolic".to_string(),
-                    score: score + 880 + self.prediction_boost(&prediction_key, now),
-                    action: Action::CopyPass {
-                        entry: entry.name.clone(),
-                    },
-                })
-            })
-            .collect::<Vec<_>>();
+        let mut items = Vec::new();
+        for entry in &self.pass_entries {
+            let Some(score) = score_text(&entry.search_blob, &query.text) else {
+                continue;
+            };
+            let prediction_key = pass_prediction_key(&entry.name);
+            let boosted_score = score + 880 + self.prediction_boost(&prediction_key, now);
+            items.extend(password_action_results(
+                &entry.name,
+                boosted_score,
+                query.mode == SearchMode::Pass,
+            ));
+        }
 
         sort_results(&mut items, MAX_PASS);
         items
@@ -712,6 +707,51 @@ pub fn focus_window(target: &WindowFocusTarget) -> std::io::Result<std::process:
     Command::new(program).args(args).status()
 }
 
+pub fn focused_window_target() -> Option<WindowFocusTarget> {
+    if command_exists("hyprctl") {
+        if let Ok(output) = Command::new("hyprctl")
+            .args(["activewindow", "-j"])
+            .output()
+        {
+            if output.status.success() {
+                let parsed = serde_json::from_slice::<serde_json::Value>(&output.stdout).ok()?;
+                if let Some(address) = string_field(&parsed, "address") {
+                    if !address.is_empty() && address != "0x0" {
+                        return Some(WindowFocusTarget::Hyprland { address });
+                    }
+                }
+            }
+        }
+    }
+
+    if command_exists("niri") {
+        if let Ok(output) = Command::new("niri")
+            .args(["msg", "focused-window", "--json"])
+            .output()
+        {
+            if output.status.success() {
+                let parsed = serde_json::from_slice::<serde_json::Value>(&output.stdout).ok()?;
+                if let Some(id) = parsed.get("id").and_then(serde_json::Value::as_u64) {
+                    return Some(WindowFocusTarget::Niri { id });
+                }
+            }
+        }
+    }
+
+    if command_exists("xdotool") {
+        if let Ok(output) = Command::new("xdotool").arg("getactivewindow").output() {
+            if output.status.success() {
+                let window_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !window_id.is_empty() {
+                    return Some(WindowFocusTarget::X11 { window_id });
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub fn window_focus_command(target: &WindowFocusTarget) -> (&'static str, Vec<String>) {
     match target {
         WindowFocusTarget::Hyprland { address } => (
@@ -730,6 +770,14 @@ pub fn window_focus_command(target: &WindowFocusTarget) -> (&'static str, Vec<St
                 "focus-window".to_string(),
                 "--id".to_string(),
                 id.to_string(),
+            ],
+        ),
+        WindowFocusTarget::X11 { window_id } => (
+            "xdotool",
+            vec![
+                "windowactivate".to_string(),
+                "--sync".to_string(),
+                window_id.clone(),
             ],
         ),
     }
@@ -870,6 +918,86 @@ fn ssh_prediction_key(host: &str) -> String {
 
 fn pass_prediction_key(entry: &str) -> String {
     format!("pass:{entry}")
+}
+
+fn password_action_results(entry: &str, score: i32, include_secondary: bool) -> Vec<ResultItem> {
+    let mut rows = vec![password_action_result(
+        entry,
+        "Autotype login",
+        "Type username, Tab, and password without submitting",
+        PasswordOperation::AutotypeLogin,
+        score + 80,
+        Some(pass_prediction_key(entry)),
+    )];
+
+    if include_secondary {
+        rows.extend([
+            password_action_result(
+                entry,
+                "Copy password",
+                "Copy password and clear it after the password-store timeout",
+                PasswordOperation::CopyPassword,
+                score + 50,
+                None,
+            ),
+            password_action_result(
+                entry,
+                "Copy username",
+                "Copy username metadata or the entry basename",
+                PasswordOperation::CopyUsername,
+                score + 45,
+                None,
+            ),
+            password_action_result(
+                entry,
+                "Type password",
+                "Type only the password into the focused window",
+                PasswordOperation::TypePassword,
+                score + 40,
+                None,
+            ),
+            password_action_result(
+                entry,
+                "Type username",
+                "Type only the username into the focused window",
+                PasswordOperation::TypeUsername,
+                score + 35,
+                None,
+            ),
+            password_action_result(
+                entry,
+                "Inspect actions",
+                "Decrypt this entry to show URL, OTP, and custom actions",
+                PasswordOperation::Inspect,
+                score + 30,
+                None,
+            ),
+        ]);
+    }
+
+    rows
+}
+
+fn password_action_result(
+    entry: &str,
+    title: &str,
+    subtitle: &str,
+    operation: PasswordOperation,
+    score: i32,
+    prediction_key: Option<String>,
+) -> ResultItem {
+    ResultItem {
+        prediction_key,
+        title: format!("{title}: {entry}"),
+        subtitle: subtitle.to_string(),
+        source: "Passwords",
+        icon_name: "dialog-password-symbolic".to_string(),
+        score,
+        action: Action::Password {
+            entry: entry.to_string(),
+            operation,
+        },
+    }
 }
 
 fn command_prediction_key(command: &str) -> String {
@@ -1097,7 +1225,7 @@ mod tests {
         AppEntry, FileSearchBackend, Sources, no_results_item, parse_file_search_line,
         parse_hypr_windows_json, parse_niri_windows_json, pass_entry_name, window_focus_command,
     };
-    use crate::model::{Action, QueryInput, SearchMode, WindowFocusTarget};
+    use crate::model::{Action, PasswordOperation, QueryInput, SearchMode, WindowFocusTarget};
     use crate::prediction::{PredictionStore, StoredPrediction};
     use std::path::Path;
     use std::sync::{Arc, Mutex};
@@ -1202,6 +1330,16 @@ mod tests {
     }
 
     #[test]
+    fn builds_focus_command_for_x11_window() {
+        let (program, args) = window_focus_command(&WindowFocusTarget::X11 {
+            window_id: "12345".to_string(),
+        });
+
+        assert_eq!(program, "xdotool");
+        assert_eq!(args, vec!["windowactivate", "--sync", "12345"]);
+    }
+
+    #[test]
     fn search_returns_status_item_when_no_matches_exist() {
         let sources = Sources {
             apps: Vec::new(),
@@ -1273,7 +1411,7 @@ mod tests {
     }
 
     #[test]
-    fn pass_entries_are_searchable_and_copyable() {
+    fn all_mode_password_matches_default_to_autotype_login() {
         let sources = Sources {
             apps: Vec::new(),
             ssh_hosts: Vec::new(),
@@ -1291,8 +1429,44 @@ mod tests {
         let results = sources.search("pass: github", SearchMode::All);
         assert!(matches!(
             results.first().map(|item| &item.action),
-            Some(Action::CopyPass { entry }) if entry == "github/work"
+            Some(Action::Password {
+                entry,
+                operation: PasswordOperation::AutotypeLogin,
+            }) if entry == "github/work"
         ));
+    }
+
+    #[test]
+    fn pass_mode_surfaces_action_rows_for_matching_entries() {
+        let sources = Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            pass_entries: vec![super::PassEntry {
+                name: "github/work".to_string(),
+                search_blob: "github/work".to_string(),
+            }],
+            commands: Vec::new(),
+            file_search_backend: None,
+            pass_available: true,
+            qalc_available: false,
+            predictions: empty_prediction_store(),
+        };
+
+        let results = sources.search("pass: github", SearchMode::All);
+        let operations = results
+            .iter()
+            .filter_map(|item| match &item.action {
+                Action::Password { operation, .. } => Some(operation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(operations.contains(&&PasswordOperation::AutotypeLogin));
+        assert!(operations.contains(&&PasswordOperation::CopyPassword));
+        assert!(operations.contains(&&PasswordOperation::CopyUsername));
+        assert!(operations.contains(&&PasswordOperation::TypePassword));
+        assert!(operations.contains(&&PasswordOperation::TypeUsername));
+        assert!(operations.contains(&&PasswordOperation::Inspect));
     }
 
     #[test]

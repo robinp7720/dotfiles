@@ -18,20 +18,6 @@ impl SearchMode {
     pub fn includes(self, other: SearchMode) -> bool {
         matches!(self, SearchMode::All) || self == other
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            SearchMode::All => "All",
-            SearchMode::Apps => "Applications",
-            SearchMode::Windows => "Windows",
-            SearchMode::Files => "Files",
-            SearchMode::Ssh => "SSH",
-            SearchMode::Pass => "Passwords",
-            SearchMode::Commands => "Commands",
-            SearchMode::Web => "Web",
-            SearchMode::Calc => "Calculator",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -49,20 +35,58 @@ pub struct ResultItem {
 pub enum WindowFocusTarget {
     Hyprland { address: String },
     Niri { id: u64 },
+    X11 { window_id: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Action {
-    LaunchApp { desktop_id: String },
-    FocusWindow { target: WindowFocusTarget },
-    OpenFile { path: String },
-    Ssh { host: String },
-    CopyPass { entry: String },
-    RunCommand { command: String },
-    OpenUrl { url: String },
-    WebSearch { query: String },
-    CopyText { text: String },
+    LaunchApp {
+        desktop_id: String,
+    },
+    FocusWindow {
+        target: WindowFocusTarget,
+    },
+    OpenFile {
+        path: String,
+    },
+    Ssh {
+        host: String,
+    },
+    CopyPass {
+        entry: String,
+    },
+    Password {
+        entry: String,
+        operation: PasswordOperation,
+    },
+    RunCommand {
+        command: String,
+    },
+    OpenUrl {
+        url: String,
+    },
+    WebSearch {
+        query: String,
+    },
+    CopyText {
+        text: String,
+    },
     None,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PasswordOperation {
+    AutotypeLogin,
+    CopyPassword,
+    CopyUsername,
+    TypePassword,
+    TypeUsername,
+    Inspect,
+    OpenUrl,
+    CopyUrl,
+    CopyOtp,
+    TypeOtp,
+    CustomAutotype,
 }
 
 #[derive(Clone, Debug)]

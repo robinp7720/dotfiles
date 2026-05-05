@@ -1,9 +1,15 @@
 mod model;
+mod password;
 mod prediction;
 mod sources;
 
-use crate::model::{Action, QueryInput, ResultItem, SearchMode};
-use crate::sources::{Sources, focus_window};
+use crate::model::{Action, ResultItem, SearchMode};
+use crate::model::{PasswordOperation, WindowFocusTarget};
+use crate::password::{
+    Credential, TypeStep, default_login_steps, parse_credential, run_program_input,
+    wl_copy_command, wtype_commands_for_steps, xclip_command, xdotool_commands_for_steps,
+};
+use crate::sources::{Sources, focus_window, focused_window_target};
 use anyhow::{Context, Result};
 use clap::Parser;
 use gtk4::gdk;
@@ -20,6 +26,7 @@ use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
@@ -34,6 +41,14 @@ struct Cli {
     #[arg(long)]
     query: Option<String>,
 }
+
+const LAUNCHER_WIDTH_PX: i32 = 720;
+const LAUNCHER_LAYER_TOP_MARGIN_PX: i32 = 72;
+const LAUNCHER_SURFACE_MARGIN_PX: i32 = 56;
+const LAUNCHER_SHADOW_Y_OFFSET_PX: i32 = 18;
+const LAUNCHER_SHADOW_BLUR_PX: i32 = 44;
+const LAUNCHER_SURFACE_MARGIN_BOTTOM_PX: i32 =
+    LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX + 8;
 
 fn main() {
     if let Err(error) = run() {
@@ -66,8 +81,8 @@ fn build_ui(
 ) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .default_width(860)
-        .default_height(560)
+        .default_width(LAUNCHER_WIDTH_PX)
+        .default_height(420)
         .decorated(false)
         .resizable(false)
         .title("Launcher")
@@ -80,35 +95,19 @@ fn build_ui(
     window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::Exclusive);
     window.set_namespace(Some("dot-launcher"));
     window.set_anchor(gtk4_layer_shell::Edge::Top, true);
-    window.set_margin(gtk4_layer_shell::Edge::Top, 112);
+    window.set_margin(gtk4_layer_shell::Edge::Top, LAUNCHER_LAYER_TOP_MARGIN_PX);
 
     apply_css();
+    let previous_focus_target = Rc::new(focused_window_target());
 
-    let outer = GtkBox::new(Orientation::Vertical, 18);
+    let outer = GtkBox::new(Orientation::Vertical, 10);
     outer.add_css_class("launcher-shell");
     outer.set_halign(Align::Center);
-    outer.set_size_request(860, -1);
-    outer.set_margin_top(26);
-    outer.set_margin_bottom(26);
-    outer.set_margin_start(26);
-    outer.set_margin_end(26);
-
-    let header = GtkBox::new(Orientation::Vertical, 6);
-    header.add_css_class("launcher-header");
-
-    let kicker = Label::new(Some("Desktop Launchpad"));
-    kicker.add_css_class("launcher-kicker");
-    kicker.set_halign(Align::Start);
-
-    let headline = Label::new(Some(
-        "Apps, windows, files, passwords, hosts, commands, and quick math in one overlay",
-    ));
-    headline.add_css_class("launcher-headline");
-    headline.set_halign(Align::Start);
-    headline.set_wrap(true);
-
-    header.append(&kicker);
-    header.append(&headline);
+    outer.set_size_request(LAUNCHER_WIDTH_PX, -1);
+    outer.set_margin_top(LAUNCHER_SURFACE_MARGIN_PX);
+    outer.set_margin_bottom(LAUNCHER_SURFACE_MARGIN_BOTTOM_PX);
+    outer.set_margin_start(LAUNCHER_SURFACE_MARGIN_PX);
+    outer.set_margin_end(LAUNCHER_SURFACE_MARGIN_PX);
 
     let entry = Entry::builder()
         .placeholder_text(placeholder_for_mode(mode))
@@ -122,54 +121,18 @@ fn build_ui(
         entry.set_text(query);
     }
 
-    let hint = Label::new(Some(
-        "Prefixes: ~ windows, > commands, / files, @ ssh, ! pass, ? web, = calc",
-    ));
-    hint.add_css_class("launcher-hint");
-    hint.set_halign(Align::Start);
-    hint.set_hexpand(true);
-    hint.set_wrap(true);
-
-    let mode_badge = Label::new(Some(mode.label()));
-    mode_badge.add_css_class("launcher-mode-badge");
-    mode_badge.set_halign(Align::End);
-
-    let meta = GtkBox::new(Orientation::Horizontal, 12);
-    meta.set_halign(Align::Fill);
-    meta.append(&hint);
-    meta.append(&mode_badge);
-
-    let shortcuts = GtkBox::new(Orientation::Horizontal, 8);
-    shortcuts.add_css_class("launcher-shortcuts");
-    shortcuts.set_halign(Align::Start);
-    for chip in [
-        "Applications",
-        "~ Windows",
-        "/ Files",
-        "@ SSH",
-        "! Pass",
-        "> Commands",
-        "? Web",
-        "= Calc",
-    ] {
-        shortcuts.append(&build_shortcut_chip(chip));
-    }
-
     let list = ListBox::new();
     list.set_selection_mode(SelectionMode::Single);
     list.add_css_class("launcher-results");
 
     let scroller = ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
-        .min_content_height(380)
+        .min_content_height(300)
         .child(&list)
         .build();
     scroller.add_css_class("launcher-scroller");
 
-    outer.append(&header);
     outer.append(&entry);
-    outer.append(&meta);
-    outer.append(&shortcuts);
     outer.append(&scroller);
     window.set_child(Some(&outer));
 
@@ -179,12 +142,9 @@ fn build_ui(
         let sources = sources.clone();
         let list = list.clone();
         let scroller = scroller.clone();
-        let hint = hint.clone();
-        let mode_badge = mode_badge.clone();
         let current_results = current_results.clone();
         entry.connect_changed(move |entry| {
             let query = entry.text().to_string();
-            update_search_meta(&hint, &mode_badge, &query, mode);
             let results = sources.search(&query, mode);
             rebuild_results(&list, &scroller, &results);
             current_results.replace(results);
@@ -192,47 +152,66 @@ fn build_ui(
     }
 
     {
-        let hint = hint.clone();
+        let list = list.clone();
+        let status_list = list.clone();
+        let scroller = scroller.clone();
         let window = window.clone();
         let sources = sources.clone();
         let current_results = current_results.clone();
+        let previous_focus_target = previous_focus_target.clone();
         list.connect_row_activated(move |_, row| {
-            let results = current_results.borrow();
-            activate_row(row, &results, &window, &hint, &sources);
+            let item = {
+                let results = current_results.borrow();
+                results.get(row.index() as usize).cloned()
+            };
+            if let Some(item) = item {
+                activate_item(
+                    &window,
+                    &sources,
+                    item,
+                    &status_list,
+                    &scroller,
+                    &current_results,
+                    previous_focus_target.as_ref().as_ref(),
+                );
+            }
         });
     }
 
     {
-        let hint = hint.clone();
         let list = list.clone();
+        let status_list = list.clone();
+        let scroller = scroller.clone();
         let window = window.clone();
         let sources = sources.clone();
         let activate_entry = entry.clone();
         let current_results = current_results.clone();
+        let previous_focus_target = previous_focus_target.clone();
         entry.connect_activate(move |_| {
             let query = activate_entry.text().to_string();
-            let results = current_results.borrow();
-            let selected = list
-                .selected_row()
-                .and_then(|row| results.get(row.index() as usize).cloned())
-                .or_else(|| {
-                    if query.is_empty() {
-                        None
-                    } else {
-                        results.first().cloned()
-                    }
-                });
+            let selected = {
+                let results = current_results.borrow();
+                list.selected_row()
+                    .and_then(|row| results.get(row.index() as usize).cloned())
+                    .or_else(|| {
+                        if query.is_empty() {
+                            None
+                        } else {
+                            results.first().cloned()
+                        }
+                    })
+            };
 
             if let Some(item) = selected {
-                if let Err(error) = execute_action(&window, item.action.clone()) {
-                    set_hint_state(
-                        &hint,
-                        &format!("Action failed: {}", error.root_cause()),
-                        true,
-                    );
-                } else {
-                    sources.record_activation(&item);
-                }
+                activate_item(
+                    &window,
+                    &sources,
+                    item,
+                    &status_list,
+                    &scroller,
+                    &current_results,
+                    previous_focus_target.as_ref().as_ref(),
+                );
             }
         });
     }
@@ -292,12 +271,6 @@ fn build_ui(
     }
 
     let initial_results = sources.search(initial_query.as_deref().unwrap_or_default(), mode);
-    update_search_meta(
-        &hint,
-        &mode_badge,
-        initial_query.as_deref().unwrap_or_default(),
-        mode,
-    );
     rebuild_results(&list, &scroller, &initial_results);
     current_results.replace(initial_results);
 
@@ -318,12 +291,6 @@ fn request_initial_focus(window: &ApplicationWindow, entry: &Entry) {
             entry.grab_focus_without_selecting();
         });
     }
-}
-
-fn build_shortcut_chip(label: &str) -> Label {
-    let chip = Label::new(Some(label));
-    chip.add_css_class("launcher-shortcut-chip");
-    chip
 }
 
 fn rebuild_results(list: &ListBox, scroller: &ScrolledWindow, results: &[ResultItem]) {
@@ -350,13 +317,13 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     }
 
     let layout = GtkBox::new(Orientation::Horizontal, 14);
-    layout.set_margin_top(12);
-    layout.set_margin_bottom(12);
-    layout.set_margin_start(14);
-    layout.set_margin_end(14);
+    layout.set_margin_top(8);
+    layout.set_margin_bottom(8);
+    layout.set_margin_start(10);
+    layout.set_margin_end(10);
 
     let icon = Image::from_icon_name(&item.icon_name);
-    icon.set_pixel_size(28);
+    icon.set_pixel_size(24);
     icon.add_css_class("launcher-icon");
     icon.set_halign(Align::Center);
     icon.set_valign(Align::Center);
@@ -367,33 +334,34 @@ fn build_row(item: &ResultItem) -> ListBoxRow {
     icon_wrap.set_halign(Align::Center);
     icon_wrap.append(&icon);
 
-    let text_box = GtkBox::new(Orientation::Vertical, 4);
-    text_box.set_hexpand(true);
-
     let title = Label::new(Some(&item.title));
     title.add_css_class("launcher-title");
     title.set_halign(Align::Start);
+    title.set_hexpand(true);
     title.set_xalign(0.0);
-    title.set_wrap(true);
+    title.set_wrap(false);
+    title.set_ellipsize(gtk4::pango::EllipsizeMode::End);
 
-    let subtitle = Label::new(Some(&item.subtitle));
-    subtitle.add_css_class("launcher-subtitle");
-    subtitle.set_halign(Align::Start);
-    subtitle.set_xalign(0.0);
-    subtitle.set_wrap(true);
-
-    let source_badge = Label::new(Some(item.source));
-    source_badge.add_css_class("launcher-source-badge");
-    source_badge.set_valign(Align::Center);
-
-    text_box.append(&title);
-    text_box.append(&subtitle);
+    if let Some(tooltip) = row_tooltip_text(item) {
+        row.set_tooltip_text(Some(&tooltip));
+    }
 
     layout.append(&icon_wrap);
-    layout.append(&text_box);
-    layout.append(&source_badge);
+    layout.append(&title);
     row.set_child(Some(&layout));
     row
+}
+
+fn row_tooltip_text(item: &ResultItem) -> Option<String> {
+    let subtitle = item.subtitle.trim();
+    let source = item.source.trim();
+
+    match (subtitle.is_empty(), source.is_empty()) {
+        (true, true) => None,
+        (false, true) => Some(subtitle.to_string()),
+        (true, false) => Some(source.to_string()),
+        (false, false) => Some(format!("{subtitle}\n{source}")),
+    }
 }
 
 fn move_selection(list: &ListBox, scroller: &ScrolledWindow, delta: i32, result_count: i32) {
@@ -431,28 +399,76 @@ fn scroll_row_into_view(list: &ListBox, scroller: &ScrolledWindow, row: &ListBox
     adjustment.set_value(next_value.clamp(adjustment.lower(), max_value));
 }
 
-fn activate_row(
-    row: &ListBoxRow,
-    results: &[ResultItem],
+fn activate_item(
     window: &ApplicationWindow,
-    hint: &Label,
     sources: &Sources,
+    item: ResultItem,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    previous_focus_target: Option<&WindowFocusTarget>,
 ) {
-    let index = row.index() as usize;
-    if let Some(item) = results.get(index).cloned() {
-        if let Err(error) = execute_action(window, item.action.clone()) {
-            set_hint_state(
-                hint,
-                &format!("Action failed: {}", error.root_cause()),
-                true,
-            );
-        } else {
-            sources.record_activation(&item);
+    if let Action::Password {
+        entry,
+        operation: PasswordOperation::Inspect,
+    } = &item.action
+    {
+        match load_pass_credential(entry) {
+            Ok(credential) => {
+                let results = inspected_password_results(&credential);
+                rebuild_results(list, scroller, &results);
+                current_results.replace(results);
+            }
+            Err(error) => show_status_result(
+                list,
+                scroller,
+                current_results,
+                action_failure_result(&error.root_cause().to_string()),
+            ),
         }
+        return;
+    }
+
+    if let Err(error) = execute_action(window, item.action.clone(), previous_focus_target) {
+        show_status_result(
+            list,
+            scroller,
+            current_results,
+            action_failure_result(&error.root_cause().to_string()),
+        );
+    } else {
+        sources.record_activation(&item);
     }
 }
 
-fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
+fn show_status_result(
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    item: ResultItem,
+) {
+    let results = vec![item];
+    rebuild_results(list, scroller, &results);
+    current_results.replace(results);
+}
+
+fn action_failure_result(message: &str) -> ResultItem {
+    ResultItem {
+        prediction_key: None,
+        title: format!("Action failed: {message}"),
+        subtitle: String::new(),
+        source: "Status",
+        icon_name: "dialog-error-symbolic".to_string(),
+        score: 0,
+        action: Action::None,
+    }
+}
+
+fn execute_action(
+    window: &ApplicationWindow,
+    action: Action,
+    previous_focus_target: Option<&WindowFocusTarget>,
+) -> Result<()> {
     match action {
         Action::LaunchApp { desktop_id } => launch_desktop_app(&desktop_id)?,
         Action::FocusWindow { target } => {
@@ -469,7 +485,13 @@ fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
         Action::Ssh { host } => launch_ssh(&host)?,
         Action::CopyPass { entry } => {
             let secret = load_pass_secret(&entry)?;
-            copy_to_clipboard(&secret);
+            copy_secret(&secret)?;
+            window.close();
+            return Ok(());
+        }
+        Action::Password { entry, operation } => {
+            execute_password_operation(window, &entry, operation, previous_focus_target)?;
+            return Ok(());
         }
         Action::RunCommand { command } => {
             Command::new("sh")
@@ -496,6 +518,307 @@ fn execute_action(window: &ApplicationWindow, action: Action) -> Result<()> {
 
     window.close();
     Ok(())
+}
+
+fn execute_password_operation(
+    window: &ApplicationWindow,
+    entry: &str,
+    operation: PasswordOperation,
+    previous_focus_target: Option<&WindowFocusTarget>,
+) -> Result<()> {
+    let credential = load_pass_credential(entry)?;
+
+    match operation {
+        PasswordOperation::AutotypeLogin => {
+            type_secret_steps(
+                window,
+                previous_focus_target,
+                default_login_steps(&credential),
+            )?;
+        }
+        PasswordOperation::CopyPassword => {
+            copy_secret(&credential.password)?;
+            window.close();
+        }
+        PasswordOperation::CopyUsername => {
+            copy_secret(&credential.username)?;
+            window.close();
+        }
+        PasswordOperation::TypePassword => {
+            type_secret_steps(
+                window,
+                previous_focus_target,
+                vec![TypeStep::Text(credential.password)],
+            )?;
+        }
+        PasswordOperation::TypeUsername => {
+            type_secret_steps(
+                window,
+                previous_focus_target,
+                vec![TypeStep::Text(credential.username)],
+            )?;
+        }
+        PasswordOperation::OpenUrl => {
+            let url = credential
+                .url
+                .context("pass entry does not contain a URL")?;
+            gio::AppInfo::launch_default_for_uri(&url, gio::AppLaunchContext::NONE)
+                .context("failed to open URL")?;
+            window.close();
+        }
+        PasswordOperation::CopyUrl => {
+            let url = credential
+                .url
+                .context("pass entry does not contain a URL")?;
+            copy_secret(&url)?;
+            window.close();
+        }
+        PasswordOperation::CopyOtp => {
+            let otp = load_pass_otp(entry)?;
+            copy_secret(&otp)?;
+            window.close();
+        }
+        PasswordOperation::TypeOtp => {
+            let otp = load_pass_otp(entry)?;
+            type_secret_steps(window, previous_focus_target, vec![TypeStep::Text(otp)])?;
+        }
+        PasswordOperation::CustomAutotype => {
+            let steps = custom_autotype_steps(entry, &credential)?;
+            type_secret_steps(window, previous_focus_target, steps)?;
+        }
+        PasswordOperation::Inspect => unreachable!("inspect is handled before action execution"),
+    }
+
+    Ok(())
+}
+
+fn type_secret_steps(
+    window: &ApplicationWindow,
+    previous_focus_target: Option<&WindowFocusTarget>,
+    steps: Vec<TypeStep>,
+) -> Result<()> {
+    let target = previous_focus_target.context("no previously focused window was captured")?;
+    if !type_backend_available() {
+        anyhow::bail!("wtype or xdotool is required for password autotype");
+    }
+
+    let status = focus_window(target).context("failed to refocus previous window")?;
+    if !status.success() {
+        anyhow::bail!("failed to refocus previous window");
+    }
+
+    window.close();
+    thread::sleep(Duration::from_millis(160));
+
+    let commands = if wayland_available() && command_exists("wtype") {
+        wtype_commands_for_steps(&steps)
+    } else {
+        xdotool_commands_for_steps(&steps)
+    };
+
+    for command in commands {
+        run_program_input(command)?;
+    }
+
+    Ok(())
+}
+
+fn type_backend_available() -> bool {
+    (wayland_available() && command_exists("wtype")) || command_exists("xdotool")
+}
+
+fn copy_secret(text: &str) -> Result<()> {
+    if wayland_available() && command_exists("wl-copy") {
+        run_program_input(wl_copy_command(text, password_clip_timeout_seconds()))
+    } else if command_exists("xclip") {
+        run_program_input(xclip_command(text))?;
+        clear_xclip_clipboard_after(password_clip_timeout_seconds());
+        Ok(())
+    } else {
+        anyhow::bail!("wl-copy or xclip is required to copy password data");
+    }
+}
+
+fn clear_xclip_clipboard_after(timeout_seconds: u64) {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(timeout_seconds));
+        let _ = Command::new("xclip")
+            .args(["-selection", "clipboard", "-in"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut child| {
+                if let Some(stdin) = child.stdin.take() {
+                    drop(stdin);
+                }
+                child.wait().map(|_| ())
+            });
+    });
+}
+
+fn wayland_available() -> bool {
+    std::env::var_os("WAYLAND_DISPLAY").is_some()
+}
+
+fn command_exists(program: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| {
+            let path = dir.join(program);
+            path.is_file() && is_executable(&path)
+        })
+    })
+}
+
+fn password_clip_timeout_seconds() -> u64 {
+    std::env::var("PASSWORD_STORE_CLIP_TIME")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(15)
+}
+
+fn inspected_password_results(credential: &Credential) -> Vec<ResultItem> {
+    let mut rows = vec![
+        password_action_result(
+            &credential.entry,
+            "Autotype login",
+            "Type username, Tab, and password without submitting",
+            PasswordOperation::AutotypeLogin,
+            1_000,
+        ),
+        password_action_result(
+            &credential.entry,
+            "Copy password",
+            "Copy password and clear it after the password-store timeout",
+            PasswordOperation::CopyPassword,
+            950,
+        ),
+        password_action_result(
+            &credential.entry,
+            "Copy username",
+            "Copy username metadata or the entry basename",
+            PasswordOperation::CopyUsername,
+            940,
+        ),
+        password_action_result(
+            &credential.entry,
+            "Type password",
+            "Type only the password into the focused window",
+            PasswordOperation::TypePassword,
+            930,
+        ),
+        password_action_result(
+            &credential.entry,
+            "Type username",
+            "Type only the username into the focused window",
+            PasswordOperation::TypeUsername,
+            920,
+        ),
+    ];
+
+    if credential.url.is_some() {
+        rows.push(password_action_result(
+            &credential.entry,
+            "Open URL",
+            "Open this entry's URL in the default browser",
+            PasswordOperation::OpenUrl,
+            910,
+        ));
+        rows.push(password_action_result(
+            &credential.entry,
+            "Copy URL",
+            "Copy this entry's URL",
+            PasswordOperation::CopyUrl,
+            900,
+        ));
+    }
+
+    if credential.otp_uri.is_some() {
+        rows.push(password_action_result(
+            &credential.entry,
+            "Copy OTP",
+            "Generate and copy a one-time password with pass-otp",
+            PasswordOperation::CopyOtp,
+            890,
+        ));
+        rows.push(password_action_result(
+            &credential.entry,
+            "Type OTP",
+            "Generate and type a one-time password with pass-otp",
+            PasswordOperation::TypeOtp,
+            880,
+        ));
+    }
+
+    if credential.autotype.is_some() {
+        rows.push(password_action_result(
+            &credential.entry,
+            "Custom autotype",
+            "Run this entry's autotype template",
+            PasswordOperation::CustomAutotype,
+            870,
+        ));
+    }
+
+    rows
+}
+
+fn password_action_result(
+    entry: &str,
+    title: &str,
+    subtitle: &str,
+    operation: PasswordOperation,
+    score: i32,
+) -> ResultItem {
+    ResultItem {
+        prediction_key: None,
+        title: format!("{title}: {entry}"),
+        subtitle: subtitle.to_string(),
+        source: "Passwords",
+        icon_name: "dialog-password-symbolic".to_string(),
+        score,
+        action: Action::Password {
+            entry: entry.to_string(),
+            operation,
+        },
+    }
+}
+
+fn custom_autotype_steps(entry: &str, credential: &Credential) -> Result<Vec<TypeStep>> {
+    let template = credential
+        .autotype
+        .as_deref()
+        .context("pass entry does not contain an autotype template")?;
+    let mut steps = Vec::new();
+
+    let mut tokens = template.split_whitespace().peekable();
+    while let Some(token) = tokens.next() {
+        match token {
+            ":tab" => steps.push(TypeStep::Key("Tab")),
+            ":space" => steps.push(TypeStep::Text(" ".to_string())),
+            ":enter" => steps.push(TypeStep::Key("Return")),
+            ":delay" => steps.push(TypeStep::Delay(1_000)),
+            "pass" | "password" => steps.push(TypeStep::Text(credential.password.clone())),
+            "user" | "username" => steps.push(TypeStep::Text(credential.username.clone())),
+            "path" => steps.push(TypeStep::Text(entry.to_string())),
+            "basename" | "filename" => {
+                steps.push(TypeStep::Text(crate::password::fallback_username(entry)));
+            }
+            ":otp" => {
+                if matches!(tokens.peek(), Some(&"pass") | Some(&"gopass")) {
+                    tokens.next();
+                }
+                steps.push(TypeStep::Text(load_pass_otp(entry)?));
+            }
+            key => {
+                let Some(value) = credential.fields.get(&key.to_ascii_lowercase()) else {
+                    anyhow::bail!("unknown autotype token: {key}");
+                };
+                steps.push(TypeStep::Text(value.clone()));
+            }
+        }
+    }
+
+    Ok(steps)
 }
 
 fn launch_desktop_app(desktop_id: &str) -> Result<()> {
@@ -541,33 +864,6 @@ fn placeholder_for_mode(mode: SearchMode) -> &'static str {
     }
 }
 
-fn update_search_meta(hint: &Label, mode_badge: &Label, raw_query: &str, cli_mode: SearchMode) {
-    let query = QueryInput::parse(raw_query, cli_mode);
-    mode_badge.set_text(query.mode.label());
-
-    let hint_text = match query.mode {
-        SearchMode::All => "Prefixes: ~ windows, > commands, / files, @ ssh, ! pass, ? web, = calc",
-        SearchMode::Apps => "Search installed desktop applications",
-        SearchMode::Windows => "Search active windows and press Enter to focus one",
-        SearchMode::Files => "Search LocalSearch indexed files",
-        SearchMode::Ssh => "Search aliases from ~/.ssh/config and known_hosts",
-        SearchMode::Pass => "Press Enter to copy the first line from pass show",
-        SearchMode::Commands => "Press Enter to run the command or choose a suggestion",
-        SearchMode::Web => "Press Enter to search the web or open a URL directly",
-        SearchMode::Calc => "Press Enter to copy the calculated result",
-    };
-    set_hint_state(hint, hint_text, false);
-}
-
-fn set_hint_state(hint: &Label, message: &str, is_error: bool) {
-    hint.set_text(message);
-    if is_error {
-        hint.add_css_class("launcher-hint-error");
-    } else {
-        hint.remove_css_class("launcher-hint-error");
-    }
-}
-
 fn copy_to_clipboard(text: &str) {
     if let Some(display) = gdk::Display::default() {
         display.clipboard().set_text(text);
@@ -575,30 +871,36 @@ fn copy_to_clipboard(text: &str) {
 }
 
 fn load_pass_secret(entry: &str) -> Result<String> {
+    parse_credential(entry, &load_pass_output(&["show", entry])?)
+        .map(|credential| credential.password)
+}
+
+fn load_pass_credential(entry: &str) -> Result<Credential> {
+    parse_credential(entry, &load_pass_output(&["show", entry])?)
+}
+
+fn load_pass_otp(entry: &str) -> Result<String> {
+    load_pass_output(&["otp", entry]).map(|output| output.trim().to_string())
+}
+
+fn load_pass_output(args: &[&str]) -> Result<String> {
     let output = Command::new("pass")
-        .args(["show", entry])
+        .args(args)
         .output()
         .context("failed to run pass")?;
-
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         anyhow::bail!(
             "{}",
             if stderr.is_empty() {
-                "pass failed to decrypt the selected entry"
+                "pass failed"
             } else {
                 stderr.as_str()
             }
         );
     }
 
-    String::from_utf8(output.stdout)
-        .context("pass returned non-UTF-8 output")?
-        .lines()
-        .next()
-        .map(|line| line.to_string())
-        .filter(|line| !line.is_empty())
-        .context("pass entry did not contain a password on the first line")
+    String::from_utf8(output.stdout).context("pass returned non-UTF-8 output")
 }
 
 fn default_ssh_terminal(home: Option<&std::path::Path>) -> String {
@@ -633,8 +935,8 @@ fn is_executable(path: &std::path::Path) -> bool {
     }
 }
 
-fn apply_css() {
-    let css = r#"
+fn launcher_css() -> &'static str {
+    r#"
       window {
         background: transparent;
       }
@@ -642,34 +944,16 @@ fn apply_css() {
       .launcher-shell {
         background: linear-gradient(180deg, rgba(19, 23, 33, 0.78), rgba(12, 15, 24, 0.92));
         border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 24px;
-        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
-        padding: 1.35rem;
-      }
-
-      .launcher-header {
-        padding: 0.1rem 0.15rem 0.2rem;
-      }
-
-      .launcher-kicker {
-        color: rgba(188, 214, 255, 0.72);
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      .launcher-headline {
-        color: rgba(245, 248, 255, 0.98);
-        font-size: 1.34rem;
-        font-weight: 700;
+        border-radius: 18px;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+        padding: 0.8rem;
       }
 
       .launcher-entry {
-        min-height: 64px;
-        font-size: 1.18rem;
-        padding: 0.45rem 0.95rem;
-        border-radius: 18px;
+        min-height: 54px;
+        font-size: 1.08rem;
+        padding: 0.35rem 0.82rem;
+        border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.09);
         background: rgba(255, 255, 255, 0.07);
         color: rgba(247, 249, 255, 0.98);
@@ -683,48 +967,13 @@ fn apply_css() {
                     0 0 0 3px rgba(106, 160, 255, 0.14);
       }
 
-      .launcher-hint {
-        color: rgba(255, 255, 255, 0.68);
-        font-size: 0.9rem;
-        margin-left: 0.25rem;
-      }
-
-      .launcher-hint-error {
-        color: rgba(255, 187, 187, 0.96);
-      }
-
-      .launcher-mode-badge {
-        background: rgba(148, 197, 255, 0.14);
-        border: 1px solid rgba(148, 197, 255, 0.26);
-        border-radius: 999px;
-        color: rgba(214, 231, 255, 0.96);
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 0.3rem 0.8rem;
-      }
-
-      .launcher-shortcuts {
-        margin-top: -0.1rem;
-      }
-
-      .launcher-shortcut-chip {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 999px;
-        color: rgba(233, 238, 248, 0.82);
-        font-size: 0.83rem;
-        font-weight: 600;
-        padding: 0.3rem 0.72rem;
-      }
-
       .launcher-results {
         background: transparent;
       }
 
       .launcher-row {
-        margin-bottom: 8px;
-        border-radius: 18px;
+        margin-bottom: 5px;
+        border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.02);
         background: rgba(255, 255, 255, 0.02);
       }
@@ -744,11 +993,11 @@ fn apply_css() {
       }
 
       .launcher-icon-wrap {
-        min-width: 44px;
-        border-radius: 14px;
+        min-width: 34px;
+        border-radius: 10px;
         background: rgba(255, 255, 255, 0.07);
         border: 1px solid rgba(255, 255, 255, 0.04);
-        padding: 8px;
+        padding: 6px;
       }
 
       .launcher-icon {
@@ -756,27 +1005,14 @@ fn apply_css() {
       }
 
       .launcher-title {
-        font-size: 1.05rem;
-        font-weight: 700;
+        font-size: 1rem;
+        font-weight: 650;
       }
+    "#
+}
 
-      .launcher-subtitle {
-        color: rgba(255, 255, 255, 0.70);
-        font-size: 0.92rem;
-      }
-
-      .launcher-source-badge {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 999px;
-        color: rgba(233, 238, 248, 0.74);
-        font-size: 0.76rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        padding: 0.28rem 0.72rem;
-      }
-    "#;
-
+fn apply_css() {
+    let css = launcher_css();
     let provider = gtk4::CssProvider::new();
     provider.load_from_string(css);
     gtk4::style_context_add_provider_for_display(
@@ -788,7 +1024,13 @@ fn apply_css() {
 
 #[cfg(test)]
 mod tests {
-    use super::default_ssh_terminal;
+    use super::{
+        LAUNCHER_SHADOW_BLUR_PX, LAUNCHER_SHADOW_Y_OFFSET_PX, LAUNCHER_SURFACE_MARGIN_BOTTOM_PX,
+        LAUNCHER_SURFACE_MARGIN_PX, action_failure_result, default_ssh_terminal,
+        inspected_password_results, launcher_css, row_tooltip_text,
+    };
+    use crate::model::{Action, PasswordOperation, ResultItem};
+    use crate::password::parse_credential;
     use std::fs::{self, File};
 
     #[test]
@@ -826,5 +1068,66 @@ mod tests {
     #[test]
     fn falls_back_to_kitty_without_wrapper() {
         assert_eq!(default_ssh_terminal(None), "kitty");
+    }
+
+    #[test]
+    fn action_failures_render_as_status_results() {
+        let item = action_failure_result("permission denied");
+
+        assert_eq!(item.title, "Action failed: permission denied");
+        assert!(matches!(item.action, Action::None));
+        assert_eq!(item.source, "Status");
+        assert!(item.subtitle.is_empty());
+    }
+
+    #[test]
+    fn row_tooltip_preserves_hidden_result_details() {
+        let item = ResultItem {
+            prediction_key: None,
+            title: "Firefox".to_string(),
+            subtitle: "Web Browser".to_string(),
+            source: "Applications",
+            icon_name: "firefox".to_string(),
+            score: 100,
+            action: Action::None,
+        };
+
+        assert_eq!(
+            row_tooltip_text(&item).as_deref(),
+            Some("Web Browser\nApplications")
+        );
+    }
+
+    #[test]
+    fn launcher_surface_reserves_room_for_the_css_shadow() {
+        assert!(LAUNCHER_SURFACE_MARGIN_PX >= LAUNCHER_SHADOW_BLUR_PX);
+        assert!(
+            LAUNCHER_SURFACE_MARGIN_BOTTOM_PX
+                >= LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX
+        );
+        assert!(launcher_css().contains("box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);"));
+    }
+
+    #[test]
+    fn inspected_password_results_include_metadata_specific_actions() {
+        let credential = parse_credential(
+            "github/work",
+            "secret\nuser: robin\nurl: https://github.com\notpauth://totp/GitHub:robin?secret=ABC\nautotype: user :tab pass\n",
+        )
+        .expect("credential");
+
+        let operations = inspected_password_results(&credential)
+            .into_iter()
+            .filter_map(|item| match item.action {
+                Action::Password { operation, .. } => Some(operation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(operations.contains(&PasswordOperation::OpenUrl));
+        assert!(operations.contains(&PasswordOperation::CopyUrl));
+        assert!(operations.contains(&PasswordOperation::CopyOtp));
+        assert!(operations.contains(&PasswordOperation::TypeOtp));
+        assert!(operations.contains(&PasswordOperation::CustomAutotype));
     }
 }
