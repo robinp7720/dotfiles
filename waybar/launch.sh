@@ -28,12 +28,24 @@ with source.open(encoding="utf-8") as handle:
 
 desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 session = os.environ.get("DESKTOP_SESSION", "").lower()
+session_desktop = os.environ.get("XDG_SESSION_DESKTOP", "").lower()
 
-is_hyprland = bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")) or "hyprland" in {
-    desktop,
-    session,
-}
-is_niri = bool(os.environ.get("NIRI_SOCKET")) or "niri" in {desktop, session}
+
+def desktop_tokens(*values):
+    tokens = set()
+    for value in values:
+        for token in value.replace(";", ":").split(":"):
+            token = token.strip()
+            if token:
+                tokens.add(token)
+    return tokens
+
+desktop_names = desktop_tokens(desktop, session, session_desktop)
+
+is_hyprland = (
+    bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")) or "hyprland" in desktop_names
+)
+is_niri = bool(os.environ.get("NIRI_SOCKET")) or "niri" in desktop_names
 
 modules_left = list(config.get("modules-left", []))
 if is_hyprland and not is_niri:
