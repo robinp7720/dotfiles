@@ -10,6 +10,8 @@ Native Rust launcher for this dotfiles repo.
 - Native password-store actions through `pass`
 - SSH host search from `~/.ssh/config`, `known_hosts`, and `known_hosts.old`
 - Command runner with `$PATH` suggestions
+- Browser bookmark search from Firefox and Chromium-family profiles
+- Recent file search from `~/.local/share/recently-used.xbel`
 - Web search through the default browser
 - `libqalculate` integration through `qalc`
 
@@ -27,9 +29,17 @@ dot-launcher --mode pass
 dot-launcher --mode ssh
 ```
 
+Search prefixes:
+```text
+bookmark: rust docs
+recent: report
+```
+
 ## Notes
 - Predictive history is stored as plain JSON in `~/.local/state/dot-launcher/predictions.json`.
 - File search requires the `localsearch` CLI to be installed and indexed.
+- Bookmark search reads Firefox `places.sqlite` through `sqlite3` when available and Chromium-family `Bookmarks` JSON directly.
+- Recent file search reads local `file://` entries from `recently-used.xbel`.
 - Window switching uses `hyprctl clients -j` on Hyprland and `niri msg windows --json` on Niri.
 - Password search reads entry names from `PASSWORD_STORE_DIR` or `~/.password-store`.
 - Pressing Enter on a password result autotypes username, Tab, and password into the previously focused window without submitting the form.

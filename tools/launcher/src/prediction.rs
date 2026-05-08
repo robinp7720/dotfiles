@@ -169,6 +169,8 @@ fn source_label(source: &str) -> &'static str {
         "SSH" => "SSH",
         "Passwords" => "Passwords",
         "Commands" => "Commands",
+        "Bookmarks" => "Bookmarks",
+        "Recent Files" => "Recent Files",
         "Web" => "Web",
         "Calculator" => "Calculator",
         _ => "Predictions",

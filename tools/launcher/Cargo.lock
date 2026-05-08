@@ -188,6 +188,7 @@ dependencies = [
  "serde",
  "serde_json",
  "urlencoding",
+ "xml-rs",
 ]
 
 [[package]]

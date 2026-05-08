@@ -1,11 +1,11 @@
 use crate::model::{
-    Action, PasswordOperation, QueryInput, ResultItem, SearchMode, WindowFocusTarget,
+    Action, PasswordOperation, QueryInput, ResultItem, SearchMode, SourceFilter, WindowFocusTarget,
     browser_target, score_text,
 };
 use crate::prediction::{PredictionStore, StoredPrediction};
 use gtk4::gio;
 use gtk4::prelude::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,6 +20,8 @@ const MAX_FILES: usize = 8;
 const MAX_SSH: usize = 6;
 const MAX_PASS: usize = 8;
 const MAX_COMMANDS: usize = 8;
+const MAX_BOOKMARKS: usize = 8;
+const MAX_RECENTS: usize = 8;
 const MIN_FILE_QUERY_CHARS: usize = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,11 +80,28 @@ pub struct WindowEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct BookmarkEntry {
+    pub title: String,
+    pub url: String,
+    pub search_blob: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecentFileEntry {
+    pub title: String,
+    pub path: String,
+    pub modified: i64,
+    pub search_blob: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Sources {
     apps: Vec<AppEntry>,
     ssh_hosts: Vec<String>,
     pass_entries: Vec<PassEntry>,
     commands: Vec<String>,
+    bookmarks: Vec<BookmarkEntry>,
+    recent_files: Vec<RecentFileEntry>,
     file_search_backend: Option<FileSearchBackend>,
     pass_available: bool,
     qalc_available: bool,
@@ -96,6 +115,8 @@ impl Sources {
             ssh_hosts: load_ssh_hosts(),
             pass_entries: load_pass_entries(),
             commands: load_commands(),
+            bookmarks: load_browser_bookmarks(),
+            recent_files: load_recent_files(),
             file_search_backend: FileSearchBackend::detect(),
             pass_available: command_exists("pass"),
             qalc_available: command_exists("qalc"),
@@ -117,8 +138,20 @@ impl Sources {
         let now = current_unix_time();
 
         if query.text.is_empty() {
-            results.extend(self.default_results(query.mode, now));
+            results.extend(self.default_results(&query, now));
             return results;
+        }
+
+        match query.source_filter {
+            SourceFilter::Bookmarks => {
+                results.extend(self.search_bookmarks(&query, now));
+                return finish_search_results(results, &query);
+            }
+            SourceFilter::Recents => {
+                results.extend(self.search_recent_files(&query, now));
+                return finish_search_results(results, &query);
+            }
+            SourceFilter::All => {}
         }
 
         if query.mode.includes(SearchMode::Apps) {
@@ -141,8 +174,17 @@ impl Sources {
             results.extend(self.search_pass(&query, now));
         }
 
+        if query.mode == SearchMode::All {
+            results.extend(self.search_bookmarks(&query, now));
+            results.extend(self.search_recent_files(&query, now));
+        }
+
         if query.mode == SearchMode::Commands {
             results.extend(self.search_commands(&query, now));
+        } else if query.mode == SearchMode::All {
+            if let Some(result) = self.search_all_mode_command(&query, now) {
+                results.push(result);
+            }
         }
 
         if query.mode.includes(SearchMode::Calc) {
@@ -159,17 +201,7 @@ impl Sources {
             results.push(self.search_web(&query, now));
         }
 
-        results.sort_by(|left, right| {
-            right
-                .score
-                .cmp(&left.score)
-                .then_with(|| left.title.cmp(&right.title))
-        });
-        results.truncate(24);
-        if results.is_empty() {
-            results.push(no_results_item(&query));
-        }
-        results
+        finish_search_results(results, &query)
     }
 
     pub fn record_activation(&self, item: &ResultItem) {
@@ -194,8 +226,33 @@ impl Sources {
         }
     }
 
-    fn default_results(&self, mode: SearchMode, now: u64) -> Vec<ResultItem> {
+    fn default_results(&self, query: &QueryInput, now: u64) -> Vec<ResultItem> {
         let mut results = Vec::new();
+        let mode = query.mode;
+
+        match query.source_filter {
+            SourceFilter::Bookmarks => {
+                results.push(instruction_result(
+                    "Bookmark search",
+                    "Type a bookmark title or URL fragment",
+                    "Bookmarks",
+                    "user-bookmarks-symbolic",
+                    65,
+                ));
+                return results;
+            }
+            SourceFilter::Recents => {
+                results.push(instruction_result(
+                    "Recent file search",
+                    "Type a recently used file name or path fragment",
+                    "Recent Files",
+                    "document-open-recent-symbolic",
+                    65,
+                ));
+                return results;
+            }
+            SourceFilter::All => {}
+        }
 
         if mode == SearchMode::All {
             results.extend(self.top_prediction_results(now));
@@ -543,6 +600,84 @@ impl Sources {
         items
     }
 
+    fn search_bookmarks(&self, query: &QueryInput, now: u64) -> Vec<ResultItem> {
+        let mut items = self
+            .bookmarks
+            .iter()
+            .filter_map(|bookmark| {
+                let score = score_text(&bookmark.search_blob, &query.text)?;
+                let prediction_key = bookmark_prediction_key(&bookmark.url);
+                Some(ResultItem {
+                    prediction_key: Some(prediction_key.clone()),
+                    title: bookmark.title.clone(),
+                    subtitle: bookmark.url.clone(),
+                    source: "Bookmarks",
+                    icon_name: "user-bookmarks-symbolic".to_string(),
+                    score: score + 830 + self.prediction_boost(&prediction_key, now),
+                    action: Action::OpenUrl {
+                        url: bookmark.url.clone(),
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+
+        sort_results(&mut items, MAX_BOOKMARKS);
+        items
+    }
+
+    fn search_recent_files(&self, query: &QueryInput, now: u64) -> Vec<ResultItem> {
+        let mut items = self
+            .recent_files
+            .iter()
+            .enumerate()
+            .filter_map(|(index, recent)| {
+                let score = score_text(&recent.search_blob, &query.text)?;
+                let prediction_key = recent_prediction_key(&recent.path);
+                let recency_score = (MAX_RECENTS.saturating_sub(index.min(MAX_RECENTS)) * 5) as i32;
+                Some(ResultItem {
+                    prediction_key: Some(prediction_key.clone()),
+                    title: recent.title.clone(),
+                    subtitle: recent.path.clone(),
+                    source: "Recent Files",
+                    icon_name: "document-open-recent-symbolic".to_string(),
+                    score: score
+                        + 790
+                        + recency_score
+                        + self.prediction_boost(&prediction_key, now),
+                    action: Action::OpenFile {
+                        path: recent.path.clone(),
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+
+        sort_results(&mut items, MAX_RECENTS);
+        items
+    }
+
+    fn search_all_mode_command(&self, query: &QueryInput, now: u64) -> Option<ResultItem> {
+        let mut words = query.text.split_whitespace();
+        let program = words.next()?;
+        words.next()?;
+
+        if !self.commands.iter().any(|command| command == program) {
+            return None;
+        }
+
+        let prediction_key = command_prediction_key(&query.text);
+        Some(ResultItem {
+            prediction_key: Some(prediction_key.clone()),
+            title: format!("Run \"{}\"", query.text),
+            subtitle: "Execute in the background with sh -lc".to_string(),
+            source: "Commands",
+            icon_name: "utilities-terminal-symbolic".to_string(),
+            score: 930 + self.prediction_boost(&prediction_key, now),
+            action: Action::RunCommand {
+                command: query.text.clone(),
+            },
+        })
+    }
+
     fn search_calc(&self, query: &QueryInput, now: u64) -> Option<ResultItem> {
         if !self.qalc_available {
             return None;
@@ -667,6 +802,96 @@ fn load_ssh_hosts() -> Vec<String> {
         parse_known_hosts(&home.join(".ssh/known_hosts.old"), &mut hosts);
     }
     hosts.into_iter().collect()
+}
+
+fn load_browser_bookmarks() -> Vec<BookmarkEntry> {
+    let mut by_url = BTreeMap::new();
+
+    for entry in load_firefox_bookmarks()
+        .into_iter()
+        .chain(load_chromium_bookmarks())
+    {
+        by_url.entry(entry.url.clone()).or_insert(entry);
+    }
+
+    let mut bookmarks = by_url.into_values().collect::<Vec<_>>();
+    bookmarks.sort_by(|left, right| {
+        left.title
+            .to_ascii_lowercase()
+            .cmp(&right.title.to_ascii_lowercase())
+            .then_with(|| left.url.cmp(&right.url))
+    });
+    bookmarks
+}
+
+fn load_firefox_bookmarks() -> Vec<BookmarkEntry> {
+    if !command_exists("sqlite3") {
+        return Vec::new();
+    }
+
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let profiles_dir = home.join(".mozilla/firefox");
+    let Ok(profiles) = fs::read_dir(profiles_dir) else {
+        return Vec::new();
+    };
+
+    let query = "select replace(coalesce(b.title,''), char(9), ' '), p.url \
+        from moz_bookmarks b join moz_places p on p.id = b.fk \
+        where b.type = 1 and p.url not like 'place:%'";
+
+    profiles
+        .flatten()
+        .map(|profile| profile.path().join("places.sqlite"))
+        .filter(|path| path.is_file())
+        .filter_map(|path| {
+            let database = format!("file:{}?immutable=1", path.to_string_lossy());
+            let output = Command::new("sqlite3")
+                .args(["-separator", "\t", &database, query])
+                .output()
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            Some(parse_firefox_bookmark_rows(&String::from_utf8_lossy(
+                &output.stdout,
+            )))
+        })
+        .flatten()
+        .collect()
+}
+
+fn load_chromium_bookmarks() -> Vec<BookmarkEntry> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+
+    let roots = [
+        home.join(".config/google-chrome"),
+        home.join(".config/chromium"),
+        home.join(".config/BraveSoftware/Brave-Browser"),
+        home.join(".config/vivaldi"),
+    ];
+
+    roots
+        .into_iter()
+        .flat_map(chromium_bookmark_files)
+        .filter_map(|path| fs::read_to_string(path).ok())
+        .flat_map(|contents| parse_chromium_bookmarks_json(&contents))
+        .collect()
+}
+
+fn chromium_bookmark_files(root: PathBuf) -> Vec<PathBuf> {
+    let Ok(profiles) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+
+    profiles
+        .flatten()
+        .map(|profile| profile.path().join("Bookmarks"))
+        .filter(|path| path.is_file())
+        .collect()
 }
 
 fn load_windows() -> Vec<WindowEntry> {
@@ -918,6 +1143,14 @@ fn ssh_prediction_key(host: &str) -> String {
 
 fn pass_prediction_key(entry: &str) -> String {
     format!("pass:{entry}")
+}
+
+fn bookmark_prediction_key(url: &str) -> String {
+    format!("bookmark:{url}")
+}
+
+fn recent_prediction_key(path: &str) -> String {
+    format!("recent:{path}")
 }
 
 fn password_action_results(entry: &str, score: i32, include_secondary: bool) -> Vec<ResultItem> {
@@ -1177,6 +1410,186 @@ fn load_pass_entries() -> Vec<PassEntry> {
     entries
 }
 
+fn load_recent_files() -> Vec<RecentFileEntry> {
+    let Some(data_dir) = dirs::data_dir() else {
+        return Vec::new();
+    };
+    let path = data_dir.join("recently-used.xbel");
+    fs::read_to_string(path)
+        .map(|contents| parse_recent_files_xbel(&contents))
+        .unwrap_or_default()
+}
+
+fn parse_chromium_bookmarks_json(raw: &str) -> Vec<BookmarkEntry> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return Vec::new();
+    };
+
+    let mut entries = Vec::new();
+    if let Some(roots) = value.get("roots").and_then(serde_json::Value::as_object) {
+        for root in roots.values() {
+            collect_chromium_bookmarks(root, &mut entries);
+        }
+    }
+    entries
+}
+
+fn collect_chromium_bookmarks(value: &serde_json::Value, entries: &mut Vec<BookmarkEntry>) {
+    if value.get("type").and_then(serde_json::Value::as_str) == Some("url") {
+        if let Some(url) = string_field(value, "url") {
+            let title = string_field(value, "name").unwrap_or_else(|| url.clone());
+            if let Some(entry) = bookmark_entry(title, url) {
+                entries.push(entry);
+            }
+        }
+    }
+
+    if let Some(children) = value.get("children").and_then(serde_json::Value::as_array) {
+        for child in children {
+            collect_chromium_bookmarks(child, entries);
+        }
+    }
+}
+
+fn parse_firefox_bookmark_rows(raw: &str) -> Vec<BookmarkEntry> {
+    raw.lines()
+        .filter_map(|line| {
+            let (title, url) = line.split_once('\t')?;
+            bookmark_entry(title.trim().to_string(), url.trim().to_string())
+        })
+        .collect()
+}
+
+fn bookmark_entry(title: String, url: String) -> Option<BookmarkEntry> {
+    let url = url.trim();
+    if url.is_empty() || url.starts_with("place:") {
+        return None;
+    }
+
+    let title = if title.trim().is_empty() {
+        url.to_string()
+    } else {
+        title.trim().to_string()
+    };
+
+    Some(BookmarkEntry {
+        search_blob: format!("{title} {url}").to_ascii_lowercase(),
+        title,
+        url: url.to_string(),
+    })
+}
+
+fn parse_recent_files_xbel(raw: &str) -> Vec<RecentFileEntry> {
+    use xml::reader::{EventReader, XmlEvent};
+
+    let parser = EventReader::from_str(raw);
+    let mut entries = Vec::new();
+    let mut href = None::<String>;
+    let mut modified = 0;
+    let mut title = String::new();
+    let mut in_title = false;
+
+    for event in parser {
+        match event {
+            Ok(XmlEvent::StartElement {
+                name, attributes, ..
+            }) if name.local_name == "bookmark" => {
+                href = attributes
+                    .iter()
+                    .find(|attribute| attribute.name.local_name == "href")
+                    .map(|attribute| attribute.value.clone());
+                modified = attributes
+                    .iter()
+                    .find(|attribute| attribute.name.local_name == "modified")
+                    .or_else(|| {
+                        attributes
+                            .iter()
+                            .find(|attribute| attribute.name.local_name == "visited")
+                    })
+                    .and_then(|attribute| parse_xbel_timestamp(&attribute.value))
+                    .unwrap_or_default();
+                title.clear();
+            }
+            Ok(XmlEvent::StartElement { name, .. }) if name.local_name == "title" => {
+                in_title = true;
+                title.clear();
+            }
+            Ok(XmlEvent::Characters(text)) if in_title => title.push_str(&text),
+            Ok(XmlEvent::EndElement { name }) if name.local_name == "title" => {
+                in_title = false;
+            }
+            Ok(XmlEvent::EndElement { name }) if name.local_name == "bookmark" => {
+                if let Some(href) = href.take() {
+                    if let Some(entry) = recent_file_entry(&href, &title, modified) {
+                        entries.push(entry);
+                    }
+                }
+                title.clear();
+                modified = 0;
+                in_title = false;
+            }
+            _ => {}
+        }
+    }
+
+    entries.sort_by(|left, right| {
+        right
+            .modified
+            .cmp(&left.modified)
+            .then_with(|| left.title.cmp(&right.title))
+    });
+    let mut seen_paths = BTreeSet::new();
+    entries.retain(|entry| seen_paths.insert(entry.path.clone()));
+    entries
+}
+
+fn recent_file_entry(href: &str, title: &str, modified: i64) -> Option<RecentFileEntry> {
+    let path = file_uri_to_path(href)?;
+    let title = if title.trim().is_empty() {
+        Path::new(&path)
+            .file_name()
+            .and_then(|part| part.to_str())
+            .unwrap_or(path.as_str())
+            .to_string()
+    } else {
+        title.trim().to_string()
+    };
+
+    Some(RecentFileEntry {
+        search_blob: format!("{title} {path}").to_ascii_lowercase(),
+        title,
+        path,
+        modified,
+    })
+}
+
+fn file_uri_to_path(uri: &str) -> Option<String> {
+    let rest = uri.strip_prefix("file://")?;
+    let path = rest
+        .strip_prefix("localhost/")
+        .map(|path| format!("/{path}"))
+        .unwrap_or_else(|| rest.to_string());
+    if !path.starts_with('/') {
+        return None;
+    }
+    urlencoding::decode(&path)
+        .ok()
+        .map(|path| path.into_owned())
+        .filter(|path| !path.is_empty())
+}
+
+fn parse_xbel_timestamp(raw: &str) -> Option<i64> {
+    let digits = raw
+        .chars()
+        .filter(char::is_ascii_digit)
+        .take(14)
+        .collect::<String>();
+    if digits.len() < 8 {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 fn password_store_dir() -> Option<PathBuf> {
     env::var_os("PASSWORD_STORE_DIR")
         .filter(|value| !value.is_empty())
@@ -1222,10 +1635,14 @@ fn parse_file_search_line(line: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppEntry, FileSearchBackend, Sources, no_results_item, parse_file_search_line,
-        parse_hypr_windows_json, parse_niri_windows_json, pass_entry_name, window_focus_command,
+        AppEntry, BookmarkEntry, FileSearchBackend, RecentFileEntry, Sources, no_results_item,
+        parse_chromium_bookmarks_json, parse_file_search_line, parse_firefox_bookmark_rows,
+        parse_hypr_windows_json, parse_niri_windows_json, parse_recent_files_xbel, pass_entry_name,
+        window_focus_command,
     };
-    use crate::model::{Action, PasswordOperation, QueryInput, SearchMode, WindowFocusTarget};
+    use crate::model::{
+        Action, PasswordOperation, QueryInput, SearchMode, SourceFilter, WindowFocusTarget,
+    };
     use crate::prediction::{PredictionStore, StoredPrediction};
     use std::path::Path;
     use std::sync::{Arc, Mutex};
@@ -1241,6 +1658,21 @@ mod tests {
         let mut store = PredictionStore::disabled();
         store.record(prediction, now).expect("record prediction");
         Arc::new(Mutex::new(store))
+    }
+
+    fn empty_sources() -> Sources {
+        Sources {
+            apps: Vec::new(),
+            ssh_hosts: Vec::new(),
+            pass_entries: Vec::new(),
+            commands: Vec::new(),
+            bookmarks: Vec::new(),
+            recent_files: Vec::new(),
+            file_search_backend: None,
+            pass_available: false,
+            qalc_available: false,
+            predictions: empty_prediction_store(),
+        }
     }
 
     #[test]
@@ -1341,16 +1773,7 @@ mod tests {
 
     #[test]
     fn search_returns_status_item_when_no_matches_exist() {
-        let sources = Sources {
-            apps: Vec::new(),
-            ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
-            commands: Vec::new(),
-            file_search_backend: None,
-            pass_available: false,
-            qalc_available: false,
-            predictions: empty_prediction_store(),
-        };
+        let sources = empty_sources();
 
         let results = sources.search("unlikely-query", SearchMode::Apps);
         assert_eq!(results.len(), 1);
@@ -1360,16 +1783,7 @@ mod tests {
 
     #[test]
     fn bare_urls_surface_as_browser_results_in_all_mode() {
-        let sources = Sources {
-            apps: Vec::new(),
-            ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
-            commands: Vec::new(),
-            file_search_backend: None,
-            pass_available: false,
-            qalc_available: false,
-            predictions: empty_prediction_store(),
-        };
+        let sources = empty_sources();
 
         let results = sources.search("example.com/docs", SearchMode::All);
         assert!(matches!(
@@ -1382,6 +1796,7 @@ mod tests {
     fn no_results_item_uses_mode_specific_guidance() {
         let item = no_results_item(&QueryInput {
             mode: SearchMode::Files,
+            source_filter: SourceFilter::All,
             text: "report".to_string(),
         });
 
@@ -1393,14 +1808,8 @@ mod tests {
     #[test]
     fn file_mode_requires_a_minimum_query_length_before_shelling_out() {
         let sources = Sources {
-            apps: Vec::new(),
-            ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
-            commands: Vec::new(),
             file_search_backend: Some(FileSearchBackend::LocalSearch),
-            pass_available: false,
-            qalc_available: false,
-            predictions: empty_prediction_store(),
+            ..empty_sources()
         };
 
         let results = sources.search("/ a", SearchMode::All);
@@ -1413,17 +1822,12 @@ mod tests {
     #[test]
     fn all_mode_password_matches_default_to_autotype_login() {
         let sources = Sources {
-            apps: Vec::new(),
-            ssh_hosts: Vec::new(),
             pass_entries: vec![super::PassEntry {
                 name: "github/work".to_string(),
                 search_blob: "github/work".to_string(),
             }],
-            commands: Vec::new(),
-            file_search_backend: None,
             pass_available: true,
-            qalc_available: false,
-            predictions: empty_prediction_store(),
+            ..empty_sources()
         };
 
         let results = sources.search("pass: github", SearchMode::All);
@@ -1439,17 +1843,12 @@ mod tests {
     #[test]
     fn pass_mode_surfaces_action_rows_for_matching_entries() {
         let sources = Sources {
-            apps: Vec::new(),
-            ssh_hosts: Vec::new(),
             pass_entries: vec![super::PassEntry {
                 name: "github/work".to_string(),
                 search_blob: "github/work".to_string(),
             }],
-            commands: Vec::new(),
-            file_search_backend: None,
             pass_available: true,
-            qalc_available: false,
-            predictions: empty_prediction_store(),
+            ..empty_sources()
         };
 
         let results = sources.search("pass: github", SearchMode::All);
@@ -1490,12 +1889,6 @@ mod tests {
                     search_blob: "beta browser web browser".to_string(),
                 },
             ],
-            ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
-            commands: Vec::new(),
-            file_search_backend: None,
-            pass_available: false,
-            qalc_available: false,
             predictions: prediction_store_with(
                 StoredPrediction {
                     key: "app:beta.desktop".to_string(),
@@ -1509,6 +1902,7 @@ mod tests {
                 },
                 super::current_unix_time().saturating_sub(60),
             ),
+            ..empty_sources()
         };
 
         let results = sources.search("browser", SearchMode::Apps);
@@ -1527,12 +1921,6 @@ mod tests {
                 icon_name: "alpha".to_string(),
                 search_blob: "alpha first app".to_string(),
             }],
-            ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
-            commands: Vec::new(),
-            file_search_backend: None,
-            pass_available: false,
-            qalc_available: false,
             predictions: prediction_store_with(
                 StoredPrediction {
                     key: "cmd:git status".to_string(),
@@ -1546,12 +1934,159 @@ mod tests {
                 },
                 super::current_unix_time().saturating_sub(60),
             ),
+            ..empty_sources()
         };
 
         let results = sources.search("", SearchMode::All);
 
         assert_eq!(results[0].source, "Commands");
         assert_eq!(results[0].title, "Run \"git status\"");
+    }
+
+    #[test]
+    fn all_mode_surfaces_command_runner_when_input_starts_with_known_command() {
+        let sources = Sources {
+            commands: vec!["systemctl".to_string()],
+            ..empty_sources()
+        };
+
+        let results = sources.search("systemctl suspend", SearchMode::All);
+
+        assert_eq!(results[0].title, "Run \"systemctl suspend\"");
+        assert!(matches!(
+            &results[0].action,
+            Action::RunCommand { command } if command == "systemctl suspend"
+        ));
+    }
+
+    #[test]
+    fn parses_chromium_bookmark_json_urls() {
+        let bookmarks = parse_chromium_bookmarks_json(
+            r#"{
+              "roots": {
+                "bookmark_bar": {
+                  "type": "folder",
+                  "children": [
+                    {"type": "url", "name": "Rust", "url": "https://www.rust-lang.org/"},
+                    {"type": "folder", "children": [
+                      {"type": "url", "name": "", "url": "https://example.com/docs"}
+                    ]}
+                  ]
+                }
+              }
+            }"#,
+        );
+
+        assert_eq!(bookmarks.len(), 2);
+        assert_eq!(bookmarks[0].title, "Rust");
+        assert_eq!(bookmarks[0].url, "https://www.rust-lang.org/");
+        assert_eq!(bookmarks[1].title, "https://example.com/docs");
+    }
+
+    #[test]
+    fn parses_firefox_sqlite_rows_as_bookmarks() {
+        let bookmarks =
+            parse_firefox_bookmark_rows("Rust Docs\thttps://doc.rust-lang.org/\n\tplace:sort=8\n");
+
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].title, "Rust Docs");
+        assert_eq!(bookmarks[0].url, "https://doc.rust-lang.org/");
+    }
+
+    #[test]
+    fn parses_recent_files_xbel_and_skips_non_file_uris() {
+        let recents = parse_recent_files_xbel(
+            r#"<?xml version="1.0"?>
+            <xbel>
+              <bookmark href="file:///home/robin/Documents/Project%20Plan.pdf" modified="2026-05-05T10:11:12Z">
+                <title>Project Plan</title>
+              </bookmark>
+              <bookmark href="https://example.com" modified="2026-05-06T10:11:12Z">
+                <title>Remote</title>
+              </bookmark>
+              <bookmark href="file:///home/robin/Downloads/raw.txt" modified="2026-05-04T10:11:12Z"/>
+            </xbel>"#,
+        );
+
+        assert_eq!(recents.len(), 2);
+        assert_eq!(recents[0].title, "Project Plan");
+        assert_eq!(recents[0].path, "/home/robin/Documents/Project Plan.pdf");
+        assert_eq!(recents[1].title, "raw.txt");
+    }
+
+    #[test]
+    fn all_mode_searches_bookmarks_and_recent_files() {
+        let sources = Sources {
+            bookmarks: vec![BookmarkEntry {
+                title: "Rust Documentation".to_string(),
+                url: "https://doc.rust-lang.org/".to_string(),
+                search_blob: "rust documentation https://doc.rust-lang.org/".to_string(),
+            }],
+            recent_files: vec![RecentFileEntry {
+                title: "Project Plan".to_string(),
+                path: "/home/robin/Documents/Project Plan.pdf".to_string(),
+                modified: 20260505101112,
+                search_blob: "project plan /home/robin/documents/project plan.pdf".to_string(),
+            }],
+            ..empty_sources()
+        };
+
+        let bookmark_results = sources.search("rust doc", SearchMode::All);
+        assert!(matches!(
+            bookmark_results.first().map(|item| &item.action),
+            Some(Action::OpenUrl { url }) if url == "https://doc.rust-lang.org/"
+        ));
+        assert_eq!(
+            bookmark_results[0].prediction_key.as_deref(),
+            Some("bookmark:https://doc.rust-lang.org/")
+        );
+
+        let recent_results = sources.search("project plan", SearchMode::All);
+        assert!(matches!(
+            recent_results.first().map(|item| &item.action),
+            Some(Action::OpenFile { path }) if path == "/home/robin/Documents/Project Plan.pdf"
+        ));
+        assert_eq!(
+            recent_results[0].prediction_key.as_deref(),
+            Some("recent:/home/robin/Documents/Project Plan.pdf")
+        );
+    }
+
+    #[test]
+    fn explicit_local_prefixes_search_only_the_selected_source() {
+        let sources = Sources {
+            bookmarks: vec![BookmarkEntry {
+                title: "Project Board".to_string(),
+                url: "https://example.com/project".to_string(),
+                search_blob: "project board https://example.com/project".to_string(),
+            }],
+            recent_files: vec![RecentFileEntry {
+                title: "Project Notes".to_string(),
+                path: "/home/robin/project.txt".to_string(),
+                modified: 20260505101112,
+                search_blob: "project notes /home/robin/project.txt".to_string(),
+            }],
+            ..empty_sources()
+        };
+
+        let bookmark_results = sources.search("bookmark: project", SearchMode::All);
+        assert_eq!(bookmark_results.len(), 1);
+        assert_eq!(bookmark_results[0].source, "Bookmarks");
+
+        let recent_results = sources.search("recent: project", SearchMode::All);
+        assert_eq!(recent_results.len(), 1);
+        assert_eq!(recent_results[0].source, "Recent Files");
+    }
+
+    #[test]
+    fn empty_explicit_local_prefixes_show_instruction_rows() {
+        let sources = empty_sources();
+
+        let bookmark_results = sources.search("bookmark:", SearchMode::All);
+        assert_eq!(bookmark_results[0].title, "Bookmark search");
+
+        let recent_results = sources.search("recent:", SearchMode::All);
+        assert_eq!(recent_results[0].title, "Recent file search");
     }
 
     #[test]
@@ -1589,20 +2124,26 @@ fn looks_like_math(query: &str) -> bool {
 }
 
 fn no_results_item(query: &QueryInput) -> ResultItem {
-    let subtitle = match query.mode {
-        SearchMode::All => "Try a broader term or switch to a dedicated mode.".to_string(),
-        SearchMode::Apps => "Try a different app name or executable.".to_string(),
-        SearchMode::Windows => "Try a window title, app id, or workspace name.".to_string(),
-        SearchMode::Files => {
-            "Try a different file name or ensure the file indexer has indexed it.".to_string()
-        }
-        SearchMode::Ssh => "Check ~/.ssh/config and known_hosts for the expected host.".to_string(),
-        SearchMode::Pass => "Try a different password-store entry name.".to_string(),
-        SearchMode::Commands => {
-            "Try a different executable name or a full shell command.".to_string()
-        }
-        SearchMode::Web => "Press Enter to open a browser search result instead.".to_string(),
-        SearchMode::Calc => "Try a valid libqalculate expression such as 42/7.".to_string(),
+    let subtitle = match query.source_filter {
+        SourceFilter::Bookmarks => "Try a different bookmark title or URL fragment.".to_string(),
+        SourceFilter::Recents => "Try a different recently used file name.".to_string(),
+        SourceFilter::All => match query.mode {
+            SearchMode::All => "Try a broader term or switch to a dedicated mode.".to_string(),
+            SearchMode::Apps => "Try a different app name or executable.".to_string(),
+            SearchMode::Windows => "Try a window title, app id, or workspace name.".to_string(),
+            SearchMode::Files => {
+                "Try a different file name or ensure the file indexer has indexed it.".to_string()
+            }
+            SearchMode::Ssh => {
+                "Check ~/.ssh/config and known_hosts for the expected host.".to_string()
+            }
+            SearchMode::Pass => "Try a different password-store entry name.".to_string(),
+            SearchMode::Commands => {
+                "Try a different executable name or a full shell command.".to_string()
+            }
+            SearchMode::Web => "Press Enter to open a browser search result instead.".to_string(),
+            SearchMode::Calc => "Try a valid libqalculate expression such as 42/7.".to_string(),
+        },
     };
 
     ResultItem {
@@ -1624,6 +2165,20 @@ fn sort_results(results: &mut Vec<ResultItem>, limit: usize) {
             .then_with(|| left.title.cmp(&right.title))
     });
     results.truncate(limit);
+}
+
+fn finish_search_results(mut results: Vec<ResultItem>, query: &QueryInput) -> Vec<ResultItem> {
+    results.sort_by(|left, right| {
+        right
+            .score
+            .cmp(&left.score)
+            .then_with(|| left.title.cmp(&right.title))
+    });
+    results.truncate(24);
+    if results.is_empty() {
+        results.push(no_results_item(query));
+    }
+    results
 }
 
 fn instruction_result(

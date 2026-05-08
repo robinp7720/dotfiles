@@ -92,21 +92,31 @@ pub enum PasswordOperation {
 #[derive(Clone, Debug)]
 pub struct QueryInput {
     pub mode: SearchMode,
+    pub source_filter: SourceFilter,
     pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceFilter {
+    All,
+    Bookmarks,
+    Recents,
 }
 
 impl QueryInput {
     pub fn parse(raw: &str, cli_mode: SearchMode) -> Self {
         let trimmed = raw.trim();
-        let (mode, text) = parse_prefixed_query(trimmed).unwrap_or((cli_mode, trimmed));
+        let (mode, source_filter, text) =
+            parse_prefixed_query(trimmed).unwrap_or((cli_mode, SourceFilter::All, trimmed));
         Self {
             mode,
+            source_filter,
             text: text.to_string(),
         }
     }
 }
 
-fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
+fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, SourceFilter, &str)> {
     if raw.is_empty() {
         return None;
     }
@@ -116,43 +126,47 @@ fn parse_prefixed_query(raw: &str) -> Option<(SearchMode, &str)> {
     let rest = &raw[first.len_utf8()..];
 
     match first {
-        '>' => return Some((SearchMode::Commands, rest.trim_start())),
-        '~' => return Some((SearchMode::Windows, rest.trim_start())),
-        '@' => return Some((SearchMode::Ssh, rest.trim_start())),
-        '!' => return Some((SearchMode::Pass, rest.trim_start())),
-        '?' => return Some((SearchMode::Web, rest.trim_start())),
-        '=' => return Some((SearchMode::Calc, rest.trim_start())),
+        '>' => return Some((SearchMode::Commands, SourceFilter::All, rest.trim_start())),
+        '~' => return Some((SearchMode::Windows, SourceFilter::All, rest.trim_start())),
+        '@' => return Some((SearchMode::Ssh, SourceFilter::All, rest.trim_start())),
+        '!' => return Some((SearchMode::Pass, SourceFilter::All, rest.trim_start())),
+        '?' => return Some((SearchMode::Web, SourceFilter::All, rest.trim_start())),
+        '=' => return Some((SearchMode::Calc, SourceFilter::All, rest.trim_start())),
         '/' => {
             let whitespace_prefixed = rest.chars().next().is_none_or(char::is_whitespace);
             if whitespace_prefixed {
-                return Some((SearchMode::Files, rest.trim_start()));
+                return Some((SearchMode::Files, SourceFilter::All, rest.trim_start()));
             }
         }
         _ => {}
     }
 
     let lowered = raw.to_ascii_lowercase();
-    const PREFIXES: [(&str, SearchMode); 14] = [
-        ("apps:", SearchMode::Apps),
-        ("app:", SearchMode::Apps),
-        ("windows:", SearchMode::Windows),
-        ("window:", SearchMode::Windows),
-        ("win:", SearchMode::Windows),
-        ("files:", SearchMode::Files),
-        ("file:", SearchMode::Files),
-        ("ssh:", SearchMode::Ssh),
-        ("pass:", SearchMode::Pass),
-        ("password:", SearchMode::Pass),
-        ("cmd:", SearchMode::Commands),
-        ("command:", SearchMode::Commands),
-        ("web:", SearchMode::Web),
-        ("calc:", SearchMode::Calc),
+    const PREFIXES: [(&str, SearchMode, SourceFilter); 18] = [
+        ("apps:", SearchMode::Apps, SourceFilter::All),
+        ("app:", SearchMode::Apps, SourceFilter::All),
+        ("windows:", SearchMode::Windows, SourceFilter::All),
+        ("window:", SearchMode::Windows, SourceFilter::All),
+        ("win:", SearchMode::Windows, SourceFilter::All),
+        ("files:", SearchMode::Files, SourceFilter::All),
+        ("file:", SearchMode::Files, SourceFilter::All),
+        ("ssh:", SearchMode::Ssh, SourceFilter::All),
+        ("pass:", SearchMode::Pass, SourceFilter::All),
+        ("password:", SearchMode::Pass, SourceFilter::All),
+        ("cmd:", SearchMode::Commands, SourceFilter::All),
+        ("command:", SearchMode::Commands, SourceFilter::All),
+        ("web:", SearchMode::Web, SourceFilter::All),
+        ("calc:", SearchMode::Calc, SourceFilter::All),
+        ("bookmarks:", SearchMode::All, SourceFilter::Bookmarks),
+        ("bookmark:", SearchMode::All, SourceFilter::Bookmarks),
+        ("recents:", SearchMode::All, SourceFilter::Recents),
+        ("recent:", SearchMode::All, SourceFilter::Recents),
     ];
 
-    PREFIXES.iter().find_map(|(prefix, mode)| {
+    PREFIXES.iter().find_map(|(prefix, mode, source_filter)| {
         lowered
             .strip_prefix(prefix)
-            .map(|_| (*mode, raw[prefix.len()..].trim_start()))
+            .map(|_| (*mode, *source_filter, raw[prefix.len()..].trim_start()))
     })
 }
 
@@ -275,7 +289,7 @@ fn valid_domain_label(label: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueryInput, SearchMode, browser_target};
+    use super::{QueryInput, SearchMode, SourceFilter, browser_target};
 
     #[test]
     fn symbol_prefixes_override_the_default_mode() {
@@ -289,6 +303,19 @@ mod tests {
         let query = QueryInput::parse("SSH: prod-box", SearchMode::All);
         assert_eq!(query.mode, SearchMode::Ssh);
         assert_eq!(query.text, "prod-box");
+    }
+
+    #[test]
+    fn local_source_prefixes_filter_all_mode_search() {
+        let bookmark = QueryInput::parse("bookmark: rust docs", SearchMode::All);
+        assert_eq!(bookmark.mode, SearchMode::All);
+        assert_eq!(bookmark.source_filter, SourceFilter::Bookmarks);
+        assert_eq!(bookmark.text, "rust docs");
+
+        let recent = QueryInput::parse("RECENTS: report", SearchMode::Apps);
+        assert_eq!(recent.mode, SearchMode::All);
+        assert_eq!(recent.source_filter, SourceFilter::Recents);
+        assert_eq!(recent.text, "report");
     }
 
     #[test]
