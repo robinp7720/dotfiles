@@ -170,7 +170,8 @@
     },
     "custom/power": {
         "format": "",
-        "tooltip": "Power menu",
+        "tooltip": true,
+        "tooltip-format": "Power menu",
         "on-click": "~/.dotfiles/scripts/power_menu.sh"
     }
 }
