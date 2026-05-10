@@ -3,6 +3,7 @@ mod password;
 mod prediction;
 mod sources;
 
+use crate::model::PowerOperation;
 use crate::model::{Action, ResultItem, SearchMode};
 use crate::model::{PasswordOperation, WindowFocusTarget};
 use crate::password::{
@@ -408,6 +409,19 @@ fn activate_item(
     current_results: &Rc<RefCell<Vec<ResultItem>>>,
     previous_focus_target: Option<&WindowFocusTarget>,
 ) {
+    if let Action::Power {
+        operation,
+        confirmed: false,
+    } = item.action
+    {
+        if power_requires_confirmation(operation) {
+            let results = power_confirmation_results(operation);
+            rebuild_results(list, scroller, &results);
+            current_results.replace(results);
+            return;
+        }
+    }
+
     if let Action::Password {
         entry,
         operation: PasswordOperation::Inspect,
@@ -499,6 +513,9 @@ fn execute_action(
                 .spawn()
                 .context("failed to spawn command")?;
         }
+        Action::Power { operation, .. } => {
+            execute_power_operation(operation)?;
+        }
         Action::WebSearch { query } => {
             let base = std::env::var("DOT_LAUNCHER_SEARCH_URL")
                 .unwrap_or_else(|_| "https://duckduckgo.com/?q=".to_string());
@@ -517,6 +534,215 @@ fn execute_action(
     }
 
     window.close();
+    Ok(())
+}
+
+fn power_confirmation_results(operation: PowerOperation) -> Vec<ResultItem> {
+    vec![
+        ResultItem {
+            prediction_key: None,
+            title: format!("Confirm {}", power_operation_title(operation)),
+            subtitle: power_operation_confirmation(operation).to_string(),
+            source: "Power",
+            icon_name: power_operation_icon(operation).to_string(),
+            score: 100,
+            action: Action::Power {
+                operation,
+                confirmed: true,
+            },
+        },
+        ResultItem {
+            prediction_key: None,
+            title: "Cancel".to_string(),
+            subtitle: "Keep the current session untouched".to_string(),
+            source: "Power",
+            icon_name: "process-stop-symbolic".to_string(),
+            score: 90,
+            action: Action::None,
+        },
+    ]
+}
+
+fn power_requires_confirmation(operation: PowerOperation) -> bool {
+    !matches!(operation, PowerOperation::Lock)
+}
+
+fn power_operation_title(operation: PowerOperation) -> &'static str {
+    match operation {
+        PowerOperation::Lock => "Lock",
+        PowerOperation::Suspend => "Suspend",
+        PowerOperation::Logout => "Logout",
+        PowerOperation::Reboot => "Reboot",
+        PowerOperation::Shutdown => "Shutdown",
+    }
+}
+
+fn power_operation_confirmation(operation: PowerOperation) -> &'static str {
+    match operation {
+        PowerOperation::Lock => "Blank the screen and keep the session running",
+        PowerOperation::Suspend => "Lock first, then suspend the machine",
+        PowerOperation::Logout => "Close the current desktop session now",
+        PowerOperation::Reboot => "Restart the system now",
+        PowerOperation::Shutdown => "Power off the system now",
+    }
+}
+
+fn power_operation_icon(operation: PowerOperation) -> &'static str {
+    match operation {
+        PowerOperation::Lock => "system-lock-screen-symbolic",
+        PowerOperation::Suspend => "media-playback-pause-symbolic",
+        PowerOperation::Logout => "system-log-out-symbolic",
+        PowerOperation::Reboot => "system-reboot-symbolic",
+        PowerOperation::Shutdown => "system-shutdown-symbolic",
+    }
+}
+
+fn execute_power_operation(operation: PowerOperation) -> Result<()> {
+    match operation {
+        PowerOperation::Lock => lock_session(),
+        PowerOperation::Suspend => {
+            let _ = lock_session();
+            thread::sleep(Duration::from_secs(1));
+            spawn_system_command("systemctl", &["suspend"], "failed to suspend")
+        }
+        PowerOperation::Logout => logout_session(),
+        PowerOperation::Reboot => {
+            spawn_system_command("systemctl", &["reboot"], "failed to reboot")
+        }
+        PowerOperation::Shutdown => {
+            spawn_system_command("systemctl", &["poweroff"], "failed to power off")
+        }
+    }
+}
+
+fn lock_session() -> Result<()> {
+    if is_hyprland_session() && !process_running_for_user("hyprlock") {
+        if spawn_optional_command("hyprlock", &[])?.is_some() {
+            return Ok(());
+        }
+    }
+
+    if lock_current_logind_session()? {
+        return Ok(());
+    }
+
+    if !process_running_for_user("hyprlock") && spawn_optional_command("hyprlock", &[])?.is_some() {
+        return Ok(());
+    }
+
+    anyhow::bail!("no lock command is available for the current session");
+}
+
+fn logout_session() -> Result<()> {
+    if is_hyprland_session() && spawn_optional_command("hyprctl", &["dispatch", "exit"])?.is_some()
+    {
+        return Ok(());
+    }
+
+    if is_niri_session()
+        && spawn_optional_command("niri", &["msg", "action", "quit", "--skip-confirmation"])?
+            .is_some()
+    {
+        return Ok(());
+    }
+
+    if is_bspwm_session() && spawn_optional_command("bspc", &["quit"])?.is_some() {
+        return Ok(());
+    }
+
+    if let Some(session_id) = current_logind_session_id() {
+        spawn_system_command(
+            "loginctl",
+            &["terminate-session", &session_id],
+            "failed to terminate current session",
+        )?;
+        return Ok(());
+    }
+
+    anyhow::bail!("no safe logout method found for the current session");
+}
+
+fn lock_current_logind_session() -> Result<bool> {
+    if let Some(session_id) = current_logind_session_id() {
+        return spawn_optional_command("loginctl", &["lock-session", &session_id])
+            .map(|child| child.is_some());
+    }
+
+    spawn_optional_command("loginctl", &["lock-session"]).map(|child| child.is_some())
+}
+
+fn current_logind_session_id() -> Option<String> {
+    if let Ok(session_id) = std::env::var("XDG_SESSION_ID") {
+        if !session_id.trim().is_empty() {
+            return Some(session_id);
+        }
+    }
+
+    let user = std::env::var("USER").ok()?;
+    let output = Command::new("loginctl")
+        .args(["show-user", &user, "--property=Display", "--value"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let session_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if session_id.is_empty() || session_id == "n/a" {
+        None
+    } else {
+        Some(session_id)
+    }
+}
+
+fn is_hyprland_session() -> bool {
+    std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() || desktop_matches("hyprland")
+}
+
+fn is_niri_session() -> bool {
+    std::env::var("NIRI_SOCKET").is_ok() || desktop_matches("niri")
+}
+
+fn is_bspwm_session() -> bool {
+    std::env::var("BSPWM_SOCKET").is_ok() || desktop_matches("bspwm")
+}
+
+fn desktop_matches(wanted: &str) -> bool {
+    let raw = std::env::var("XDG_CURRENT_DESKTOP")
+        .or_else(|_| std::env::var("XDG_SESSION_DESKTOP"))
+        .or_else(|_| std::env::var("DESKTOP_SESSION"))
+        .unwrap_or_default();
+
+    raw.split([':', ';'])
+        .any(|token| token.eq_ignore_ascii_case(wanted))
+}
+
+fn process_running_for_user(process_name: &str) -> bool {
+    let Ok(uid) = std::env::var("UID") else {
+        return false;
+    };
+    if uid.trim().is_empty() {
+        return false;
+    }
+
+    Command::new("pgrep")
+        .args(["-u", &uid, "-x", process_name])
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn spawn_optional_command(program: &str, args: &[&str]) -> Result<Option<std::process::Child>> {
+    match Command::new(program).args(args).spawn() {
+        Ok(child) => Ok(Some(child)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to spawn {program}")),
+    }
+}
+
+fn spawn_system_command(program: &str, args: &[&str], message: &str) -> Result<()> {
+    spawn_optional_command(program, args)
+        .with_context(|| message.to_string())?
+        .with_context(|| format!("{program} is not installed"))?;
     Ok(())
 }
 
@@ -1027,9 +1253,10 @@ mod tests {
     use super::{
         LAUNCHER_SHADOW_BLUR_PX, LAUNCHER_SHADOW_Y_OFFSET_PX, LAUNCHER_SURFACE_MARGIN_BOTTOM_PX,
         LAUNCHER_SURFACE_MARGIN_PX, action_failure_result, default_ssh_terminal,
-        inspected_password_results, launcher_css, row_tooltip_text,
+        inspected_password_results, launcher_css, power_confirmation_results,
+        power_requires_confirmation, row_tooltip_text,
     };
-    use crate::model::{Action, PasswordOperation, ResultItem};
+    use crate::model::{Action, PasswordOperation, PowerOperation, ResultItem};
     use crate::password::parse_credential;
     use std::fs::{self, File};
 
@@ -1106,6 +1333,30 @@ mod tests {
                 >= LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX
         );
         assert!(launcher_css().contains("box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);"));
+    }
+
+    #[test]
+    fn power_actions_confirm_session_ending_operations() {
+        assert!(!power_requires_confirmation(PowerOperation::Lock));
+        assert!(power_requires_confirmation(PowerOperation::Suspend));
+        assert!(power_requires_confirmation(PowerOperation::Logout));
+        assert!(power_requires_confirmation(PowerOperation::Reboot));
+        assert!(power_requires_confirmation(PowerOperation::Shutdown));
+    }
+
+    #[test]
+    fn power_confirmation_results_execute_native_power_actions() {
+        let results = power_confirmation_results(PowerOperation::Shutdown);
+
+        assert_eq!(results[0].title, "Confirm Shutdown");
+        assert!(matches!(
+            results[0].action,
+            Action::Power {
+                operation: PowerOperation::Shutdown,
+                confirmed: true,
+            }
+        ));
+        assert!(matches!(results[1].action, Action::None));
     }
 
     #[test]

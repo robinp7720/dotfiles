@@ -38,6 +38,15 @@ pub enum WindowFocusTarget {
     X11 { window_id: String },
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PowerOperation {
+    Lock,
+    Suspend,
+    Logout,
+    Reboot,
+    Shutdown,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Action {
     LaunchApp {
@@ -61,6 +70,10 @@ pub enum Action {
     },
     RunCommand {
         command: String,
+    },
+    Power {
+        operation: PowerOperation,
+        confirmed: bool,
     },
     OpenUrl {
         url: String,

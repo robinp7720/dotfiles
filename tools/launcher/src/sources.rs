@@ -1,6 +1,6 @@
 use crate::model::{
-    Action, PasswordOperation, QueryInput, ResultItem, SearchMode, SourceFilter, WindowFocusTarget,
-    browser_target, score_text,
+    Action, PasswordOperation, PowerOperation, QueryInput, ResultItem, SearchMode, SourceFilter,
+    WindowFocusTarget, browser_target, score_text,
 };
 use crate::prediction::{PredictionStore, StoredPrediction};
 use gtk4::gio;
@@ -20,9 +20,70 @@ const MAX_FILES: usize = 8;
 const MAX_SSH: usize = 6;
 const MAX_PASS: usize = 8;
 const MAX_COMMANDS: usize = 8;
+const MAX_POWER_ACTIONS: usize = 5;
 const MAX_BOOKMARKS: usize = 8;
 const MAX_RECENTS: usize = 8;
 const MIN_FILE_QUERY_CHARS: usize = 2;
+
+struct PowerAction {
+    operation: PowerOperation,
+    title: &'static str,
+    subtitle: &'static str,
+    icon_name: &'static str,
+    search_terms: &'static [&'static str],
+}
+
+const POWER_ACTIONS: &[PowerAction] = &[
+    PowerAction {
+        operation: PowerOperation::Lock,
+        title: "Lock",
+        subtitle: "Blank the screen and keep the session running",
+        icon_name: "system-lock-screen-symbolic",
+        search_terms: &["lock", "screen lock", "secure", "power", "session"],
+    },
+    PowerAction {
+        operation: PowerOperation::Suspend,
+        title: "Suspend",
+        subtitle: "Lock first, then suspend the machine",
+        icon_name: "media-playback-pause-symbolic",
+        search_terms: &["suspend", "sleep", "standby", "power", "session"],
+    },
+    PowerAction {
+        operation: PowerOperation::Logout,
+        title: "Logout",
+        subtitle: "Close the current desktop session after confirmation",
+        icon_name: "system-log-out-symbolic",
+        search_terms: &[
+            "logout",
+            "log out",
+            "sign out",
+            "exit session",
+            "power",
+            "session",
+        ],
+    },
+    PowerAction {
+        operation: PowerOperation::Reboot,
+        title: "Reboot",
+        subtitle: "Restart the system after confirmation",
+        icon_name: "system-reboot-symbolic",
+        search_terms: &["reboot", "restart", "power", "session"],
+    },
+    PowerAction {
+        operation: PowerOperation::Shutdown,
+        title: "Shutdown",
+        subtitle: "Power off the system after confirmation",
+        icon_name: "system-shutdown-symbolic",
+        search_terms: &[
+            "shutdown",
+            "shut down",
+            "poweroff",
+            "power off",
+            "power",
+            "session",
+        ],
+    },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FileSearchBackend {
@@ -172,6 +233,10 @@ impl Sources {
 
         if query.mode.includes(SearchMode::Pass) {
             results.extend(self.search_pass(&query, now));
+        }
+
+        if matches!(query.mode, SearchMode::All | SearchMode::Commands) {
+            results.extend(self.search_power(&query, now));
         }
 
         if query.mode == SearchMode::All {
@@ -597,6 +662,33 @@ impl Sources {
         sort_results(&mut suggestions, MAX_COMMANDS);
         items.extend(suggestions);
 
+        items
+    }
+
+    fn search_power(&self, query: &QueryInput, now: u64) -> Vec<ResultItem> {
+        let mut items = POWER_ACTIONS
+            .iter()
+            .filter_map(|action| {
+                power_action_score(action, &query.text).map(|score| (action, score))
+            })
+            .map(|(action, score)| {
+                let prediction_key = power_prediction_key(action.operation);
+                ResultItem {
+                    prediction_key: Some(prediction_key.clone()),
+                    title: action.title.to_string(),
+                    subtitle: action.subtitle.to_string(),
+                    source: "Power",
+                    icon_name: action.icon_name.to_string(),
+                    score: score + 950 + self.prediction_boost(&prediction_key, now),
+                    action: Action::Power {
+                        operation: action.operation,
+                        confirmed: false,
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+
+        sort_results(&mut items, MAX_POWER_ACTIONS);
         items
     }
 
@@ -1237,6 +1329,28 @@ fn command_prediction_key(command: &str) -> String {
     format!("cmd:{command}")
 }
 
+fn power_prediction_key(operation: PowerOperation) -> String {
+    format!("power:{}", power_operation_id(operation))
+}
+
+fn power_action_score(action: &PowerAction, query: &str) -> Option<i32> {
+    action
+        .search_terms
+        .iter()
+        .filter_map(|term| score_text(term, query))
+        .max()
+}
+
+fn power_operation_id(operation: PowerOperation) -> &'static str {
+    match operation {
+        PowerOperation::Lock => "lock",
+        PowerOperation::Suspend => "suspend",
+        PowerOperation::Logout => "logout",
+        PowerOperation::Reboot => "reboot",
+        PowerOperation::Shutdown => "shutdown",
+    }
+}
+
 fn url_prediction_key(url: &str) -> String {
     format!("url:{url}")
 }
@@ -1641,7 +1755,8 @@ mod tests {
         window_focus_command,
     };
     use crate::model::{
-        Action, PasswordOperation, QueryInput, SearchMode, SourceFilter, WindowFocusTarget,
+        Action, PasswordOperation, PowerOperation, QueryInput, SearchMode, SourceFilter,
+        WindowFocusTarget,
     };
     use crate::prediction::{PredictionStore, StoredPrediction};
     use std::path::Path;
@@ -1956,6 +2071,40 @@ mod tests {
         assert!(matches!(
             &results[0].action,
             Action::RunCommand { command } if command == "systemctl suspend"
+        ));
+    }
+
+    #[test]
+    fn all_mode_surfaces_curated_power_actions() {
+        let sources = empty_sources();
+
+        let results = sources.search("reboot", SearchMode::All);
+
+        assert_eq!(results[0].source, "Power");
+        assert_eq!(results[0].title, "Reboot");
+        assert!(matches!(
+            &results[0].action,
+            Action::Power {
+                operation: PowerOperation::Reboot,
+                confirmed: false,
+            }
+        ));
+    }
+
+    #[test]
+    fn power_actions_match_common_synonyms() {
+        let sources = empty_sources();
+
+        let results = sources.search("sleep", SearchMode::All);
+
+        assert_eq!(results[0].source, "Power");
+        assert_eq!(results[0].title, "Suspend");
+        assert!(matches!(
+            &results[0].action,
+            Action::Power {
+                operation: PowerOperation::Suspend,
+                confirmed: false,
+            }
         ));
     }
 
