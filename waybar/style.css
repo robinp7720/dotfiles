@@ -110,25 +110,10 @@ window#waybar.hidden {
   font-weight: 600;
 }
 
-#custom-next-event.hidden {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: transparent;
-}
-
-#custom-keyboard-layout.hidden {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: transparent;
-}
-
-#custom-battery.hidden {
+#custom-next-event.hidden,
+#custom-keyboard-layout.hidden,
+#custom-battery.hidden,
+#custom-powerprofile.hidden {
   min-width: 0;
   margin: 0;
   padding: 0;
