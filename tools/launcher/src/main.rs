@@ -14,6 +14,7 @@ use crate::sources::{Sources, focus_window, focused_window_target};
 use anyhow::{Context, Result};
 use clap::Parser;
 use gtk4::gdk;
+use gtk4::gdk::prelude::*;
 use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -50,6 +51,20 @@ const LAUNCHER_SHADOW_Y_OFFSET_PX: i32 = 18;
 const LAUNCHER_SHADOW_BLUR_PX: i32 = 44;
 const LAUNCHER_SURFACE_MARGIN_BOTTOM_PX: i32 =
     LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX + 8;
+
+fn layer_shell_enabled(display_is_wayland: bool, protocol_supported: bool) -> bool {
+    display_is_wayland && protocol_supported
+}
+
+fn layer_shell_supported() -> bool {
+    let display_is_wayland =
+        gdk::Display::default().is_some_and(|display| display.backend().is_wayland());
+    if !display_is_wayland {
+        return false;
+    }
+
+    layer_shell_enabled(display_is_wayland, gtk4_layer_shell::is_supported())
+}
 
 fn main() {
     if let Err(error) = run() {
@@ -89,14 +104,16 @@ fn build_ui(
         .title("Launcher")
         .build();
 
-    window.init_layer_shell();
-    window.set_layer(gtk4_layer_shell::Layer::Overlay);
-    // The launcher should behave like a modal overlay. On-demand focus is
-    // compositor-defined and can leave the entry without a working key grab.
-    window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::Exclusive);
-    window.set_namespace(Some("dot-launcher"));
-    window.set_anchor(gtk4_layer_shell::Edge::Top, true);
-    window.set_margin(gtk4_layer_shell::Edge::Top, LAUNCHER_LAYER_TOP_MARGIN_PX);
+    if layer_shell_supported() {
+        window.init_layer_shell();
+        window.set_layer(gtk4_layer_shell::Layer::Overlay);
+        // The launcher should behave like a modal overlay. On-demand focus is
+        // compositor-defined and can leave the entry without a working key grab.
+        window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::Exclusive);
+        window.set_namespace(Some("dot-launcher"));
+        window.set_anchor(gtk4_layer_shell::Edge::Top, true);
+        window.set_margin(gtk4_layer_shell::Edge::Top, LAUNCHER_LAYER_TOP_MARGIN_PX);
+    }
 
     apply_css();
     let previous_focus_target = Rc::new(focused_window_target());
@@ -1253,7 +1270,7 @@ mod tests {
     use super::{
         LAUNCHER_SHADOW_BLUR_PX, LAUNCHER_SHADOW_Y_OFFSET_PX, LAUNCHER_SURFACE_MARGIN_BOTTOM_PX,
         LAUNCHER_SURFACE_MARGIN_PX, action_failure_result, default_ssh_terminal,
-        inspected_password_results, launcher_css, power_confirmation_results,
+        inspected_password_results, launcher_css, layer_shell_enabled, power_confirmation_results,
         power_requires_confirmation, row_tooltip_text,
     };
     use crate::model::{Action, PasswordOperation, PowerOperation, ResultItem};
@@ -1333,6 +1350,14 @@ mod tests {
                 >= LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX
         );
         assert!(launcher_css().contains("box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);"));
+    }
+
+    #[test]
+    fn layer_shell_requires_wayland_and_protocol_support() {
+        assert!(layer_shell_enabled(true, true));
+        assert!(!layer_shell_enabled(false, true));
+        assert!(!layer_shell_enabled(true, false));
+        assert!(!layer_shell_enabled(false, false));
     }
 
     #[test]
