@@ -35,6 +35,16 @@ escape_markup() {
   printf '%s' "$value"
 }
 
+run_status_command() {
+  local timeout_seconds="${STATUS_TIMEOUT_SECONDS:-1}"
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$timeout_seconds" "$@" 2>/dev/null
+  else
+    "$@" 2>/dev/null
+  fi
+}
+
 render_row() {
   local icon="$1"
   local title="$2"
@@ -59,16 +69,22 @@ bluetooth_status() {
     return
   fi
 
-  local state connected
-  state="$(bluetoothctl show 2>/dev/null | awk '/Powered:/ {print $2}')"
-  connected="$(bluetoothctl devices Connected 2>/dev/null | wc -l | tr -d ' ')"
+  local state connected show_output connected_output
+  show_output="$(run_status_command bluetoothctl show || true)"
+  state="$(awk '/Powered:/ {print $2}' <<<"$show_output")"
 
-  if [[ "$state" != "yes" ]]; then
+  if [[ -z "$state" ]]; then
+    printf 'Unavailable\n'
+  elif [[ "$state" != "yes" ]]; then
     printf 'Off\n'
-  elif [[ "$connected" -gt 0 ]]; then
-    printf 'On · %s connected\n' "$connected"
   else
-    printf 'On\n'
+    connected_output="$(run_status_command bluetoothctl devices Connected || true)"
+    connected="$(grep -c '^Device ' <<<"$connected_output" || true)"
+    if [[ "$connected" -gt 0 ]]; then
+      printf 'On · %s connected\n' "$connected"
+    else
+      printf 'On\n'
+    fi
   fi
 }
 
@@ -78,7 +94,10 @@ headphones_status() {
     return
   fi
 
-  if bluetoothctl info "$HEADPHONES_MAC" 2>/dev/null | grep -q "Connected: yes"; then
+  local info
+  info="$(run_status_command bluetoothctl info "$HEADPHONES_MAC" || true)"
+
+  if grep -q "Connected: yes" <<<"$info"; then
     printf 'Connected\n'
   else
     printf 'Disconnected\n'
@@ -92,7 +111,7 @@ power_profile_status() {
   fi
 
   local profile
-  profile="$(powerprofilesctl get 2>/dev/null || true)"
+  profile="$(run_status_command powerprofilesctl get || true)"
   case "$profile" in
     performance)
       printf 'Performance\n'
