@@ -1,0 +1,25 @@
+#3.6.2
+
+#[gtk-about]
+[Desktop Entry]
+
+#F[Icon]
+frame_maininfo=
+Container=_MainDock_
+sep_display=
+Name=Firefox
+Icon=firefox
+Exec=/usr/lib/firefox/firefox %u
+
+#X[Extra parameters]
+frame_extra=
+prevent inhibate=false
+StartupWMClass=firefox
+Terminal=false
+Path=
+ShowOnViewport=0
+Order=1
+
+Icon Type=0
+Type=Application
+Origin=/usr/share/applications/firefox.desktop

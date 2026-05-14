@@ -33,7 +33,7 @@
     origin = top-right
 
     # Offset from the origin
-    offset = 16x18
+    offset = 18x42
 
     # Scale factor. It is auto-detected if value is 0.
     scale = 0
@@ -73,7 +73,7 @@
     # The transparency of the window.  Range: [0; 100].
     # This option will only work if a compositing window manager is
     # present (e.g. xcompmgr, compiz, etc.). (X11 only)
-    transparency = 0
+    transparency = 6
 
     # Draw a line of "separator_height" pixel height between two
     # notifications.
@@ -101,7 +101,7 @@
     # If value is greater than 0, separator_height will be ignored and a border
     # of size frame_width will be drawn around each notification instead.
     # Click events on gaps do not currently propagate to applications below.
-    gap_size = 8
+    gap_size = 10
 
     # Define a color for the separator.
     # possible values are:
@@ -250,7 +250,7 @@
     # corners.
     # The radius will be automatically lowered if it exceeds half of the
     # notification height to avoid clipping text and/or icons.
-    corner_radius = 12
+    corner_radius = 14
 
     # Ignore the dbus closeNotification message.
     # Useful to enforce the timeout set by dunst configuration. Without this
@@ -313,8 +313,8 @@
 [urgency_low]
     # IMPORTANT: colors have to be defined in quotation marks.
     # Otherwise the "#" and following would be interpreted as a comment.
-    background = "{{ colors.secondary_container.default.hex }}"
-    foreground = "{{ colors.on_secondary_container.default.hex }}"
+    background = "{{ colors.surface_container_low.default.hex }}"
+    foreground = "{{ colors.on_surface_variant.default.hex }}"
     timeout = 10
     # Icon for notifications with low urgency, uncomment to enable
     default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
@@ -322,8 +322,7 @@
 [urgency_normal]
     background = "{{ colors.surface_container.default.hex }}"
     foreground = "{{ colors.on_surface.default.hex }}"
-    frame_color = "{{ colors.outline_variant.default.hex }}"
-    frame_color = "#94e2d5"
+    frame_color = "{{ colors.primary.default.hex }}"
     timeout = 30
     # Icon for notifications with normal urgency, uncomment to enable
     default_icon = "/usr/share/icons/Moka/96x96@2x/apps/preferences-system-notifications.png"
@@ -331,7 +330,7 @@
 [urgency_critical]
     background = "{{ colors.error.default.hex }}"
     foreground = "{{ colors.on_error.default.hex }}"
-    #frame_color = "#ff0000"
+    frame_color = "{{ colors.error.default.hex }}"
     timeout = 0
     # Icon for notifications with critical urgency, uncomment to enable
     #default_icon = /path/to/icon

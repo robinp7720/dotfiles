@@ -12,6 +12,6 @@ start_polybar
 
 assign_desktops_if_present DP-2-2 "I" "II" "III" "IV" "V"
 
-set_global_padding 40 0 0 0
+set_global_padding 40 76 0 0
 
 start_background superpaper

@@ -94,6 +94,7 @@ mkdir -p "$HOME/.config"
 
 directories=(
   "bspwm"
+  "cairo-dock"
   "dunst"
   "hypr"
   "kitty"

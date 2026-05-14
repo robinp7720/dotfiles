@@ -19,20 +19,22 @@ thunar --daemon &
 # Run the main mode
 ~/.config/bspwm/modes/all_monitors.sh
 
-cairo-dock &
+if command -v cairo-dock >/dev/null 2>&1; then
+  cairo-dock -X &
+fi
 
 # Scripts to automate desktop actions
 "$HOME/.config/bspwm/focus_watcher" &
 
 # Set the border colors.
-bspc config normal_border_color "#2a2a2a"
-bspc config active_border_color "#b7c9d9"
-bspc config focused_border_color "#8ccdff"
-bspc config presel_border_color "#FA2C0D"
+bspc config normal_border_color "#152222"
+bspc config active_border_color "#9bd4a0"
+bspc config focused_border_color "#86d992"
+bspc config presel_border_color "#ffb4ab"
 
 ## SET ALL THE BSPWM WM OPTIONS
 bspc config border_width    2
-bspc config window_gap      10
+bspc config window_gap      12
 
 bspc config split_ratio           0.50
 bspc config focus_follows_pointer true

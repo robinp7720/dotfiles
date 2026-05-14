@@ -10,10 +10,14 @@ rofi/colors.rasi
 eww/colors.scss
 niri/colors.kdl
 polybar/colors.ini
+cairo-dock/current_theme/cairo-dock.conf
+cairo-dock/current_theme/images/bg.svg
+cairo-dock/.cairo-dock-need-save
 
 # Local workspace metadata
 AGENTS.md
 .codex
+.superpowers/
 
 # Rust build artifacts
 tools/*/target/

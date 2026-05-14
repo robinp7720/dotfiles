@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="120" viewBox="0 0 800 120">
+  <defs>
+    <linearGradient id="dock-glass" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="{{ colors.surface_container_high.default.hex }}" stop-opacity="0.92"/>
+      <stop offset="0.55" stop-color="{{ colors.surface.default.hex }}" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="{{ colors.surface_container_lowest.default.hex }}" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="dock-accent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="{{ colors.primary.default.hex }}" stop-opacity="0.00"/>
+      <stop offset="0.50" stop-color="{{ colors.primary.default.hex }}" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="{{ colors.tertiary.default.hex }}" stop-opacity="0.00"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="120" rx="22" fill="url(#dock-glass)"/>
+  <path d="M0 69 C92 34 152 36 252 55 C373 78 469 85 593 56 C685 34 748 39 800 56 L800 120 L0 120 Z"
+        fill="{{ colors.surface_container_high.default.hex }}" fill-opacity="0.64"/>
+  <rect x="48" y="8" width="704" height="2" rx="1" fill="url(#dock-accent)"/>
+</svg>

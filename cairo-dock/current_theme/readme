@@ -1,0 +1,9 @@
+Classic Dock Studio theme for the bspwm/Xorg session.
+
+The runtime Cairo-Dock config and dock background are generated from Matugen:
+
+- matugen/templates/cairo-dock.conf
+- matugen/templates/cairo-dock-bg.svg
+
+Static launchers and indicator images are tracked here so setup.sh can link the
+whole cairo-dock directory into ~/.config/cairo-dock.

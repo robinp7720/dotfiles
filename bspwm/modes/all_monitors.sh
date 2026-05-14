@@ -10,7 +10,7 @@ prepare_mode
 run_screenlayout "$HOME/.screenlayout/all_monitors.sh"
 
 start_polybar
-set_global_padding 40 0 0 0
+set_global_padding 40 76 0 0
 
 assign_desktops_if_present DP-2 "I" "II" "III" "IV" "V"
 assign_desktops_if_present DVI-D-0 "VI" "VII" "VIII" "IX" "X"

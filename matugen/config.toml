@@ -22,6 +22,14 @@ input_path = '~/.config/matugen/templates/polybar.ini'
 output_path = '~/.dotfiles/polybar/colors.ini'
 post_hook = 'polybar-msg cmd restart'
 
+[templates.cairo_dock]
+input_path = '~/.config/matugen/templates/cairo-dock.conf'
+output_path = '~/.config/cairo-dock/current_theme/cairo-dock.conf'
+
+[templates.cairo_dock_background]
+input_path = '~/.config/matugen/templates/cairo-dock-bg.svg'
+output_path = '~/.config/cairo-dock/current_theme/images/bg.svg'
+
 [templates.dunst]
 input_path = '~/.config/matugen/templates/dunstrc'
 output_path = '~/.config/dunst/dunstrc'

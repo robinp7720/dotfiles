@@ -1,0 +1,9 @@
+[Launch]
+last version=3.6.2
+default backend=
+last year=2026
+
+ping server=true
+
+[Gui]
+mode=1

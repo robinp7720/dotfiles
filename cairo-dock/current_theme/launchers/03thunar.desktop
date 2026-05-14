@@ -1,0 +1,25 @@
+#3.6.2
+
+#[gtk-about]
+[Desktop Entry]
+
+#F[Icon]
+frame_maininfo=
+Container=_MainDock_
+sep_display=
+Name=Thunar
+Icon=org.xfce.thunar
+Exec=thunar %U
+
+#X[Extra parameters]
+frame_extra=
+prevent inhibate=false
+StartupWMClass=Thunar
+Terminal=false
+Path=
+ShowOnViewport=0
+Order=3
+
+Icon Type=0
+Type=Application
+Origin=/usr/share/applications/thunar.desktop
