@@ -30,6 +30,7 @@ new_repo() {
   git -C "$repo" init -q
   git -C "$repo" config user.name "Self Improve Test"
   git -C "$repo" config user.email "self-improve-test@localhost"
+  git -C "$repo" config commit.gpgsign false
   printf 'initial\n' >"$repo/README.md"
   git -C "$repo" add README.md
   git -C "$repo" commit -q -m "test: initial"
