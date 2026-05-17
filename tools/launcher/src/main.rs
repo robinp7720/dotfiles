@@ -899,7 +899,14 @@ fn clear_xclip_clipboard_after(timeout_seconds: u64) {
 }
 
 fn wayland_available() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some()
+    wayland_available_for_session(
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+    )
+}
+
+fn wayland_available_for_session(session_type: Option<&str>, wayland_display_set: bool) -> bool {
+    wayland_display_set && !session_type.is_some_and(|session| session.eq_ignore_ascii_case("x11"))
 }
 
 fn command_exists(program: &str) -> bool {
@@ -1271,7 +1278,7 @@ mod tests {
         LAUNCHER_SHADOW_BLUR_PX, LAUNCHER_SHADOW_Y_OFFSET_PX, LAUNCHER_SURFACE_MARGIN_BOTTOM_PX,
         LAUNCHER_SURFACE_MARGIN_PX, action_failure_result, default_ssh_terminal,
         inspected_password_results, launcher_css, layer_shell_enabled, power_confirmation_results,
-        power_requires_confirmation, row_tooltip_text,
+        power_requires_confirmation, row_tooltip_text, wayland_available_for_session,
     };
     use crate::model::{Action, PasswordOperation, PowerOperation, ResultItem};
     use crate::password::parse_credential;
@@ -1358,6 +1365,11 @@ mod tests {
         assert!(!layer_shell_enabled(false, true));
         assert!(!layer_shell_enabled(true, false));
         assert!(!layer_shell_enabled(false, false));
+    }
+
+    #[test]
+    fn x11_session_ignores_stray_wayland_display_for_autotype() {
+        assert!(!wayland_available_for_session(Some("x11"), true));
     }
 
     #[test]
