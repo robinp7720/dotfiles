@@ -51,6 +51,7 @@ const LAUNCHER_SHADOW_Y_OFFSET_PX: i32 = 18;
 const LAUNCHER_SHADOW_BLUR_PX: i32 = 44;
 const LAUNCHER_SURFACE_MARGIN_BOTTOM_PX: i32 =
     LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX + 8;
+const AUTOTYPE_AFTER_CLOSE_DELAY_MS: u64 = 180;
 
 fn layer_shell_enabled(display_is_wayland: bool, protocol_supported: bool) -> bool {
     display_is_wayland && protocol_supported
@@ -840,18 +841,36 @@ fn type_secret_steps(
     previous_focus_target: Option<&WindowFocusTarget>,
     steps: Vec<TypeStep>,
 ) -> Result<()> {
-    let target = previous_focus_target.context("no previously focused window was captured")?;
+    let target = previous_focus_target
+        .context("no previously focused window was captured")?
+        .clone();
     if !type_backend_available() {
         anyhow::bail!("wtype or xdotool is required for password autotype");
     }
 
+    let application_hold = window.application().map(|app| app.hold());
+    window.close();
+
+    glib::timeout_add_local_once(
+        Duration::from_millis(AUTOTYPE_AFTER_CLOSE_DELAY_MS),
+        move || {
+            if let Err(error) = run_type_secret_steps(&target, steps) {
+                eprintln!("password autotype failed: {error:?}");
+            }
+            drop(application_hold);
+        },
+    );
+
+    Ok(())
+}
+
+fn run_type_secret_steps(target: &WindowFocusTarget, steps: Vec<TypeStep>) -> Result<()> {
     let status = focus_window(target).context("failed to refocus previous window")?;
     if !status.success() {
         anyhow::bail!("failed to refocus previous window");
     }
 
-    window.close();
-    thread::sleep(Duration::from_millis(160));
+    thread::sleep(Duration::from_millis(80));
 
     let commands = if wayland_available() && command_exists("wtype") {
         wtype_commands_for_steps(&steps)
@@ -902,11 +921,18 @@ fn wayland_available() -> bool {
     wayland_available_for_session(
         std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
         std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        is_hyprland_session() || is_niri_session(),
     )
 }
 
-fn wayland_available_for_session(session_type: Option<&str>, wayland_display_set: bool) -> bool {
-    wayland_display_set && !session_type.is_some_and(|session| session.eq_ignore_ascii_case("x11"))
+fn wayland_available_for_session(
+    session_type: Option<&str>,
+    wayland_display_set: bool,
+    known_wayland_compositor: bool,
+) -> bool {
+    wayland_display_set
+        && (known_wayland_compositor
+            || !session_type.is_some_and(|session| session.eq_ignore_ascii_case("x11")))
 }
 
 fn command_exists(program: &str) -> bool {
@@ -1369,7 +1395,12 @@ mod tests {
 
     #[test]
     fn x11_session_ignores_stray_wayland_display_for_autotype() {
-        assert!(!wayland_available_for_session(Some("x11"), true));
+        assert!(!wayland_available_for_session(Some("x11"), true, false));
+    }
+
+    #[test]
+    fn hyprland_session_uses_wayland_autotype_when_session_type_is_stale() {
+        assert!(wayland_available_for_session(Some("x11"), true, true));
     }
 
     #[test]
