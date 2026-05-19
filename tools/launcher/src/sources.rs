@@ -1034,7 +1034,8 @@ pub fn focused_window_target() -> Option<WindowFocusTarget> {
                 let parsed = serde_json::from_slice::<serde_json::Value>(&output.stdout).ok()?;
                 if let Some(address) = string_field(&parsed, "address") {
                     if !address.is_empty() && address != "0x0" {
-                        return Some(WindowFocusTarget::Hyprland { address });
+                        let xwayland = bool_field(&parsed, "xwayland").unwrap_or(false);
+                        return Some(WindowFocusTarget::Hyprland { address, xwayland });
                     }
                 }
             }
@@ -1071,7 +1072,7 @@ pub fn focused_window_target() -> Option<WindowFocusTarget> {
 
 pub fn window_focus_command(target: &WindowFocusTarget) -> (&'static str, Vec<String>) {
     match target {
-        WindowFocusTarget::Hyprland { address } => (
+        WindowFocusTarget::Hyprland { address, .. } => (
             "hyprctl",
             vec![
                 "dispatch".to_string(),
@@ -1136,7 +1137,10 @@ pub fn parse_hypr_windows_json(raw: &str) -> serde_json::Result<Vec<WindowEntry>
                 workspace,
                 search_blob,
                 focus_order,
-                focus_target: WindowFocusTarget::Hyprland { address },
+                focus_target: WindowFocusTarget::Hyprland {
+                    address,
+                    xwayland: bool_field(window, "xwayland").unwrap_or(false),
+                },
             })
         })
         .collect::<Vec<_>>();
@@ -1810,6 +1814,7 @@ mod tests {
                 "workspace": {"name": "2"},
                 "mapped": true,
                 "hidden": false,
+                "xwayland": true,
                 "focusHistoryID": 3
               },
               {
@@ -1832,7 +1837,8 @@ mod tests {
         assert_eq!(
             windows[0].focus_target,
             WindowFocusTarget::Hyprland {
-                address: "0xabc".to_string()
+                address: "0xabc".to_string(),
+                xwayland: true
             }
         );
     }
@@ -1841,6 +1847,7 @@ mod tests {
     fn builds_native_focus_command_for_hyprland_window() {
         let (program, args) = window_focus_command(&WindowFocusTarget::Hyprland {
             address: "0xabc".to_string(),
+            xwayland: false,
         });
 
         assert_eq!(program, "hyprctl");

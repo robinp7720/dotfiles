@@ -214,7 +214,7 @@ pub fn run_program_input(input: ProgramInput) -> Result<()> {
 mod tests {
     use super::{
         ProgramInput, TypeStep, default_login_steps, parse_credential, run_program_input,
-        wl_copy_command, wtype_commands_for_steps, xclip_command,
+        wl_copy_command, wtype_commands_for_steps, xclip_command, xdotool_commands_for_steps,
     };
     use std::fs;
 
@@ -278,6 +278,25 @@ mod tests {
         );
         assert_eq!(commands[0].stdin.as_deref(), Some("robin"));
         assert_eq!(commands[2].stdin.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn wtype_text_commands_do_not_add_a_typing_delay() {
+        let commands = wtype_commands_for_steps(&[TypeStep::Text("secret".to_string())]);
+
+        assert_eq!(commands[0].args, vec!["-"]);
+        assert_eq!(commands[0].stdin.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn xdotool_text_commands_do_not_add_a_typing_delay() {
+        let commands = xdotool_commands_for_steps(&[TypeStep::Text("secret".to_string())]);
+
+        assert_eq!(
+            commands[0].args,
+            vec!["type", "--clearmodifiers", "--file", "-"]
+        );
+        assert_eq!(commands[0].stdin.as_deref(), Some("secret"));
     }
 
     #[test]

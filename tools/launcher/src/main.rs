@@ -870,9 +870,16 @@ fn run_type_secret_steps(target: &WindowFocusTarget, steps: Vec<TypeStep>) -> Re
         anyhow::bail!("failed to refocus previous window");
     }
 
-    thread::sleep(Duration::from_millis(80));
+    let use_x11_backend = use_x11_type_backend(target) && command_exists("xdotool");
+    thread::sleep(Duration::from_millis(if use_x11_backend {
+        500
+    } else {
+        80
+    }));
 
-    let commands = if wayland_available() && command_exists("wtype") {
+    let commands = if use_x11_backend {
+        xdotool_commands_for_steps(&steps)
+    } else if wayland_available() && command_exists("wtype") {
         wtype_commands_for_steps(&steps)
     } else {
         xdotool_commands_for_steps(&steps)
@@ -887,6 +894,13 @@ fn run_type_secret_steps(target: &WindowFocusTarget, steps: Vec<TypeStep>) -> Re
 
 fn type_backend_available() -> bool {
     (wayland_available() && command_exists("wtype")) || command_exists("xdotool")
+}
+
+fn use_x11_type_backend(target: &WindowFocusTarget) -> bool {
+    matches!(
+        target,
+        WindowFocusTarget::Hyprland { xwayland: true, .. } | WindowFocusTarget::X11 { .. }
+    )
 }
 
 fn copy_secret(text: &str) -> Result<()> {
@@ -1306,7 +1320,7 @@ mod tests {
         inspected_password_results, launcher_css, layer_shell_enabled, power_confirmation_results,
         power_requires_confirmation, row_tooltip_text, wayland_available_for_session,
     };
-    use crate::model::{Action, PasswordOperation, PowerOperation, ResultItem};
+    use crate::model::{Action, PasswordOperation, PowerOperation, ResultItem, WindowFocusTarget};
     use crate::password::parse_credential;
     use std::fs::{self, File};
 
@@ -1401,6 +1415,18 @@ mod tests {
     #[test]
     fn hyprland_session_uses_wayland_autotype_when_session_type_is_stale() {
         assert!(wayland_available_for_session(Some("x11"), true, true));
+    }
+
+    #[test]
+    fn xwayland_hyprland_targets_use_the_x11_type_backend() {
+        assert!(super::use_x11_type_backend(&WindowFocusTarget::Hyprland {
+            address: "0xabc".to_string(),
+            xwayland: true,
+        }));
+        assert!(!super::use_x11_type_backend(&WindowFocusTarget::Hyprland {
+            address: "0xabc".to_string(),
+            xwayland: false,
+        }));
     }
 
     #[test]

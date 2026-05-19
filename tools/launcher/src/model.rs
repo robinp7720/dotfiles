@@ -33,7 +33,7 @@ pub struct ResultItem {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum WindowFocusTarget {
-    Hyprland { address: String },
+    Hyprland { address: String, xwayland: bool },
     Niri { id: u64 },
     X11 { window_id: String },
 }
