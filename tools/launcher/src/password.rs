@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn program_runner_writes_stdin_to_child() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "dot-launcher-program-input-{}-{}",
+            "Luma-program-input-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

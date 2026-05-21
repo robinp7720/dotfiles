@@ -181,7 +181,7 @@ fn source_label(source: &str) -> &'static str {
 fn prediction_state_path() -> Option<PathBuf> {
     dirs::state_dir()
         .or_else(|| dirs::home_dir().map(|home| home.join(".local/state")))
-        .map(|state| state.join("dot-launcher/predictions.json"))
+        .map(|state| state.join("Luma/predictions.json"))
 }
 
 #[cfg(test)]
@@ -192,7 +192,7 @@ mod tests {
 
     fn temp_history_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "dot-launcher-{name}-{}-{}.json",
+            "Luma-{name}-{}-{}.json",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

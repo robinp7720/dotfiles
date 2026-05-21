@@ -126,7 +126,7 @@ fn build_ui(
         // The launcher should behave like a modal overlay. On-demand focus is
         // compositor-defined and can leave the entry without a working key grab.
         window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::Exclusive);
-        window.set_namespace(Some("dot-launcher"));
+        window.set_namespace(Some("Luma"));
         window.set_anchor(gtk4_layer_shell::Edge::Top, true);
         window.set_margin(gtk4_layer_shell::Edge::Top, LAUNCHER_LAYER_TOP_MARGIN_PX);
     }
@@ -1705,7 +1705,7 @@ mod tests {
     #[test]
     fn prefers_launch_kitty_wrapper_when_it_is_executable() {
         let temp_home = std::env::temp_dir().join(format!(
-            "dot-launcher-test-{}-{}",
+            "Luma-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

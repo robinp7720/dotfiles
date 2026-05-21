@@ -98,7 +98,7 @@ Pressing Enter on a password result autotypes username, Tab, and password into t
 
 ## Notes
 
-- Predictive history is stored as plain JSON in the app state directory.
+- Predictive history is stored as plain JSON in `~/.local/state/Luma/predictions.json`.
 - File search requires `localsearch` to be installed and indexed.
 - Bookmark search reads Firefox `places.sqlite` through `sqlite3` when available and Chromium-family `Bookmarks` JSON directly.
 - Recent file search reads local `file://` entries from `recently-used.xbel`.
