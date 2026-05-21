@@ -7,8 +7,9 @@ use crate::model::PowerOperation;
 use crate::model::{Action, ResultItem, SearchMode};
 use crate::model::{PasswordOperation, WindowFocusTarget};
 use crate::password::{
-    Credential, TypeStep, default_login_steps, parse_credential, run_program_input,
-    wl_copy_command, wtype_commands_for_steps, xclip_command, xdotool_commands_for_steps,
+    Credential, TypeStep, default_login_steps, format_generated_pass_entry, generate_password,
+    parse_credential, pass_insert_command, run_program_input, wl_copy_command,
+    wtype_commands_for_steps, xclip_command, xdotool_commands_for_steps,
 };
 use crate::sources::{Sources, focus_window, focused_window_target};
 use anyhow::{Context, Result};
@@ -52,6 +53,20 @@ const LAUNCHER_SHADOW_BLUR_PX: i32 = 44;
 const LAUNCHER_SURFACE_MARGIN_BOTTOM_PX: i32 =
     LAUNCHER_SHADOW_BLUR_PX + LAUNCHER_SHADOW_Y_OFFSET_PX + 8;
 const AUTOTYPE_AFTER_CLOSE_DELAY_MS: u64 = 180;
+
+#[derive(Clone, Debug)]
+struct AddPasswordDraft {
+    entry: String,
+    username: Option<String>,
+    url: Option<String>,
+    step: AddPasswordStep,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AddPasswordStep {
+    Username,
+    Url,
+}
 
 fn layer_shell_enabled(display_is_wayland: bool, protocol_supported: bool) -> bool {
     display_is_wayland && protocol_supported
@@ -156,17 +171,30 @@ fn build_ui(
     window.set_child(Some(&outer));
 
     let current_results = Rc::new(RefCell::new(Vec::<ResultItem>::new()));
+    let add_password_draft = Rc::new(RefCell::new(None::<AddPasswordDraft>));
+    let clipboard_url = Rc::new(RefCell::new(None::<String>));
 
     {
         let sources = sources.clone();
         let list = list.clone();
         let scroller = scroller.clone();
         let current_results = current_results.clone();
+        let add_password_draft = add_password_draft.clone();
+        let clipboard_url = clipboard_url.clone();
         entry.connect_changed(move |entry| {
-            let query = entry.text().to_string();
-            let results = sources.search(&query, mode);
-            rebuild_results(&list, &scroller, &results);
-            current_results.replace(results);
+            if add_password_draft.borrow().is_some() {
+                return;
+            }
+
+            refresh_search_results(
+                entry,
+                &sources,
+                &list,
+                &scroller,
+                &current_results,
+                &clipboard_url,
+                mode,
+            );
         });
     }
 
@@ -176,6 +204,8 @@ fn build_ui(
         let scroller = scroller.clone();
         let window = window.clone();
         let sources = sources.clone();
+        let entry = entry.clone();
+        let add_password_draft = add_password_draft.clone();
         let current_results = current_results.clone();
         let previous_focus_target = previous_focus_target.clone();
         list.connect_row_activated(move |_, row| {
@@ -191,6 +221,8 @@ fn build_ui(
                     &status_list,
                     &scroller,
                     &current_results,
+                    &entry,
+                    &add_password_draft,
                     previous_focus_target.as_ref().as_ref(),
                 );
             }
@@ -206,7 +238,21 @@ fn build_ui(
         let activate_entry = entry.clone();
         let current_results = current_results.clone();
         let previous_focus_target = previous_focus_target.clone();
+        let add_password_draft = add_password_draft.clone();
         entry.connect_activate(move |_| {
+            if add_password_draft.borrow().is_some() {
+                advance_add_password_flow(
+                    &activate_entry,
+                    &sources,
+                    &status_list,
+                    &scroller,
+                    &current_results,
+                    &add_password_draft,
+                    mode,
+                );
+                return;
+            }
+
             let query = activate_entry.text().to_string();
             let selected = {
                 let results = current_results.borrow();
@@ -229,6 +275,8 @@ fn build_ui(
                     &status_list,
                     &scroller,
                     &current_results,
+                    &activate_entry,
+                    &add_password_draft,
                     previous_focus_target.as_ref().as_ref(),
                 );
             }
@@ -289,12 +337,130 @@ fn build_ui(
         }
     }
 
-    let initial_results = sources.search(initial_query.as_deref().unwrap_or_default(), mode);
-    rebuild_results(&list, &scroller, &initial_results);
-    current_results.replace(initial_results);
-
+    refresh_search_results(
+        &entry,
+        &sources,
+        &list,
+        &scroller,
+        &current_results,
+        &clipboard_url,
+        mode,
+    );
     window.present();
     request_initial_focus(&window, &entry);
+    schedule_clipboard_url_loads(
+        &entry,
+        &sources,
+        &list,
+        &scroller,
+        &current_results,
+        &clipboard_url,
+        &add_password_draft,
+        mode,
+    );
+}
+
+fn refresh_search_results(
+    entry: &Entry,
+    sources: &Sources,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    clipboard_url: &Rc<RefCell<Option<String>>>,
+    mode: SearchMode,
+) {
+    let query = entry.text().to_string();
+    let clipboard_url = clipboard_url.borrow().clone();
+    let results = if let Some(clipboard_url) = clipboard_url.as_deref() {
+        sources.search_with_clipboard_url(&query, mode, Some(clipboard_url))
+    } else {
+        sources.search(&query, mode)
+    };
+    rebuild_results(list, scroller, &results);
+    current_results.replace(results);
+}
+
+fn schedule_clipboard_url_loads(
+    entry: &Entry,
+    sources: &Arc<Sources>,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    clipboard_url: &Rc<RefCell<Option<String>>>,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
+    mode: SearchMode,
+) {
+    for delay_ms in [80_u64, 220, 500] {
+        let entry = entry.clone();
+        let sources = sources.clone();
+        let list = list.clone();
+        let scroller = scroller.clone();
+        let current_results = current_results.clone();
+        let clipboard_url = clipboard_url.clone();
+        let add_password_draft = add_password_draft.clone();
+        glib::timeout_add_local_once(Duration::from_millis(delay_ms), move || {
+            if clipboard_url.borrow().is_some() {
+                return;
+            }
+            load_clipboard_url(
+                &entry,
+                &sources,
+                &list,
+                &scroller,
+                &current_results,
+                &clipboard_url,
+                &add_password_draft,
+                mode,
+            );
+        });
+    }
+}
+
+fn load_clipboard_url(
+    entry: &Entry,
+    sources: &Arc<Sources>,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    clipboard_url: &Rc<RefCell<Option<String>>>,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
+    mode: SearchMode,
+) {
+    let Some(display) = gdk::Display::default() else {
+        return;
+    };
+
+    let entry = entry.clone();
+    let sources = sources.clone();
+    let list = list.clone();
+    let scroller = scroller.clone();
+    let current_results = current_results.clone();
+    let clipboard_url = clipboard_url.clone();
+    let add_password_draft = add_password_draft.clone();
+    display
+        .clipboard()
+        .read_text_async(None::<&gio::Cancellable>, move |result| {
+            let Ok(Some(text)) = result else {
+                return;
+            };
+            let text = text.trim();
+            if text.is_empty() {
+                return;
+            }
+
+            clipboard_url.replace(Some(text.to_string()));
+            if add_password_draft.borrow().is_none() {
+                refresh_search_results(
+                    &entry,
+                    &sources,
+                    &list,
+                    &scroller,
+                    &current_results,
+                    &clipboard_url,
+                    mode,
+                );
+            }
+        });
 }
 
 fn request_initial_focus(window: &ApplicationWindow, entry: &Entry) {
@@ -425,6 +591,8 @@ fn activate_item(
     list: &ListBox,
     scroller: &ScrolledWindow,
     current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    entry_widget: &Entry,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
     previous_focus_target: Option<&WindowFocusTarget>,
 ) {
     if let Action::Power {
@@ -461,6 +629,19 @@ fn activate_item(
         return;
     }
 
+    if let Action::AddPassword { entry, url } = &item.action {
+        start_add_password_flow(
+            entry_widget,
+            list,
+            scroller,
+            current_results,
+            add_password_draft,
+            entry,
+            url.clone(),
+        );
+        return;
+    }
+
     if let Err(error) = execute_action(window, item.action.clone(), previous_focus_target) {
         show_status_result(
             list,
@@ -470,6 +651,200 @@ fn activate_item(
         );
     } else {
         sources.record_activation(&item);
+    }
+}
+
+fn start_add_password_flow(
+    entry_widget: &Entry,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
+    new_entry: &str,
+    prefilled_url: Option<String>,
+) {
+    let draft = AddPasswordDraft {
+        entry: new_entry.trim().to_string(),
+        username: None,
+        url: prefilled_url,
+        step: AddPasswordStep::Username,
+    };
+    add_password_draft.replace(Some(draft.clone()));
+    entry_widget.set_placeholder_text(Some("Optional username or email"));
+    entry_widget.set_text("");
+    entry_widget.grab_focus();
+    show_status_result(
+        list,
+        scroller,
+        current_results,
+        add_password_prompt_result(
+            &format!("Username/email for {}", draft.entry),
+            "Leave blank and press Enter to use the entry basename",
+        ),
+    );
+}
+
+fn advance_add_password_flow(
+    entry_widget: &Entry,
+    sources: &Sources,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
+    mode: SearchMode,
+) {
+    let input = entry_widget.text().trim().to_string();
+    let mut draft_ref = add_password_draft.borrow_mut();
+    let Some(draft) = draft_ref.as_mut() else {
+        return;
+    };
+
+    match draft.step {
+        AddPasswordStep::Username => {
+            draft.username = non_empty_string(&input);
+            if draft.url.is_some() {
+                let draft = draft.clone();
+                drop(draft_ref);
+                finish_add_password_flow(
+                    entry_widget,
+                    sources,
+                    list,
+                    scroller,
+                    current_results,
+                    add_password_draft,
+                    mode,
+                    draft,
+                );
+                return;
+            }
+
+            draft.step = AddPasswordStep::Url;
+            let title = format!("URL for {}", draft.entry);
+            drop(draft_ref);
+            entry_widget.set_placeholder_text(Some("Optional URL"));
+            entry_widget.set_text("");
+            show_status_result(
+                list,
+                scroller,
+                current_results,
+                add_password_prompt_result(
+                    &title,
+                    "Leave blank and press Enter to save without a URL",
+                ),
+            );
+        }
+        AddPasswordStep::Url => {
+            draft.url = non_empty_string(&input);
+            let draft = draft.clone();
+            drop(draft_ref);
+            finish_add_password_flow(
+                entry_widget,
+                sources,
+                list,
+                scroller,
+                current_results,
+                add_password_draft,
+                mode,
+                draft,
+            );
+        }
+    }
+}
+
+fn finish_add_password_flow(
+    entry_widget: &Entry,
+    sources: &Sources,
+    list: &ListBox,
+    scroller: &ScrolledWindow,
+    current_results: &Rc<RefCell<Vec<ResultItem>>>,
+    add_password_draft: &Rc<RefCell<Option<AddPasswordDraft>>>,
+    mode: SearchMode,
+    draft: AddPasswordDraft,
+) {
+    add_password_draft.replace(None);
+    entry_widget.set_placeholder_text(Some(placeholder_for_mode(mode)));
+    entry_widget.set_text("");
+
+    match create_generated_password_entry(sources, &draft) {
+        Ok(credential) => {
+            let results = inspected_password_results(&credential);
+            rebuild_results(list, scroller, &results);
+            current_results.replace(results);
+        }
+        Err(error) => show_status_result(
+            list,
+            scroller,
+            current_results,
+            action_failure_result(&error.root_cause().to_string()),
+        ),
+    }
+}
+
+fn create_generated_password_entry(
+    sources: &Sources,
+    draft: &AddPasswordDraft,
+) -> Result<Credential> {
+    validate_new_password_entry(&draft.entry)?;
+    if sources.password_entry_exists(&draft.entry) || pass_entry_exists_on_disk(&draft.entry)? {
+        anyhow::bail!("password entry already exists");
+    }
+
+    let password = generate_password()?;
+    let content =
+        format_generated_pass_entry(&password, draft.username.as_deref(), draft.url.as_deref());
+    run_program_input(pass_insert_command(&draft.entry, &content))?;
+    sources.refresh_pass_entries();
+    parse_credential(&draft.entry, &content)
+}
+
+fn validate_new_password_entry(entry: &str) -> Result<()> {
+    if entry.trim().is_empty() {
+        anyhow::bail!("password entry name cannot be empty");
+    }
+    if entry.starts_with('/') {
+        anyhow::bail!("password entry name must be relative");
+    }
+    if entry
+        .split('/')
+        .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        anyhow::bail!("password entry name contains an invalid path component");
+    }
+    Ok(())
+}
+
+fn pass_entry_exists_on_disk(entry: &str) -> Result<bool> {
+    validate_new_password_entry(entry)?;
+    let Some(store_dir) = password_store_dir() else {
+        return Ok(false);
+    };
+    Ok(store_dir.join(format!("{entry}.gpg")).exists())
+}
+
+fn password_store_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("PASSWORD_STORE_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".password-store")))
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn add_password_prompt_result(title: &str, subtitle: &str) -> ResultItem {
+    ResultItem {
+        prediction_key: None,
+        title: title.to_string(),
+        subtitle: subtitle.to_string(),
+        source: "Passwords",
+        icon_name: "dialog-password-symbolic".to_string(),
+        score: 0,
+        action: Action::None,
     }
 }
 
@@ -524,6 +899,9 @@ fn execute_action(
         Action::Password { entry, operation } => {
             execute_password_operation(window, &entry, operation, previous_focus_target)?;
             return Ok(());
+        }
+        Action::AddPassword { .. } => {
+            anyhow::bail!("password creation must start from the launcher UI");
         }
         Action::RunCommand { command } => {
             Command::new("sh")

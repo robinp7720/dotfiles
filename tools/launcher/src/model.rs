@@ -68,6 +68,10 @@ pub enum Action {
         entry: String,
         operation: PasswordOperation,
     },
+    AddPassword {
+        entry: String,
+        url: Option<String>,
+    },
     RunCommand {
         command: String,
     },
@@ -85,6 +89,12 @@ pub enum Action {
         text: String,
     },
     None,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PasswordUrlDraft {
+    pub entry: String,
+    pub url: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -247,6 +257,37 @@ pub fn browser_target(raw: &str) -> Option<String> {
     None
 }
 
+pub fn password_url_draft(raw: &str) -> Option<PasswordUrlDraft> {
+    let url = browser_target(raw)?;
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim();
+    if authority.is_empty() {
+        return None;
+    }
+
+    let host = authority
+        .rsplit('@')
+        .next()
+        .unwrap_or(authority)
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+
+    Some(PasswordUrlDraft { entry: host, url })
+}
+
 fn has_uri_scheme(value: &str) -> bool {
     let Some((scheme, rest)) = value.split_once("://") else {
         return false;
@@ -302,7 +343,7 @@ fn valid_domain_label(label: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueryInput, SearchMode, SourceFilter, browser_target};
+    use super::{QueryInput, SearchMode, SourceFilter, browser_target, password_url_draft};
 
     #[test]
     fn symbol_prefixes_override_the_default_mode() {
@@ -387,5 +428,42 @@ mod tests {
     fn browser_target_rejects_plain_search_terms() {
         assert_eq!(browser_target("firefox"), None);
         assert_eq!(browser_target("two words"), None);
+    }
+
+    #[test]
+    fn password_url_draft_uses_url_host_as_entry_name() {
+        let draft =
+            password_url_draft("https://login.example.com/path?q=1").expect("password URL draft");
+
+        assert_eq!(draft.entry, "login.example.com");
+        assert_eq!(draft.url, "https://login.example.com/path?q=1");
+    }
+
+    #[test]
+    fn password_url_draft_handles_encoded_paths() {
+        let draft = password_url_draft(
+            "https://www.torrentleech.org/torrents/top/index/added/-1%20day/orderby/completed/order/desc",
+        )
+        .expect("password URL draft");
+
+        assert_eq!(draft.entry, "www.torrentleech.org");
+        assert_eq!(
+            draft.url,
+            "https://www.torrentleech.org/torrents/top/index/added/-1%20day/orderby/completed/order/desc"
+        );
+    }
+
+    #[test]
+    fn password_url_draft_accepts_http_urls() {
+        let draft = password_url_draft("http://example.com").expect("password URL draft");
+
+        assert_eq!(draft.entry, "example.com");
+        assert_eq!(draft.url, "http://example.com");
+    }
+
+    #[test]
+    fn password_url_draft_rejects_plain_text() {
+        assert_eq!(password_url_draft("not a url"), None);
+        assert_eq!(password_url_draft("firefox"), None);
     }
 }

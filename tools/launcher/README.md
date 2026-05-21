@@ -42,6 +42,7 @@ recent: report
 - Recent file search reads local `file://` entries from `recently-used.xbel`.
 - Window switching uses `hyprctl clients -j` on Hyprland and `niri msg windows --json` on Niri.
 - Password search reads entry names from `PASSWORD_STORE_DIR` or `~/.password-store`.
+- In password mode or `pass:` queries, a non-existing entry name shows an add row that generates a new password and saves optional username/email and URL metadata. If the clipboard contains a URL, the empty launcher and password mode can add the URL host directly and store the full URL automatically.
 - Pressing Enter on a password result autotypes username, Tab, and password into the previously focused window without submitting the form.
 - Password mode and `pass:` queries show action rows for autotype, copy password, copy username, type password, type username, and inspected metadata actions.
 - Password entries use the standard `pass` format: first line is the password, with optional `key: value` metadata after it. Username keys are `user`, `username`, or `email`; otherwise the entry basename is used.

@@ -1,6 +1,6 @@
 use crate::model::{
     Action, PasswordOperation, PowerOperation, QueryInput, ResultItem, SearchMode, SourceFilter,
-    WindowFocusTarget, browser_target, score_text,
+    WindowFocusTarget, browser_target, password_url_draft, score_text,
 };
 use crate::prediction::{PredictionStore, StoredPrediction};
 use gtk4::gio;
@@ -159,7 +159,7 @@ pub struct RecentFileEntry {
 pub struct Sources {
     apps: Vec<AppEntry>,
     ssh_hosts: Vec<String>,
-    pass_entries: Vec<PassEntry>,
+    pass_entries: Arc<Mutex<Vec<PassEntry>>>,
     commands: Vec<String>,
     bookmarks: Vec<BookmarkEntry>,
     recent_files: Vec<RecentFileEntry>,
@@ -174,7 +174,7 @@ impl Sources {
         Self {
             apps: load_applications(),
             ssh_hosts: load_ssh_hosts(),
-            pass_entries: load_pass_entries(),
+            pass_entries: Arc::new(Mutex::new(load_pass_entries())),
             commands: load_commands(),
             bookmarks: load_browser_bookmarks(),
             recent_files: load_recent_files(),
@@ -193,13 +193,38 @@ impl Sources {
         }
     }
 
+    pub fn refresh_pass_entries(&self) {
+        if !self.pass_available {
+            return;
+        }
+
+        if let Ok(mut entries) = self.pass_entries.lock() {
+            *entries = load_pass_entries();
+        }
+    }
+
+    pub fn password_entry_exists(&self, entry: &str) -> bool {
+        self.pass_entries
+            .lock()
+            .is_ok_and(|entries| entries.iter().any(|candidate| candidate.name == entry))
+    }
+
     pub fn search(&self, raw_query: &str, cli_mode: SearchMode) -> Vec<ResultItem> {
+        self.search_with_clipboard_url(raw_query, cli_mode, None)
+    }
+
+    pub fn search_with_clipboard_url(
+        &self,
+        raw_query: &str,
+        cli_mode: SearchMode,
+        clipboard_url: Option<&str>,
+    ) -> Vec<ResultItem> {
         let query = QueryInput::parse(raw_query, cli_mode);
         let mut results = Vec::new();
         let now = current_unix_time();
 
         if query.text.is_empty() {
-            results.extend(self.default_results(&query, now));
+            results.extend(self.default_results(&query, now, clipboard_url));
             return results;
         }
 
@@ -291,7 +316,12 @@ impl Sources {
         }
     }
 
-    fn default_results(&self, query: &QueryInput, now: u64) -> Vec<ResultItem> {
+    fn default_results(
+        &self,
+        query: &QueryInput,
+        now: u64,
+        clipboard_url: Option<&str>,
+    ) -> Vec<ResultItem> {
         let mut results = Vec::new();
         let mode = query.mode;
 
@@ -317,6 +347,15 @@ impl Sources {
                 return results;
             }
             SourceFilter::All => {}
+        }
+
+        if matches!(mode, SearchMode::All | SearchMode::Pass)
+            && self.pass_available
+            && let Some(draft) = clipboard_url
+                .and_then(password_url_draft)
+                .filter(|draft| !self.password_entry_exists(&draft.entry))
+        {
+            results.push(add_password_result(&draft.entry, Some(draft.url)));
         }
 
         if mode == SearchMode::All {
@@ -382,7 +421,11 @@ impl Sources {
                     "dialog-password-symbolic",
                     65,
                 ));
-            } else if self.pass_entries.is_empty() {
+            } else if self
+                .pass_entries
+                .lock()
+                .is_ok_and(|entries| entries.is_empty())
+            {
                 results.push(instruction_result(
                     "Password store is empty",
                     "Add entries to ~/.password-store or set PASSWORD_STORE_DIR",
@@ -608,7 +651,22 @@ impl Sources {
         }
 
         let mut items = Vec::new();
-        for entry in &self.pass_entries {
+        if query.mode == SearchMode::Pass
+            && !query.text.is_empty()
+            && !self
+                .pass_entries
+                .lock()
+                .is_ok_and(|entries| entries.iter().any(|entry| entry.name == query.text))
+        {
+            items.push(add_password_result(&query.text, None));
+        }
+
+        let pass_entries = self
+            .pass_entries
+            .lock()
+            .map(|entries| entries.clone())
+            .unwrap_or_default();
+        for entry in &pass_entries {
             let Some(score) = score_text(&entry.search_blob, &query.text) else {
                 continue;
             };
@@ -1329,6 +1387,21 @@ fn password_action_result(
     }
 }
 
+fn add_password_result(entry: &str, url: Option<String>) -> ResultItem {
+    ResultItem {
+        prediction_key: None,
+        title: format!("Add password: {entry}"),
+        subtitle: "Generate a password and save it to password-store".to_string(),
+        source: "Passwords",
+        icon_name: "list-add-symbolic".to_string(),
+        score: 1_700,
+        action: Action::AddPassword {
+            entry: entry.to_string(),
+            url,
+        },
+    }
+}
+
 fn command_prediction_key(command: &str) -> String {
     format!("cmd:{command}")
 }
@@ -1783,7 +1856,7 @@ mod tests {
         Sources {
             apps: Vec::new(),
             ssh_hosts: Vec::new(),
-            pass_entries: Vec::new(),
+            pass_entries: pass_entries(Vec::new()),
             commands: Vec::new(),
             bookmarks: Vec::new(),
             recent_files: Vec::new(),
@@ -1792,6 +1865,10 @@ mod tests {
             qalc_available: false,
             predictions: empty_prediction_store(),
         }
+    }
+
+    fn pass_entries(entries: Vec<super::PassEntry>) -> Arc<Mutex<Vec<super::PassEntry>>> {
+        Arc::new(Mutex::new(entries))
     }
 
     #[test]
@@ -1944,10 +2021,10 @@ mod tests {
     #[test]
     fn all_mode_password_matches_default_to_autotype_login() {
         let sources = Sources {
-            pass_entries: vec![super::PassEntry {
+            pass_entries: pass_entries(vec![super::PassEntry {
                 name: "github/work".to_string(),
                 search_blob: "github/work".to_string(),
-            }],
+            }]),
             pass_available: true,
             ..empty_sources()
         };
@@ -1965,10 +2042,10 @@ mod tests {
     #[test]
     fn pass_mode_surfaces_action_rows_for_matching_entries() {
         let sources = Sources {
-            pass_entries: vec![super::PassEntry {
+            pass_entries: pass_entries(vec![super::PassEntry {
                 name: "github/work".to_string(),
                 search_blob: "github/work".to_string(),
-            }],
+            }]),
             pass_available: true,
             ..empty_sources()
         };
@@ -1988,6 +2065,108 @@ mod tests {
         assert!(operations.contains(&&PasswordOperation::TypePassword));
         assert!(operations.contains(&&PasswordOperation::TypeUsername));
         assert!(operations.contains(&&PasswordOperation::Inspect));
+    }
+
+    #[test]
+    fn pass_queries_offer_to_add_the_typed_entry() {
+        let sources = Sources {
+            pass_available: true,
+            ..empty_sources()
+        };
+
+        let results = sources.search("pass: github/work", SearchMode::All);
+
+        assert!(matches!(
+            results.first().map(|item| &item.action),
+            Some(Action::AddPassword { entry, url }) if entry == "github/work" && url.is_none()
+        ));
+        assert_eq!(results[0].title, "Add password: github/work");
+    }
+
+    #[test]
+    fn empty_pass_mode_offers_to_add_clipboard_url_host() {
+        let sources = Sources {
+            pass_available: true,
+            ..empty_sources()
+        };
+
+        let results = sources.search_with_clipboard_url(
+            "",
+            SearchMode::Pass,
+            Some("https://login.example.com/path"),
+        );
+
+        assert!(matches!(
+            results.first().map(|item| &item.action),
+            Some(Action::AddPassword { entry, url }) if entry == "login.example.com"
+                && url.as_deref() == Some("https://login.example.com/path")
+        ));
+        assert_eq!(results[0].title, "Add password: login.example.com");
+    }
+
+    #[test]
+    fn empty_all_mode_offers_to_add_clipboard_url_host() {
+        let sources = Sources {
+            pass_available: true,
+            ..empty_sources()
+        };
+
+        let results = sources.search_with_clipboard_url(
+            "",
+            SearchMode::All,
+            Some("https://www.torrentleech.org/torrents/top/index/added/-1%20day/orderby/completed/order/desc"),
+        );
+
+        assert!(matches!(
+            results.first().map(|item| &item.action),
+            Some(Action::AddPassword { entry, url }) if entry == "www.torrentleech.org"
+                && url.as_deref() == Some("https://www.torrentleech.org/torrents/top/index/added/-1%20day/orderby/completed/order/desc")
+        ));
+        assert_eq!(results[0].title, "Add password: www.torrentleech.org");
+    }
+
+    #[test]
+    fn clipboard_url_add_row_is_suppressed_for_existing_entries() {
+        let sources = Sources {
+            pass_entries: pass_entries(vec![super::PassEntry {
+                name: "login.example.com".to_string(),
+                search_blob: "login.example.com".to_string(),
+            }]),
+            pass_available: true,
+            ..empty_sources()
+        };
+
+        let results = sources.search_with_clipboard_url(
+            "",
+            SearchMode::Pass,
+            Some("https://login.example.com/path"),
+        );
+
+        assert!(
+            !results
+                .iter()
+                .any(|item| matches!(item.action, Action::AddPassword { .. }))
+        );
+    }
+
+    #[test]
+    fn pass_queries_do_not_offer_to_add_existing_entries() {
+        let sources = Sources {
+            pass_entries: pass_entries(vec![super::PassEntry {
+                name: "github/work".to_string(),
+                search_blob: "github/work".to_string(),
+            }]),
+            pass_available: true,
+            ..empty_sources()
+        };
+
+        let results = sources.search("pass: github/work", SearchMode::All);
+
+        assert!(
+            !results
+                .iter()
+                .any(|item| matches!(item.action, Action::AddPassword { .. }))
+        );
     }
 
     #[test]

@@ -1,8 +1,13 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use std::process::{Command, Stdio};
 
 const DEFAULT_CLIP_TIMEOUT_SECONDS: u64 = 15;
+const DEFAULT_GENERATED_PASSWORD_LENGTH: usize = 25;
+const GENERATED_PASSWORD_ALPHABET: &[u8] =
+    b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_-+=?";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Credential {
@@ -182,6 +187,70 @@ pub fn xclip_command(text: &str) -> ProgramInput {
     }
 }
 
+pub fn generate_password() -> Result<String> {
+    generate_password_with_length(DEFAULT_GENERATED_PASSWORD_LENGTH)
+}
+
+pub fn generate_password_with_length(length: usize) -> Result<String> {
+    if length == 0 {
+        anyhow::bail!("password length must be greater than zero");
+    }
+
+    let mut random = vec![0_u8; length];
+    File::open("/dev/urandom")
+        .context("failed to open /dev/urandom")?
+        .read_exact(&mut random)
+        .context("failed to read random bytes")?;
+
+    Ok(random
+        .into_iter()
+        .map(|byte| {
+            let index = usize::from(byte) % GENERATED_PASSWORD_ALPHABET.len();
+            GENERATED_PASSWORD_ALPHABET[index] as char
+        })
+        .collect())
+}
+
+pub fn format_generated_pass_entry(
+    password: &str,
+    username: Option<&str>,
+    url: Option<&str>,
+) -> String {
+    let mut content = String::new();
+    content.push_str(password.trim_end_matches('\n'));
+    content.push('\n');
+
+    if let Some(username) = non_empty_trimmed(username) {
+        content.push_str("username: ");
+        content.push_str(username);
+        content.push('\n');
+    }
+
+    if let Some(url) = non_empty_trimmed(url) {
+        content.push_str("url: ");
+        content.push_str(url);
+        content.push('\n');
+    }
+
+    content
+}
+
+pub fn pass_insert_command(entry: &str, content: &str) -> ProgramInput {
+    ProgramInput {
+        program: "pass".to_string(),
+        args: vec![
+            "insert".to_string(),
+            "--multiline".to_string(),
+            entry.to_string(),
+        ],
+        stdin: Some(content.to_string()),
+    }
+}
+
+fn non_empty_trimmed(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
 pub fn run_program_input(input: ProgramInput) -> Result<()> {
     let program = input.program;
     let mut child = Command::new(&program)
@@ -359,6 +428,42 @@ mod tests {
             "secret"
         );
         fs::remove_dir_all(&temp_dir).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn generated_pass_content_uses_first_line_password_and_optional_metadata() {
+        let content =
+            super::format_generated_pass_entry("secret", Some("robin"), Some("https://github.com"));
+
+        assert_eq!(
+            content,
+            "secret\nusername: robin\nurl: https://github.com\n"
+        );
+    }
+
+    #[test]
+    fn generated_pass_content_omits_empty_metadata() {
+        let content = super::format_generated_pass_entry("secret", Some("  "), None);
+
+        assert_eq!(content, "secret\n");
+    }
+
+    #[test]
+    fn pass_insert_command_keeps_secret_content_out_of_argv() {
+        let command = super::pass_insert_command("github/work", "secret\nusername: robin\n");
+
+        assert_eq!(command.program, "pass");
+        assert_eq!(command.args, vec!["insert", "--multiline", "github/work"]);
+        assert_eq!(command.stdin.as_deref(), Some("secret\nusername: robin\n"));
+        assert!(!command.args.iter().any(|arg| arg.contains("secret")));
+    }
+
+    #[test]
+    fn generated_password_has_expected_length_and_no_whitespace() {
+        let password = super::generate_password_with_length(32).expect("generated password");
+
+        assert_eq!(password.len(), 32);
+        assert!(!password.chars().any(char::is_whitespace));
     }
 
     fn shell_quote(value: &str) -> String {
