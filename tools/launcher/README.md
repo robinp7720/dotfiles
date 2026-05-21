@@ -2,7 +2,7 @@
 
 Luma is a unified command palette for Linux desktops.
 
-It helps you launch apps, switch windows, search files, run commands, manage passwords, open bookmarks, and trigger common desktop actions from one fast overlay. The current Rust package and binary name are still `dot-launcher`.
+It helps you launch apps, switch windows, search files, run commands, manage passwords, open bookmarks, and trigger common desktop actions from one fast overlay.
 
 ## Features
 
@@ -40,23 +40,23 @@ Optional integrations:
 Run from source:
 
 ```bash
-cargo run --release --manifest-path tools/launcher/Cargo.toml
+cargo run --release --bin Luma --manifest-path tools/launcher/Cargo.toml
 ```
 
 Or run the installed binary directly:
 
 ```bash
-dot-launcher
+Luma
 ```
 
 Optional dedicated modes:
 
 ```bash
-dot-launcher --mode commands
-dot-launcher --mode windows
-dot-launcher --mode files
-dot-launcher --mode pass
-dot-launcher --mode ssh
+Luma --mode commands
+Luma --mode windows
+Luma --mode files
+Luma --mode pass
+Luma --mode ssh
 ```
 
 ## Search Syntax
@@ -98,7 +98,7 @@ Pressing Enter on a password result autotypes username, Tab, and password into t
 
 ## Notes
 
-- Predictive history is stored as plain JSON in `~/.local/state/dot-launcher/predictions.json`.
+- Predictive history is stored as plain JSON in the app state directory.
 - File search requires `localsearch` to be installed and indexed.
 - Bookmark search reads Firefox `places.sqlite` through `sqlite3` when available and Chromium-family `Bookmarks` JSON directly.
 - Recent file search reads local `file://` entries from `recently-used.xbel`.

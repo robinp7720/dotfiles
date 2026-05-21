@@ -33,7 +33,7 @@ use std::thread;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
-#[command(name = "dot-launcher")]
+#[command(name = "Luma")]
 #[command(
     about = "Unified predictive desktop launcher for apps, windows, files, passwords, SSH, commands, web, and libqalculate"
 )]
@@ -94,14 +94,14 @@ fn run() -> Result<()> {
     let sources = Arc::new(Sources::load());
     sources.warm_external_sources();
     let application = Application::builder()
-        .application_id("me.robindecker.DotLauncher")
+        .application_id("me.robindecker.Luma")
         .build();
 
     application.connect_activate(move |app| {
         build_ui(app, cli.mode, cli.query.clone(), sources.clone());
     });
 
-    application.run_with_args(&["dot-launcher"]);
+    application.run_with_args(&["Luma"]);
     Ok(())
 }
 
@@ -117,7 +117,7 @@ fn build_ui(
         .default_height(420)
         .decorated(false)
         .resizable(false)
-        .title("Launcher")
+        .title("Luma")
         .build();
 
     if layer_shell_supported() {
