@@ -18,6 +18,7 @@ cairo-dock/.cairo-dock-need-save
 AGENTS.md
 .codex
 .superpowers/
+.worktrees/
 
 # Rust build artifacts
 tools/*/target/
