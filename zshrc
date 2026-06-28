@@ -182,3 +182,7 @@ greeting() {
 }
 
 greeting
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/robin/.local/bin:$PATH"
