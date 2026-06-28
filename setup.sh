@@ -110,6 +110,7 @@ directories=(
   "matugen"
   "eww"
   "niri"
+  "nvim"
   "polybar"
   "sxhkd"
   "waybar"

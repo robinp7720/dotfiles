@@ -21,3 +21,8 @@ AGENTS.md
 
 # Rust build artifacts
 tools/*/target/
+
+# Neovim runtime state
+nvim/.netrwhist
+nvim/.tags
+nvim/.stfolder/

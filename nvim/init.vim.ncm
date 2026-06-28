@@ -1,0 +1,470 @@
+" --------------------
+" Vim general settings
+" --------------------
+
+set ignorecase
+set backspace=indent,eol,start
+set ruler
+set showcmd
+set number
+set mouse=a
+set completeopt=noinsert,menuone,noselect
+set inccommand=nosplit
+set termguicolors
+set incsearch
+filetype plugin indent on
+syntax on
+
+
+" --------------------
+" Max characters per line column
+" --------------------
+
+set cc=80
+set tw=79
+
+
+" --------------------
+" Indentation
+" --------------------
+
+set autoindent
+set tabstop=4    " show existing tab with 4 spaces width
+set shiftwidth=4 " when indenting with '>', use 4 spaces width
+set expandtab    " On pressing tab, insert 4 spaces
+
+
+
+" ------------------------
+" Load Plugins
+" ------------------------
+
+call plug#begin('~/.local/share/nvim/plugged')
+
+Plug 'roxma/nvim-yarp'
+Plug 'Shougo/neco-vim'
+Plug 'Townk/vim-autoclose'
+Plug 'tpope/vim-surround'
+Plug 'lervag/vimtex'
+"Plug 'dense-analysis/ale'
+Plug 'mhartington/nvim-typescript', {'do': './install.sh'}
+Plug 'godlygeek/tabular'
+Plug 'rhysd/vim-grammarous'
+Plug 'junegunn/goyo.vim'
+Plug 'svermeulen/vim-yoink'
+Plug 'airblade/vim-gitgutter'
+"Plug 'dpelle/vim-LanguageTool'
+Plug 'vigoux/LanguageTool.nvim'
+
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
+Plug 'yuki-ycino/fzf-preview.vim', { 'branch': 'release', 'do': ':UpdateRemotePlugins'}
+
+Plug 'glacambre/firenvim', { 'do': { _ -> firenvim#install(0) } }
+
+Plug 'ncm2/ncm2'
+Plug 'ncm2/ncm2-vim'
+Plug 'svermeulen/ncm2-yoink'
+Plug 'ncm2/ncm2-bufword'
+Plug 'ncm2/ncm2-tmux'
+Plug 'ncm2/ncm2-path'
+Plug 'ncm2/ncm2-jedi'
+Plug 'filipekiss/ncm2-look.vim'
+Plug 'ObserverOfTime/ncm2-jc2', {'for': ['java', 'jsp']}
+Plug 'artur-shaik/vim-javacomplete2', {'for': ['java', 'jsp']}
+"Plug 'ncm2/ncm2-tern',  {'do': 'npm install'}
+Plug 'mhartington/nvim-typescript', {'do': './install.sh'}
+Plug 'Shougo/echodoc.vim'
+
+
+Plug 'autozimu/LanguageClient-neovim', {
+            \ 'branch': 'next',
+            \ 'do': 'bash install.sh',
+            \ }
+
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+
+Plug 'scrooloose/nerdtree'
+Plug 'Xuyuanp/nerdtree-git-plugin'
+
+Plug 'ayu-theme/ayu-vim'
+Plug 'jdsimcoe/abstract.vim'
+Plug 'andreasvc/vim-256noir'
+Plug 'nanotech/jellybeans.vim'
+Plug 'gilgigilgil/anderson.vim'
+Plug 'mhartington/oceanic-next'
+
+Plug 'sheerun/vim-polyglot'
+Plug 'vim-syntastic/syntastic'
+
+Plug 'PietroPate/vim-tex-conceal', {'for': 'tex'}
+
+Plug 'tpope/vim-fugitive'
+
+"Plug 'Shougo/denite.nvim', { 'do': ':UpdateRemotePlugins' }
+Plug 'shougo/neomru.vim'
+
+Plug 'mattn/emmet-vim'
+
+Plug 'pangloss/vim-javascript'
+
+Plug 'vim-pandoc/vim-pandoc'
+Plug 'vim-pandoc/vim-pandoc-syntax' 
+
+"Plug 'plasticboy/vim-markdown'
+
+call plug#end()
+
+" ------------------------
+" Languagetool configuration (Grammar checking)
+" ------------------------
+
+"let g:languagetool_jar='/usr/share/java/languagetool/languagetool-commandline.jar'
+
+let g:languagetool_server_jar='/usr/share/java/languagetool/languagetool-server.jar'
+
+" ------------------------
+" NERDTree configuration
+" ------------------------
+
+" Open NERDTree automatically when no files have been specified
+autocmd StdinReadPre * let s:std_in=1
+autocmd VimEnter * if argc() == 0 && !exists("s:std_in") | NERDTree | endif
+
+" Shortcut to open NERDTree
+map <C-n> :NERDTreeToggle<CR>
+
+" Close VIM if the only window left open is NERDTree
+autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
+
+
+" --------------------
+" Vimtex configuration
+" --------------------
+
+let g:vimtex_compiler_progname = 'nvr'
+let g:vimtex_complete_enabled = 1
+let g:vimtex_complete_close_braces = 1
+let g:vimtex_fold_enabled = 1
+let g:vimtex_view_general_viewer = 'evince'
+let g:tex_flavor = 'latex'
+
+nnoremap <localleader>lt :call vimtex#fzf#run()<cr>
+
+
+" --------------------
+" Latex conceal stuff
+" --------------------
+" https://stackoverflow.com/questions/55287479/vim-and-latex-how-to-conceal-refname-as-name-in-vim-using-syntax-conce
+
+au VimEnter * syntax region Statement start='\ref{' end='}' transparent contains=myStart,myEnd
+au VimEnter * syntax match myStart '\ref{\ze\w\+' contained conceal cchar=[
+au VimEnter * syntax match myEnd '\(\ref{\w\+\)\@<=\zs}' contained conceal cchar=]
+
+au VimEnter * hi! link Conceal Statement
+au VimEnter * set conceallevel=2
+
+
+" --------------------
+" LanguageClient configuration
+" --------------------
+
+" Required for operations modifying multiple buffers like rename.
+set hidden
+
+let g:LanguageClient_serverCommands = {
+            \ 'rust': ['~/.cargo/bin/rustup', 'run', 'stable', 'rls'],
+            \ 'python': ['/usr/local/bin/pyls'],
+            \ 'ruby': ['~/.rbenv/shims/solargraph', 'stdio'],
+            \ 'sh': ['/usr/bin/bash-language-server', 'start'],
+            \ 'c': ['/usr/bin/clangd'],
+            \ 'cpp': ['/usr/bin/clangd'],
+            \ 'vim': ['/usr/bin/vim-language-server']
+            \ }
+
+nnoremap <silent> K :call LanguageClient#textDocument_hover()<CR>
+nnoremap <silent> gd :call LanguageClient#textDocument_definition()<CR>
+nnoremap <silent> <F2> :call LanguageClient#textDocument_rename()<CR>
+
+
+
+" --------------------
+" NCM Autocompletion
+" --------------------
+
+autocmd BufEnter  *  call ncm2#enable_for_buffer()
+
+let g:ncm2_look_enabled = 1
+let g:ncm2#complete_length=[[1,4],[2,3],[3,2],[4,1]]
+let g:ncm2#popup_delay = 0
+
+" suppress the annoying 'match x of y', 'The only match' and 'Pattern not
+" found' messages
+"set shortmess+=c
+
+" Define all the vimtex completion for ncm2 with custom suggestion priority
+
+augroup vimTexAutoComplete
+    autocmd!
+    "autocmd BufEnter * call ncm2#enable_for_buffer()
+    autocmd Filetype tex call ncm2#register_source({
+                \ 'name' : 'vimtex-cmds',
+                \ 'priority': 8, 
+                \ 'complete_length': 0,
+                \ 'scope': ['tex'],
+                \ 'matcher': {'name': 'prefix', 'key': 'word'},
+                \ 'word_pattern': '\w+',
+                \ 'complete_pattern': g:vimtex#re#ncm2#cmds,
+                \ 'on_complete': ['ncm2#on_complete#omni', 'vimtex#complete#omnifunc'],
+                \ })
+    autocmd Filetype tex call ncm2#register_source({
+                \ 'name' : 'vimtex-labels',
+                \ 'priority': 8, 
+                \ 'complete_length': 0,
+                \ 'scope': ['tex'],
+                \ 'matcher': {'name': 'combine',
+                \             'matchers': [
+                \               {'name': 'substr', 'key': 'word'},
+                \               {'name': 'substr', 'key': 'menu'},
+                \             ]},
+                \ 'word_pattern': '\w+',
+                \ 'complete_pattern': g:vimtex#re#ncm2#labels,
+                \ 'on_complete': ['ncm2#on_complete#omni', 'vimtex#complete#omnifunc'],
+                \ })
+    autocmd Filetype tex call ncm2#register_source({
+                \ 'name' : 'vimtex-files',
+                \ 'priority': 8, 
+                \ 'complete_length': 1,
+                \ 'scope': ['tex'],
+                \ 'matcher': {'name': 'combine',
+                \             'matchers': [
+                \               {'name': 'abbrfuzzy', 'key': 'word'},
+                \               {'name': 'abbrfuzzy', 'key': 'abbr'},
+                \             ]},
+                \ 'word_pattern': '\w+',
+                \ 'complete_pattern': g:vimtex#re#ncm2#files,
+                \ 'on_complete': ['ncm2#on_complete#omni', 'vimtex#complete#omnifunc'],
+                \ })
+    autocmd Filetype tex call ncm2#register_source({
+                \ 'name' : 'bibtex',
+                \ 'priority': 9, 
+                \ 'complete_length': 1,
+                \ 'scope': ['tex'],
+                \ 'matcher': {'name': 'combine',
+                \             'matchers': [
+                \               {'name': 'prefix', 'key': 'word'},
+                \               {'name': 'abbrfuzzy', 'key': 'abbr'},
+                \               {'name': 'abbrfuzzy', 'key': 'menu'},
+                \             ]},
+                \ 'word_pattern': '\w+',
+                \ 'complete_pattern': g:vimtex#re#ncm2#bibtex,
+                \ 'on_complete': ['ncm2#on_complete#omni', 'vimtex#complete#omnifunc'],
+                \ })
+augroup END
+
+au User Ncm2Plugin call ncm2#register_source({
+            \ 'name' : 'css',
+            \ 'priority': 9,
+            \ 'subscope_enable': 1,
+            \ 'scope': ['css','scss'],
+            \ 'mark': 'css',
+            \ 'word_pattern': '[\w\-]+',
+            \ 'complete_pattern': ':\s*',
+            \ 'on_complete': ['ncm2#on_complete#omni', 'csscomplete#CompleteCSS'],
+            \ })
+
+au User Ncm2Plugin call ncm2#register_source({
+            \ 'name' : 'ale',
+            \ 'priority': 9,
+            \ 'subscope_enable': 1,
+            \ 'scope': ['*'],
+            \ 'word_pattern': '[\w\-]+',
+            \ 'complete_pattern': ':\s*',
+            \ 'on_complete': ['ncm2#on_complete#omni', 'ale#completion#OmniFunc'],
+            \ })
+
+augroup vimPandocAutoComplete
+    autocmd!
+    autocmd BufEnter * call ncm2#enable_for_buffer()
+    autocmd Filetype pandoc call ncm2#register_source({
+      \ 'name': 'pandoc',
+      \ 'priority': 8,
+      \ 'scope': ['pandoc'],
+      \ 'mark': 'md',
+      \ 'word_pattern': '\w+',
+      \ 'complete_pattern': ['@'],
+      \ 'on_complete': ['ncm2#on_complete#omni', 'pandoc#completion#Complete'],
+      \ })
+  augroup END
+
+call ncm2#override_source('path', {'priority': 5})
+call ncm2#override_source('bufword', {'priority': 3})
+call ncm2#override_source('look', {'priority': 4})
+
+
+" CTRL-C doesn't trigger the InsertLeave autocmd . map to <ESC> instead.
+inoremap <c-c> <ESC>
+
+" When the <Enter> key is pressed while the popup menu is visible, it only
+" hides the menu. Use this mapping to close the menu and also start a new
+" line.
+inoremap <expr> <CR> (pumvisible() ? "\<c-y>\<cr>" : "\<CR>")
+
+" Use <TAB> to select the popup menu:
+inoremap <expr> <Tab> pumvisible() ? "\<C-n>" : "\<Tab>"
+inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
+
+
+
+" ------------------------
+" Airline configuration
+" ------------------------
+
+let g:airline_powerline_fonts = 1
+
+let g:airline#extensions#ale#enabled = 1
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#denite#enabled = 1
+let g:airline#extensions#fzf#enabled = 1
+
+let g:airline_theme='oceanicnext'
+
+let g:airline#extensions#default#section_truncate_width = {
+      \ 'b': 100,
+      \ 'x': 100,
+      \ 'y': 100,
+      \ 'z': 100,
+      \ 'warning': 150,
+      \ 'error': 200,
+      \ }
+let g:airline#extensions#default#layout = [
+      \ [ 'a', 'b', 'c' ],
+      \ [ 'x', 'y', 'z', 'error', 'warning' ]
+      \ ]
+
+
+" ------------------------
+" Theme
+" ------------------------
+
+let g:oceanic_next_terminal_bold = 1
+let g:oceanic_next_terminal_italic = 1
+"colorscheme OceanicNext
+"autocmd Filetype tex :colorscheme abstract
+
+let ayucolor='light'
+
+colorscheme jellybeans
+
+" ------------------------
+" ALE Configuration
+" ------------------------
+
+let g:ale_fixers = {
+            \   '*': ['remove_trailing_lines', 'trim_whitespace'],
+            \   'javascript': ['eslint'],
+            \   'python': ['black', 'isort'], 
+            \}
+
+let g:ale_linters = {
+            \   'tex': ['proselint']
+            \}
+
+" --------------------
+" Spell check settings
+" --------------------
+
+set spell
+set spelllang=en_us,de_de
+highlight SpellCap guisp=yellow gui=underline
+highlight SpellBad guisp=red gui=underline
+
+" Use FZF for spell suggestion
+
+function! FzfSpellSink(word)
+  exe 'normal! "_ciw'.a:word
+endfunction
+
+function! FzfSpell()
+  let suggestions = spellsuggest(expand("<cword>"))
+  return fzf#run({'source': suggestions, 'sink': function("FzfSpellSink"), 'down': '20'})
+endfunction
+nnoremap z= :call FzfSpell()<CR>
+
+
+" --------------------
+" Denite settings
+" --------------------
+
+" Define mappings
+autocmd FileType denite call s:denite_my_settings()
+function! s:denite_my_settings() abort
+  nnoremap <silent><buffer><expr> <CR>
+  \ denite#do_map('do_action')
+  nnoremap <silent><buffer><expr> d
+  \ denite#do_map('do_action', 'delete')
+  nnoremap <silent><buffer><expr> p
+  \ denite#do_map('do_action', 'preview')
+  nnoremap <silent><buffer><expr> q
+  \ denite#do_map('quit')
+  nnoremap <silent><buffer><expr> i
+  \ denite#do_map('open_filter_buffer')
+  nnoremap <silent><buffer><expr> <Space>
+  \ denite#do_map('toggle_select').'j'
+endfunction
+
+
+" --------------------
+" Emmet configuration
+" --------------------
+
+let g:user_emmet_mode='inv'
+let g:user_emmet_leader_key='<C-d>'
+
+
+" --------------------
+" Typescript server configuration
+" --------------------
+
+let g:nvim_typescript#javascript_support=1
+let g:nvim_typescript#vue_support=1
+let g:nvim_typescript#server_path='/usr/bin/tsserver'
+
+
+" --------------------
+" Javascript configuration
+" --------------------
+
+let g:javascript_plugin_jsdoc = 1
+let g:javascript_conceal_function             = "ƒ"
+let g:javascript_conceal_null                 = "ø"
+let g:javascript_conceal_this                 = "@"
+let g:javascript_conceal_return               = "⇚"
+let g:javascript_conceal_undefined            = "¿"
+let g:javascript_conceal_NaN                  = "ℕ"
+let g:javascript_conceal_prototype            = "¶"
+let g:javascript_conceal_static               = "•"
+let g:javascript_conceal_super                = "Ω"
+let g:javascript_conceal_arrow_function       = "⇒"
+let g:javascript_conceal_noarg_arrow_function = "🞅"
+let g:javascript_conceal_underscore_arrow_function = "🞅"
+
+augroup javascript_folding
+  au!
+  au FileType javascript setlocal foldmethod=syntax
+augroup END
+
+" --------------------
+" echodoc configuration
+" --------------------
+
+
+
+
+" --------------------
+" Custom commands
+" --------------------
+
+" Compile single c file and run it
+autocmd Filetype c command! -nargs=* Runc !gcc %:t <args>; ./a.out
