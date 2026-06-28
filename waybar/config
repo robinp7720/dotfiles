@@ -160,7 +160,7 @@
     "custom/logo1": {
         "format": "  ",
         "tooltip": false,
-        "on-click": "~/.config/rofi/launcher.sh"
+        "on-click": "~/.dotfiles/tools/launcher/target/release/Luma"
     },
     "custom/battery": {
         "exec": "~/.dotfiles/waybar/scripts/battery_status.py",
@@ -172,6 +172,6 @@
         "format": "",
         "tooltip": true,
         "tooltip-format": "Power menu",
-        "on-click": "~/.dotfiles/scripts/power_menu.sh"
+        "on-click": "~/.dotfiles/tools/launcher/target/release/Luma --query power"
     }
 }

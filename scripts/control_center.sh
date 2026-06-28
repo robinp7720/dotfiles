@@ -8,6 +8,7 @@ WINDOW_NAME="control_center"
 STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/control_center-open"
 REFRESH_PID_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/control_center-refresh.pid"
 STATUS_SCRIPT="$HOME/.config/eww/scripts/control_center_status.sh"
+LUMA_BIN="$HOME/.dotfiles/tools/launcher/target/release/Luma"
 
 if [[ -z "$EWW_BIN" ]]; then
   printf 'eww is not installed.\n' >&2
@@ -202,11 +203,11 @@ case "${1:-toggle}" in
     ;;
   launcher)
     close_center
-    exec "$HOME/.config/rofi/launcher.sh"
+    exec "$LUMA_BIN"
     ;;
   session-menu)
     close_center
-    exec "$HOME/.dotfiles/scripts/power_menu.sh"
+    exec "$LUMA_BIN" --query power
     ;;
   lock)
     close_center

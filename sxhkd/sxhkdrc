@@ -6,22 +6,18 @@ ctrl + Escape
 	find-cursor -d 10 -s 100 -w 0 -f -c "#333333"
 
 # program launcher
-super + d
-	~/.config/rofi/launcher.sh
-
-# Program launcher has been replaced with albert
 super + space
-    ~/.config/rofi/launcher.sh
+    ~/.dotfiles/tools/launcher/target/release/Luma
 
 super + p
-	rofi-pass
+	~/.dotfiles/tools/launcher/target/release/Luma --mode pass
 
 # reload sxhkd
 super + Escape
 	pkill -USR1 -x sxhkd
 
 super + c
-    rofi -show calc -modi calc -no-show-match -no-sort
+    ~/.dotfiles/tools/launcher/target/release/Luma --mode calc
 
 # terminal
 super + x

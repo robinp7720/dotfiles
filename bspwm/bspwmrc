@@ -63,7 +63,7 @@ bspc config external_rules_command "$HOME/.config/bspwm/external_rules"
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
 
 # Load our ssh keys
-# We only need this so we can directly login into an ssh server from rofi
+# Keep a terminal available for direct SSH launches from Luma.
 eval $(/usr/bin/gnome-keyring-daemon --start --components=pkcs11,secrets,ssh)
 export SSH_AUTH_SOCK
 

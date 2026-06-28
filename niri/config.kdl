@@ -81,9 +81,9 @@ input {
     focus-follows-mouse max-scroll-amount="80%"
 }
 
-// Add a shadow for rofi.
+// Add a shadow for Luma.
 layer-rule {
-    match namespace="^rofi$"
+    match namespace="^Luma$"
 
     shadow {
         on
@@ -422,9 +422,9 @@ binds {
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
     Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
-    Mod+B hotkey-overlay-title="Open System Palette" { spawn "~/.dotfiles/scripts/system_palette.sh"; }
-    Mod+Space hotkey-overlay-title="Run an Application: rofi" { spawn "~/.config/rofi/launcher.sh"; }
-    Mod+P hotkey-overlay-title="Passwords: tessen" { spawn "tessen"; }
+    Mod+B hotkey-overlay-title="Open Control Center" { spawn "~/.dotfiles/scripts/control_center.sh" "toggle"; }
+    Mod+Space hotkey-overlay-title="Run Luma" { spawn "~/.dotfiles/tools/launcher/target/release/Luma"; }
+    Mod+P hotkey-overlay-title="Passwords: Luma" { spawn "~/.dotfiles/tools/launcher/target/release/Luma" "--mode" "pass"; }
     Super+L hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.

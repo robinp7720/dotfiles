@@ -61,6 +61,15 @@ link_path() {
   ln -sfn "$src" "$target"
 }
 
+remove_managed_symlink() {
+  local target="$1"
+  local expected="$2"
+
+  if symlink_points_to "$target" "$expected"; then
+    rm -f -- "$target"
+  fi
+}
+
 sudo_link_path() {
   local src="$1"
   local target="$2"
@@ -102,7 +111,6 @@ directories=(
   "eww"
   "niri"
   "polybar"
-  "rofi"
   "sxhkd"
   "waybar"
   "nwg-hello"
@@ -115,6 +123,7 @@ for dir in "${directories[@]}"; do
   target="$HOME/.config/$dir"
   link_path "$DIR/$dir" "$target"
 done
+remove_managed_symlink "$HOME/.config/rofi" "$DIR/rofi"
 
 # Setup custom scripts in ~/.local/bin
 echo "Setting up scripts in ~/.local/bin"
@@ -122,7 +131,6 @@ mkdir -p "$HOME/.local/bin"
 
 scripts=(
   "scripts/launch_kitty.sh:kitty"
-  "scripts/rofi_wrapper.sh:rofi"
 )
 
 for script_pair in "${scripts[@]}"; do
@@ -135,6 +143,7 @@ for script_pair in "${scripts[@]}"; do
   link_path "$src" "$target"
   echo "Linked $target -> $src"
 done
+remove_managed_symlink "$HOME/.local/bin/rofi" "$DIR/scripts/rofi_wrapper.sh"
 
 # Link user systemd units
 mkdir -p "$HOME/.config/systemd/user"
