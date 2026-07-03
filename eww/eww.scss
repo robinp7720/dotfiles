@@ -24,10 +24,11 @@ window {
 /* Next event widget */
 .next-event {
   background-color: $surface_container_high;
-  border-radius: 14px;
+  border-radius: 22px;
   padding: 22px 26px;
   min-width: 540px;
   min-height: 120px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
 }
 .next-event-title {
   font-size: 4em;
@@ -44,10 +45,10 @@ window {
 /* Agenda widget */
 .agenda {
   background-color: $surface_container_high;
-  border-radius: 14px;
+  border-radius: 22px;
   padding: 22px 26px;
   min-width: 540px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
 }
 .agenda-list {
   margin-top: 10px;
@@ -55,7 +56,7 @@ window {
 .agenda-item {
   background-color: $surface_container;
   border: 1px solid $outline_variant;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px 12px;
   margin-bottom: 8px;
 }
@@ -89,10 +90,10 @@ window {
 /* Now playing widget */
 .now {
   background-color: $surface_container_high;
-  border-radius: 14px;
+  border-radius: 22px;
   padding: 18px 22px;
   min-width: 320px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
 }
 .now-title {
   font-size: 4em;
@@ -114,7 +115,7 @@ window {
   color: $on_surface;
 }
 .now-art-only {
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid $outline_variant;
 }
 
@@ -127,8 +128,8 @@ window {
   background-color: rgba($surface_container_low, 0.94);
   background-image: linear-gradient(180deg, rgba($surface_container_low, 0.96), rgba($surface_container, 0.96));
   border: 1px solid rgba($outline_variant, 0.88);
-  border-radius: 30px;
-  box-shadow: 0 30px 72px rgba(0, 0, 0, 0.42);
+  border-radius: 22px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.36);
   padding: 20px;
   min-width: 412px;
 }
@@ -165,7 +166,7 @@ window {
   background-color: rgba($secondary_container, 0.94);
   background-image: linear-gradient(145deg, rgba($secondary_container, 0.98), rgba($tertiary_container, 0.88));
   border: 1px solid rgba($secondary, 0.44);
-  border-radius: 26px;
+  border-radius: 18px;
   padding: 18px 18px 20px;
 }
 
@@ -238,7 +239,7 @@ window {
 .cc-agenda-card {
   background-color: rgba($surface_container_high, 0.94);
   border: 1px solid rgba($outline_variant, 0.78);
-  border-radius: 22px;
+  border-radius: 18px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
 }
 
@@ -255,7 +256,7 @@ window {
 
 .cc-primary-icon-wrap {
   background-color: rgba($primary_container, 0.96);
-  border-radius: 18px;
+  border-radius: 14px;
   min-width: 52px;
   min-height: 52px;
   margin-right: 14px;
@@ -321,7 +322,7 @@ window {
 }
 
 .cc-media-art {
-  border-radius: 18px;
+  border-radius: 14px;
   border: 1px solid rgba($outline_variant, 0.75);
   margin-right: 14px;
 }
@@ -352,7 +353,7 @@ window {
 .cc-agenda-item {
   background-color: rgba($surface_container_highest, 0.72);
   border: 1px solid rgba($outline_variant, 0.68);
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 11px 12px;
 }
 

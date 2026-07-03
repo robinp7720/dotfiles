@@ -89,7 +89,7 @@ layer-rule {
         on
     }
 
-    geometry-corner-radius 12
+    geometry-corner-radius 22
 }
 
 // Add a shadow for waybar.
@@ -100,7 +100,7 @@ layer-rule {
         on
     }
 
-    geometry-corner-radius 12
+    geometry-corner-radius 18
 }
 
 

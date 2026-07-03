@@ -46,6 +46,10 @@ output_path = '/var/cache/matugen/greetd.css'
 input_path = '~/.config/matugen/templates/anyrun.css'
 output_path = '~/.config/anyrun/colors.css'
 
+[templates.luma]
+input_path = '~/.config/matugen/templates/luma.css'
+output_path = '~/.config/Luma/theme.css'
+
 [templates.refind]
 input_path = '~/.config/matugen/templates/refind.json'
 output_path = '/var/cache/matugen/refind-colors.json'

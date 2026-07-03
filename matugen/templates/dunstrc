@@ -61,10 +61,10 @@
     progress_bar_max_width = 300
 
     # Corner radius for the progress bar. 0 disables rounded corners.
-    progress_bar_corner_radius = 10
+    progress_bar_corner_radius = 4
 
     # Corner radius for the icon image.
-    icon_corner_radius = 8
+    icon_corner_radius = 10
 
     # Show how many messages are currently hidden (because of
     # notification_limit).
@@ -73,7 +73,7 @@
     # The transparency of the window.  Range: [0; 100].
     # This option will only work if a compositing window manager is
     # present (e.g. xcompmgr, compiz, etc.). (X11 only)
-    transparency = 6
+    transparency = 4
 
     # Draw a line of "separator_height" pixel height between two
     # notifications.
@@ -85,7 +85,7 @@
     padding = 12
 
     # Horizontal padding.
-    horizontal_padding = 14
+    horizontal_padding = 16
 
     # Padding between text and icon.
     text_icon_padding = 10
@@ -101,7 +101,7 @@
     # If value is greater than 0, separator_height will be ignored and a border
     # of size frame_width will be drawn around each notification instead.
     # Click events on gaps do not currently propagate to applications below.
-    gap_size = 10
+    gap_size = 8
 
     # Define a color for the separator.
     # possible values are:
@@ -250,7 +250,7 @@
     # corners.
     # The radius will be automatically lowered if it exceeds half of the
     # notification height to avoid clipping text and/or icons.
-    corner_radius = 14
+    corner_radius = 18
 
     # Ignore the dbus closeNotification message.
     # Useful to enforce the timeout set by dunst configuration. Without this
