@@ -1,3 +1,21 @@
-// Output layout lives here so `config.kdl` can include it safely on every machine.
-// Leave this file empty to let Niri auto-place outputs, or add `output` nodes
-// for host-specific monitor positions, modes, scales, and transforms.
+// Keep this layout aligned with hypr/monitors.conf.
+output "DP-4" {
+    mode "3840x2160@60.000"
+    scale 1
+    transform "90"
+    position x=0 y=0
+}
+
+output "DP-5" {
+    mode "3840x2160@60.000"
+    scale 1
+    transform "normal"
+    position x=2160 y=675
+}
+
+output "HDMI-A-2" {
+    mode "3840x2160@60.000"
+    scale 1
+    transform "normal"
+    position x=6000 y=675
+}
