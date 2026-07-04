@@ -28,6 +28,16 @@ assert_count() {
   fi
 }
 
+assert_not_contains() {
+  local file="$1"
+  local rejected="$2"
+
+  if grep -Fq -- "$rejected" "$ROOT_DIR/$file"; then
+    printf 'Expected %s not to contain:\n  %s\n' "$file" "$rejected" >&2
+    return 1
+  fi
+}
+
 assert_contains matugen/templates/luma.css \
   'background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.72), alpha(@luma_surface, 0.68));'
 assert_contains matugen/templates/luma.css \
@@ -44,5 +54,29 @@ assert_contains hypr/hyprland-config/base.conf \
   'layerrule = blur on, match:namespace waybar'
 assert_contains hypr/hyprland-config/base.conf \
   'layerrule = ignore_alpha 0.20, match:namespace waybar'
+
+assert_contains matugen/templates/luma.css \
+  'font-family: "Cantarell", sans-serif;'
+assert_contains waybar/style.css \
+  'font-family: "Cantarell", "Symbols Nerd Font", sans-serif;'
+assert_contains eww/eww.scss \
+  'font-family: "Cantarell", sans-serif;'
+assert_contains matugen/templates/dunstrc \
+  'font = Cantarell 11'
+assert_count hypr/hyprlock.conf 5 \
+  'font_family = Cantarell'
+assert_contains hypr/hyprlock.conf \
+  'font_family = Cantarell ExtraBold'
+assert_contains matugen/templates/greetd.css \
+  'font-family: "Cantarell", sans-serif;'
+assert_contains matugen/UI_STYLE.md \
+  'Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback'
+
+assert_not_contains matugen/templates/luma.css 'JetBrains Mono'
+assert_not_contains waybar/style.css 'JetBrainsMono Nerd Font'
+assert_not_contains eww/eww.scss 'JetBrains Mono'
+assert_not_contains matugen/templates/dunstrc 'JetBrainsMono Nerd Font'
+assert_not_contains hypr/hyprlock.conf 'JetBrains Mono'
+assert_not_contains matugen/templates/greetd.css 'JetBrains Mono'
 
 printf 'Balanced Glass UI contract verified.\n'
