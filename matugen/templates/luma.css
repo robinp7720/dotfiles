@@ -16,8 +16,8 @@
 }
 
 .launcher-shell {
-  background-color: alpha(@luma_surface_low, 0.96);
-  background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.96), alpha(@luma_surface, 0.94));
+  background-color: alpha(@luma_surface_low, 0.70);
+  background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.72), alpha(@luma_surface, 0.68));
   border: 1px solid alpha(@luma_outline_variant, 0.72);
   border-radius: 22px;
   box-shadow: 0 20px 48px alpha(@luma_shadow, 0.36);
@@ -29,14 +29,14 @@
   padding: 6px 40px 6px 12px;
   border-radius: 14px;
   border: 1px solid alpha(@luma_outline_variant, 0.68);
-  background-color: alpha(@luma_surface_highest, 0.92);
+  background-color: alpha(@luma_surface_highest, 0.66);
   color: @luma_on_surface;
   box-shadow: none;
 }
 
 .launcher-entry:focus-within {
   border-color: alpha(@luma_primary, 0.72);
-  background-color: alpha(@luma_surface_highest, 0.96);
+  background-color: alpha(@luma_surface_highest, 0.74);
   box-shadow: 0 0 0 2px alpha(@luma_primary, 0.18);
 }
 
@@ -53,24 +53,24 @@
 }
 
 .launcher-row:selected {
-  background-color: alpha(@luma_primary_container, 0.90);
-  background-image: linear-gradient(90deg, alpha(@luma_primary_container, 0.96), alpha(@luma_surface_high, 0.92));
+  background-color: alpha(@luma_primary_container, 0.76);
+  background-image: linear-gradient(90deg, alpha(@luma_primary_container, 0.78), alpha(@luma_surface_high, 0.70));
   border-color: alpha(@luma_primary, 0.52);
 }
 
 .launcher-row-status {
-  background-color: alpha(@luma_surface_high, 0.90);
+  background-color: alpha(@luma_surface_high, 0.70);
   border: 1px dashed alpha(@luma_outline_variant, 0.64);
 }
 
 .launcher-row-status:selected {
-  background-color: alpha(@luma_primary_container, 0.78);
+  background-color: alpha(@luma_primary_container, 0.76);
 }
 
 .launcher-icon-wrap {
   min-width: 34px;
   border-radius: 10px;
-  background-color: alpha(@luma_surface_highest, 0.90);
+  background-color: alpha(@luma_surface_highest, 0.62);
   border: 1px solid alpha(@luma_outline_variant, 0.54);
   padding: 6px;
 }
@@ -94,15 +94,15 @@
 }
 
 .settings-shell {
-  background-color: alpha(@luma_surface_low, 0.96);
-  background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.96), alpha(@luma_surface, 0.94));
+  background-color: alpha(@luma_surface_low, 0.70);
+  background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.72), alpha(@luma_surface, 0.68));
   border: 1px solid alpha(@luma_outline_variant, 0.72);
   border-radius: 22px;
   box-shadow: 0 20px 48px alpha(@luma_shadow, 0.36);
 }
 
 .settings-card {
-  background-color: alpha(@luma_surface_high, 0.94);
+  background-color: alpha(@luma_surface_high, 0.66);
   border: 1px solid alpha(@luma_outline_variant, 0.66);
   border-radius: 18px;
   padding: 16px;

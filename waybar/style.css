@@ -1,9 +1,9 @@
 @import 'colors.css';
 
-@define-color bar_bg alpha(@surface_container_lowest, 0.86);
+@define-color bar_bg alpha(@surface_container_lowest, 0.58);
 @define-color bar_border alpha(@outline_variant, 0.65);
-@define-color module_bg alpha(@surface_container, 0.92);
-@define-color module_bg_alt alpha(@surface_container_high, 0.92);
+@define-color module_bg alpha(@surface_container, 0.52);
+@define-color module_bg_alt alpha(@surface_container_high, 0.60);
 @define-color module_border alpha(@outline_variant, 0.6);
 @define-color accent @primary;
 @define-color accent_fg @on_primary;
@@ -99,14 +99,14 @@ window#waybar.hidden {
 }
 
 #custom-nowplaying {
-  background-color: alpha(@primary_container, 0.95);
+  background-color: alpha(@primary_container, 0.68);
   color: @on_primary_container;
   border: 1px solid alpha(@primary, 0.5);
   font-weight: 600;
 }
 
 #custom-next-event {
-  background-color: alpha(@secondary_container, 0.92);
+  background-color: alpha(@secondary_container, 0.64);
   color: @on_secondary_container;
   border: 1px solid alpha(@secondary, 0.45);
   font-weight: 600;
@@ -143,13 +143,13 @@ window#waybar.hidden {
 
 #bluetooth.off,
 #custom-headphones.disconnected {
-  background-color: alpha(@surface_container_low, 0.92);
+  background-color: alpha(@surface_container_low, 0.52);
   color: @soft_fg;
   border: 1px solid alpha(@outline_variant, 0.6);
 }
 
 #custom-battery.warning {
-  background-color: alpha(@tertiary_container, 0.9);
+  background-color: alpha(@tertiary_container, 0.72);
   color: @on_tertiary_container;
   border: 1px solid alpha(@tertiary, 0.5);
 }
@@ -162,13 +162,13 @@ window#waybar.hidden {
 }
 
 #custom-battery.charging {
-  background-color: alpha(@secondary_container, 0.9);
+  background-color: alpha(@secondary_container, 0.72);
   color: @on_secondary_container;
   border: 1px solid alpha(@secondary, 0.6);
 }
 
 #clock {
-  background-color: alpha(@tertiary_container, 0.9);
+  background-color: alpha(@tertiary_container, 0.72);
   color: @on_tertiary_container;
   border: 1px solid alpha(@tertiary, 0.5);
 }
@@ -180,7 +180,7 @@ window#waybar.hidden {
 }
 
 #custom-power:hover {
-  background-color: alpha(@primary_container, 0.92);
+  background-color: alpha(@primary_container, 0.72);
   color: @on_primary_container;
   border-color: alpha(@primary, 0.5);
 }
@@ -210,7 +210,7 @@ window#waybar.hidden {
 tooltip {
   border-radius: 14px;
   padding: 12px 14px;
-  background-color: alpha(@surface_container_high, 0.95);
+  background-color: alpha(@surface_container_high, 0.82);
   border: 1px solid alpha(@outline_variant, 0.6);
   color: @on_surface;
 }
