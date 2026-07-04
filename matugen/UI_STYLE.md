@@ -11,8 +11,7 @@ come from Material roles; geometry and depth follow this shared scale:
   48-70%, and selected, warning, or status-bearing surfaces may rise to 82%.
 - Shadows: ambient cards use `0 12px 28px` at 25% black; overlays use
   `0 20px 48px` at 36% black.
-- Typography: JetBrainsMono Nerd Font, with `on_surface_variant` for supporting
-  text.
+- Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback; use `on_surface_variant` for supporting text.
 - States: `primary` marks focus and selection, `tertiary` marks warnings, and
   `error` is reserved for critical, failed, urgent, or destructive states.
 
