@@ -14,10 +14,26 @@ assert_contains() {
   fi
 }
 
+assert_count() {
+  local file="$1"
+  local expected_count="$2"
+  local expected="$3"
+  local actual_count
+
+  actual_count="$(grep -Fc -- "$expected" "$ROOT_DIR/$file")"
+  if [[ "$actual_count" -ne "$expected_count" ]]; then
+    printf 'Expected %s to contain %s occurrences of:\n  %s\nFound: %s\n' \
+      "$file" "$expected_count" "$expected" "$actual_count" >&2
+    return 1
+  fi
+}
+
 assert_contains matugen/templates/luma.css \
   'background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.72), alpha(@luma_surface, 0.68));'
 assert_contains matugen/templates/luma.css \
   'background-color: alpha(@luma_surface_highest, 0.66);'
+assert_count matugen/templates/luma.css 3 \
+  'background-color: transparent;'
 assert_contains waybar/style.css \
   '@define-color bar_bg alpha(@surface_container_lowest, 0.58);'
 assert_contains waybar/style.css \
