@@ -20,7 +20,7 @@ assert_count() {
   local expected="$3"
   local actual_count
 
-  actual_count="$(grep -Fc -- "$expected" "$ROOT_DIR/$file")"
+  actual_count="$(grep -Fc -- "$expected" "$ROOT_DIR/$file" || true)"
   if [[ "$actual_count" -ne "$expected_count" ]]; then
     printf 'Expected %s to contain %s occurrences of:\n  %s\nFound: %s\n' \
       "$file" "$expected_count" "$expected" "$actual_count" >&2
@@ -50,6 +50,8 @@ assert_contains waybar/style.css \
   '@define-color module_bg alpha(@surface_container, 0.52);'
 assert_contains waybar/style.css \
   '@define-color module_bg_alt alpha(@surface_container_high, 0.60);'
+assert_count waybar/style.css 2 \
+  'padding: 4.5px 12px;'
 assert_contains hypr/hyprland-config/base.conf \
   'layerrule = blur on, match:namespace waybar'
 assert_contains hypr/hyprland-config/base.conf \
