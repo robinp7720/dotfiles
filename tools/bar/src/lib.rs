@@ -2,6 +2,7 @@ pub mod config;
 pub mod context;
 pub mod ipc;
 pub mod model;
+pub mod sources;
 pub mod state;
 pub mod timers;
 
@@ -24,6 +25,7 @@ pub use model::{
     ResourceState, SourceHealth, SourceId, StateUpdate, SystemState, SystemUpdate, TimerState,
     WindowState, WorkspaceState,
 };
+pub use sources::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
 pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};
 
