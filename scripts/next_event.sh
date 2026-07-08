@@ -27,14 +27,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-json_escape() {
-  local s="$1"
-  s=${s//\\/\\\\}
-  s=${s//\"/\\\"}
-  s=${s//$'\n'/\\n}
-  printf '%s' "$s"
-}
-
 mtime_epoch() {
   local path="$1"
 
@@ -51,51 +43,23 @@ write_cache() {
   mv "$tmp" "$CACHE_FILE"
 }
 
-json_string_or_null() {
-  local value="${1:-}"
-
-  if [[ -n "$value" ]]; then
-    printf '"%s"' "$(json_escape "$value")"
-  else
-    printf 'null'
-  fi
-}
-
-json_number_or_null() {
-  local value="${1:-}"
-
-  if [[ -n "$value" ]]; then
-    printf '%s' "$value"
-  else
-    printf 'null'
-  fi
-}
-
-record_event_json() {
-  local id="$1"
-  local title="$2"
-  local location="${3:-}"
-  local start_epoch="$4"
-  local end_epoch="${5:-}"
-  local text="$6"
-
-  printf '{"healthy":true,"id":"%s","title":"%s","location":%s,"start_epoch":%s,"end_epoch":%s,"text":"%s"}\n' \
-    "$(json_escape "$id")" \
-    "$(json_escape "$title")" \
-    "$(json_string_or_null "$location")" \
-    "$start_epoch" \
-    "$(json_number_or_null "$end_epoch")" \
-    "$(json_escape "$text")"
-}
-
 record_empty_json() {
-  printf '{"healthy":true,"empty":true}\n'
+  python3 - <<'PY'
+import json
+
+print(json.dumps({"healthy": True, "empty": True}, separators=(",", ":")))
+PY
 }
 
 record_error_json() {
   local error_message="$1"
 
-  printf '{"healthy":false,"error":"%s"}\n' "$(json_escape "$error_message")"
+  python3 - "$error_message" <<'PY'
+import json
+import sys
+
+print(json.dumps({"healthy": False, "error": sys.argv[1]}, ensure_ascii=False, separators=(",", ":")))
+PY
 }
 
 render_cached_json() {
@@ -150,74 +114,86 @@ current_epoch() {
   fi
 }
 
-format_eta() {
-  local start_epoch="$1"
-  local now_epoch diff mins hours rem_mins
-
-  now_epoch="$(current_epoch)"
-  diff=$(( start_epoch - now_epoch ))
-  (( diff < 0 )) && diff=0
-  mins=$(( (diff + 59) / 60 ))
-
-  if (( mins >= 90 )); then
-    hours=$(( mins / 60 ))
-    rem_mins=$(( mins % 60 ))
-    if (( rem_mins == 0 )); then
-      printf '%sh\n' "$hours"
-    else
-      printf '%sh %sm\n' "$hours" "$rem_mins"
-    fi
-    return
-  fi
-
-  printf '%s mins\n' "$mins"
-}
-
 try_khal() {
   if ! command -v khal >/dev/null 2>&1; then
     return 1
   fi
 
-  local line event_date start_time end_time title start_epoch end_epoch id
-  if ! line="$(khal list now 7d 2>/dev/null | sed -n '1p')"; then
+  local output parsed
+  if ! output="$(
+    LC_ALL=C khal list \
+      --format '{start-long-full}{tab}{end-long-full}{tab}{uid}{tab}{title}{tab}{location}' \
+      --day-format '' \
+      --once \
+      now 7d 2>/dev/null
+  )"; then
     FETCH_RESULT_KIND="error"
     FETCH_RESULT_JSON="$(record_error_json "khal command failed")"
     return 0
   fi
 
-  if [[ -z "$line" ]]; then
+  if [[ -z "$output" ]]; then
     FETCH_RESULT_KIND="empty"
     FETCH_RESULT_JSON="$(record_empty_json)"
     return 0
   fi
 
-  if [[ "$line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}:[0-9]{2})(-([0-9]{2}:[0-9]{2}))?[[:space:]]{2,}(.*)$ ]]; then
-    event_date="${BASH_REMATCH[1]}"
-    start_time="${BASH_REMATCH[2]}"
-    end_time="${BASH_REMATCH[4]:-}"
-    title="${BASH_REMATCH[5]}"
-  else
+  if ! parsed="$(KHAL_OUTPUT="$output" python3 - 2>/dev/null <<'PY'
+import csv
+import io
+import json
+import os
+import subprocess
+
+
+def epoch(value):
+    result = subprocess.run(
+        ["date", "-d", value, "+%s"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip())
+
+
+rows = csv.reader(io.StringIO(os.environ["KHAL_OUTPUT"]), delimiter="\t")
+row = next(rows)
+if len(row) != 5:
+    raise ValueError(f"expected 5 khal fields, got {len(row)}")
+
+start_value, end_value, uid, title, location = row
+start_epoch = epoch(start_value)
+end_epoch = epoch(end_value) if end_value else start_epoch
+event_id = uid or f"khal:{start_epoch}:{title}"
+text = title
+if location:
+    text = f"{text} at {location}"
+
+print("event")
+print(
+    json.dumps(
+        {
+            "healthy": True,
+            "id": event_id,
+            "title": title,
+            "location": location or None,
+            "start_epoch": start_epoch,
+            "end_epoch": end_epoch,
+            "text": text,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+)
+PY
+)"; then
     FETCH_RESULT_KIND="error"
     FETCH_RESULT_JSON="$(record_error_json "failed to parse khal output")"
     return 0
   fi
 
-  if ! start_epoch="$(date -d "$event_date $start_time" +%s 2>/dev/null)"; then
-    FETCH_RESULT_KIND="error"
-    FETCH_RESULT_JSON="$(record_error_json "failed to parse khal start time")"
-    return 0
-  fi
-
-  end_epoch=""
-  if [[ -n "$end_time" ]] && ! end_epoch="$(date -d "$event_date $end_time" +%s 2>/dev/null)"; then
-    FETCH_RESULT_KIND="error"
-    FETCH_RESULT_JSON="$(record_error_json "failed to parse khal end time")"
-    return 0
-  fi
-
-  id="khal:${start_epoch}:${title}"
-  FETCH_RESULT_KIND="event"
-  FETCH_RESULT_JSON="$(record_event_json "$id" "$title" "" "$start_epoch" "$end_epoch" "$line")"
+  FETCH_RESULT_KIND="${parsed%%$'\n'*}"
+  FETCH_RESULT_JSON="${parsed#*$'\n'}"
   return 0
 }
 
@@ -226,67 +202,110 @@ try_gcalcli() {
     return 1
   fi
 
-  local line start_date start_time end_date end_time summary location start_epoch end_epoch eta out id
-  if ! line="$(
-    gcalcli --nocolor agenda --tsv --details=location now 7d 2>/dev/null |
-      awk -F '\t' 'NR>1 && NF>=5 {
-        printf "%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n", $1, $2, $3, $4, $5, $6
-        exit
-      }'
-  )"; then
+  local output parsed
+  if ! output="$(gcalcli --nocolor agenda --tsv --details=location now 7d 2>/dev/null)"; then
     FETCH_RESULT_KIND="error"
     FETCH_RESULT_JSON="$(record_error_json "gcalcli command failed")"
     return 0
   fi
 
-  if [[ -z "${line:-}" ]]; then
-    FETCH_RESULT_KIND="empty"
-    FETCH_RESULT_JSON="$(record_empty_json)"
-    return 0
-  fi
+  if ! parsed="$(GCALCLI_OUTPUT="$output" python3 - 2>/dev/null <<'PY'
+import csv
+import io
+import json
+import os
+import subprocess
+import time
 
-  IFS=$'\x1f' read -r start_date start_time end_date end_time summary location <<<"$line"
-  if [[ -z "${start_time:-}" ]] || ! start_epoch="$(date -d "$start_date $start_time" +%s 2>/dev/null)"; then
+
+def epoch(date_value, time_value):
+    result = subprocess.run(
+        ["date", "-d", f"{date_value} {time_value}", "+%s"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip())
+
+
+def format_eta(start_epoch):
+    now_epoch = int(os.environ.get("NEXT_EVENT_NOW_EPOCH", time.time()))
+    minutes = (max(start_epoch - now_epoch, 0) + 59) // 60
+    if minutes >= 90:
+        hours, remaining = divmod(minutes, 60)
+        return f"{hours}h" if remaining == 0 else f"{hours}h {remaining}m"
+    return f"{minutes} mins"
+
+
+rows = csv.reader(io.StringIO(os.environ["GCALCLI_OUTPUT"]), delimiter="\t")
+next(rows, None)
+row = next(rows, None)
+if row is None:
+    print("empty")
+    print(json.dumps({"healthy": True, "empty": True}, separators=(",", ":")))
+    raise SystemExit(0)
+if len(row) < 5:
+    raise ValueError(f"expected at least 5 gcalcli fields, got {len(row)}")
+
+row.extend([""] * (6 - len(row)))
+start_date, start_time, end_date, end_time, summary, location = row[:6]
+if not start_time:
+    raise ValueError("gcalcli start time is missing")
+start_epoch = epoch(start_date, start_time)
+if end_time:
+    end_epoch = epoch(end_date or start_date, end_time)
+else:
+    end_epoch = start_epoch
+
+title = summary.split(",", 1)[0]
+text = f"{title} in {format_eta(start_epoch)}"
+if location:
+    text = f"{text} at {location}"
+
+print("event")
+print(
+    json.dumps(
+        {
+            "healthy": True,
+            "id": f"gcalcli:{start_epoch}:{title}",
+            "title": title,
+            "location": location or None,
+            "start_epoch": start_epoch,
+            "end_epoch": end_epoch,
+            "text": text,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+)
+PY
+)"; then
     FETCH_RESULT_KIND="error"
-    FETCH_RESULT_JSON="$(record_error_json "failed to parse gcalcli start time")"
+    FETCH_RESULT_JSON="$(record_error_json "failed to parse gcalcli output")"
     return 0
   fi
 
-  end_epoch=""
-  if [[ -n "${end_time:-}" ]] && ! end_epoch="$(date -d "$end_date $end_time" +%s 2>/dev/null)"; then
-    FETCH_RESULT_KIND="error"
-    FETCH_RESULT_JSON="$(record_error_json "failed to parse gcalcli end time")"
-    return 0
-  fi
-
-  eta="$(format_eta "$start_epoch")"
-  summary="${summary%%,*}"
-
-  out="${summary}"
-  if [[ -n "${eta:-}" ]]; then
-    out="${out} in ${eta}"
-  fi
-  if [[ -n "${location:-}" ]]; then
-    out="${out} at ${location}"
-  fi
-
-  id="gcalcli:${start_epoch}:${summary}"
-  FETCH_RESULT_KIND="event"
-  FETCH_RESULT_JSON="$(record_event_json "$id" "$summary" "${location:-}" "$start_epoch" "$end_epoch" "$out")"
+  FETCH_RESULT_KIND="${parsed%%$'\n'*}"
+  FETCH_RESULT_JSON="${parsed#*$'\n'}"
   return 0
 }
 
 fetch_calendar_json() {
   local khal_empty_json=""
+  local khal_error_json=""
 
   case "$CALENDAR_BACKEND" in
     auto)
       if try_khal; then
-        if [[ "$FETCH_RESULT_KIND" != "empty" ]]; then
+        if [[ "$FETCH_RESULT_KIND" == "event" ]]; then
           printf '%s\n' "$FETCH_RESULT_JSON"
           return 0
         fi
-        khal_empty_json="$FETCH_RESULT_JSON"
+        if [[ "$FETCH_RESULT_KIND" == "empty" ]]; then
+          khal_empty_json="$FETCH_RESULT_JSON"
+        else
+          khal_error_json="$FETCH_RESULT_JSON"
+        fi
       fi
 
       if try_gcalcli; then
@@ -296,6 +315,8 @@ fetch_calendar_json() {
 
       if [[ -n "$khal_empty_json" ]]; then
         printf '%s\n' "$khal_empty_json"
+      elif [[ -n "$khal_error_json" ]]; then
+        printf '%s\n' "$khal_error_json"
       else
         record_error_json "no supported calendar backend found"
       fi

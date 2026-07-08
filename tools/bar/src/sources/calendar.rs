@@ -23,7 +23,7 @@ pub struct CalendarRecord {
     pub title: String,
     pub location: Option<String>,
     pub start_epoch: i64,
-    pub end_epoch: Option<i64>,
+    pub end_epoch: i64,
     #[serde(default)]
     pub error: Option<String>,
 }
@@ -49,13 +49,11 @@ pub fn parse_calendar_json(text: &str) -> Result<CalendarRecord> {
     if record.start_epoch <= 0 {
         bail!("start_epoch must be positive");
     }
-    if let Some(end_epoch) = record.end_epoch {
-        if end_epoch <= 0 {
-            bail!("end_epoch must be positive");
-        }
-        if end_epoch < record.start_epoch {
-            bail!("end_epoch must be greater than or equal to start_epoch");
-        }
+    if record.end_epoch <= 0 {
+        bail!("end_epoch must be positive");
+    }
+    if record.end_epoch < record.start_epoch {
+        bail!("end_epoch must be greater than or equal to start_epoch");
     }
 
     Ok(record)
@@ -91,7 +89,7 @@ fn publish_once(script_path: &Path, sender: &Sender<StateUpdate>) -> bool {
                 title: record.title,
                 location: record.location,
                 start_epoch: record.start_epoch,
-                end_epoch: record.end_epoch,
+                end_epoch: Some(record.end_epoch),
                 changed_at: 0,
             };
             sender

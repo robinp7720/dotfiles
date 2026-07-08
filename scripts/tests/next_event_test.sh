@@ -67,12 +67,14 @@ PY
 
 run_script() {
   local workdir="$1"
-  local mode="$2"
+  local backend="$2"
+  local mode="$3"
 
   HOME="$workdir/home" \
   PATH="$workdir/bin:$PATH" \
+  TZ="UTC" \
   XDG_CACHE_HOME="$workdir/cache" \
-  CALENDAR_BACKEND="gcalcli" \
+  CALENDAR_BACKEND="$backend" \
   NEXT_EVENT_NOW_EPOCH="1800000000" \
     "$SCRIPT_UNDER_TEST" "$mode"
 }
@@ -87,12 +89,12 @@ test_gcalcli_json_and_waybar_contract() {
 #!/usr/bin/env bash
 cat <<'EOF'
 start_date	start_time	end_date	end_time	summary	location
-2027-01-15	09:10	2027-01-15	09:40	Design review, Engineering	Room 2
+2027-01-15	08:10	2027-01-15	08:40	Design review, Engineering	Room 2
 EOF
 FAKE_GCALCLI
   chmod +x "$fake_gcalcli"
 
-  json_output="$(run_script "$workdir" --json)"
+  json_output="$(run_script "$workdir" gcalcli --json)"
   assert_json_field "$json_output" "id" "gcalcli:1800000600:Design review"
   assert_json_field "$json_output" "title" "Design review"
   assert_json_field "$json_output" "start_epoch" "1800000600"
@@ -104,8 +106,131 @@ FAKE_GCALCLI
   [[ -f "$cache_file" ]] || fail "expected calendar cache to be written"
   assert_json_field "$(cat "$cache_file")" "title" "Design review"
 
-  waybar_output="$(run_script "$workdir" --waybar)"
+  waybar_output="$(run_script "$workdir" gcalcli --waybar)"
   assert_waybar_payload "$waybar_output" "  Design review in 10 mins at Room 2"
+}
+
+test_auto_falls_back_after_khal_parse_failure() {
+  local workdir="$1"
+  local json_output
+
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/khal" <<'FAKE_KHAL'
+#!/usr/bin/env bash
+printf '%s\n' 'not a structured khal record'
+FAKE_KHAL
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+cat <<'EOF'
+start_date	start_time	end_date	end_time	summary	location
+2027-01-15	08:10	2027-01-15	08:40	Fallback review	Room 3
+EOF
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/khal" "$workdir/bin/gcalcli"
+
+  json_output="$(run_script "$workdir" auto --json)"
+  assert_json_field "$json_output" "title" "Fallback review"
+  assert_json_field "$json_output" "end_epoch" "1800002400"
+  assert_json_bool "$json_output" "healthy" "true"
+}
+
+test_khal_all_day_event_uses_explicit_format() {
+  local workdir="$1"
+  local json_output
+
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/khal" <<'FAKE_KHAL'
+#!/usr/bin/env bash
+expected='{start-long-full}{tab}{end-long-full}{tab}{uid}{tab}{title}{tab}{location}'
+format=''
+day_format='missing'
+once=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --format)
+      format="$2"
+      shift 2
+      ;;
+    --day-format)
+      day_format="$2"
+      shift 2
+      ;;
+    --once)
+      once=1
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+[[ "$format" == "$expected" && -z "$day_format" && "$once" == 1 && "${LC_ALL:-}" == "C" ]] || exit 64
+printf '2027-01-16 00:00\t2027-01-17 00:00\tall-day-uid\tConference day\tHall A\n'
+FAKE_KHAL
+  chmod +x "$workdir/bin/khal"
+
+  json_output="$(run_script "$workdir" khal --json)"
+  assert_json_field "$json_output" "id" "all-day-uid"
+  assert_json_field "$json_output" "title" "Conference day"
+  assert_json_field "$json_output" "start_epoch" "1800057600"
+  assert_json_field "$json_output" "end_epoch" "1800144000"
+  assert_json_field "$json_output" "location" "Hall A"
+}
+
+test_missing_backend_end_normalizes_to_start() {
+  local workdir="$1"
+  local json_output
+
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+printf 'start_date\tstart_time\tend_date\tend_time\tsummary\tlocation\n'
+printf '2027-01-15\t08:10\t\t\tOpen-ended review\tRoom 4\n'
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/gcalcli"
+
+  json_output="$(run_script "$workdir" gcalcli --json)"
+  assert_json_field "$json_output" "start_epoch" "1800000600"
+  assert_json_field "$json_output" "end_epoch" "1800000600"
+}
+
+test_control_characters_are_serialized_by_python_json() {
+  local workdir="$1"
+  local json_output title location
+
+  title=$'Planning "A"\tB\rC\nD\\E'
+  location=$'Room "2"\tEast\rWing\nDesk\\7'
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+python3 - <<'PY'
+import csv
+import sys
+
+writer = csv.writer(sys.stdout, delimiter="\t", lineterminator="\n")
+writer.writerow(["start_date", "start_time", "end_date", "end_time", "summary", "location"])
+writer.writerow([
+    "2027-01-15",
+    "08:10",
+    "2027-01-15",
+    "08:40",
+    'Planning "A"\tB\rC\nD\\E',
+    'Room "2"\tEast\rWing\nDesk\\7',
+])
+PY
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/gcalcli"
+
+  json_output="$(run_script "$workdir" gcalcli --json)"
+  assert_json_field "$json_output" "title" "$title"
+  assert_json_field "$json_output" "location" "$location"
+  CALENDAR_JSON="$json_output" python3 - <<'PY'
+import json
+import os
+
+record = json.loads(os.environ["CALENDAR_JSON"])
+assert record["end_epoch"] > 0
+PY
 }
 
 main() {
@@ -113,7 +238,33 @@ main() {
   tmpdir="$(mktemp -d)"
   trap "rm -rf '$tmpdir'" EXIT
 
-  test_gcalcli_json_and_waybar_contract "$tmpdir"
+  case "${1:-all}" in
+    gcalcli-contract)
+      test_gcalcli_json_and_waybar_contract "$tmpdir/gcalcli-contract"
+      ;;
+    khal-fallback)
+      test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
+      ;;
+    khal-all-day)
+      test_khal_all_day_event_uses_explicit_format "$tmpdir/khal-all-day"
+      ;;
+    missing-end)
+      test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"
+      ;;
+    control-characters)
+      test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
+      ;;
+    all)
+      test_gcalcli_json_and_waybar_contract "$tmpdir/gcalcli-contract"
+      test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
+      test_khal_all_day_event_uses_explicit_format "$tmpdir/khal-all-day"
+      test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"
+      test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
+      ;;
+    *)
+      fail "unknown test case: $1"
+      ;;
+  esac
 
   printf 'ok - next_event.sh structured calendar contract passed\n'
 }

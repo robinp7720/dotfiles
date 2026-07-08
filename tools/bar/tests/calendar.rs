@@ -53,6 +53,41 @@ fn parse_calendar_json_rejects_end_before_start() {
 }
 
 #[test]
+fn parse_calendar_json_rejects_missing_end_epoch() {
+    assert!(
+        parse_calendar_json(
+            r#"{"healthy":true,"id":"review","title":"Review","location":"Room 2","start_epoch":1800000600}"#,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn parse_calendar_json_rejects_non_positive_end_epoch() {
+    let error = parse_calendar_json(
+        r#"{"healthy":true,"id":"review","title":"Review","location":"Room 2","start_epoch":1800000600,"end_epoch":0}"#,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("end_epoch must be positive"));
+}
+
+#[test]
+fn parse_calendar_json_preserves_json_escaped_control_characters() {
+    let record = parse_calendar_json(
+        r#"{"healthy":true,"id":"special","title":"Planning \"A\"\tB\rC\nD\\E","location":"Room \"2\"\tEast\rWing\nDesk\\7","start_epoch":1800000600,"end_epoch":1800002400}"#,
+    )
+    .expect("parse escaped calendar record");
+
+    assert_eq!(record.title, "Planning \"A\"\tB\rC\nD\\E");
+    assert_eq!(
+        record.location.as_deref(),
+        Some("Room \"2\"\tEast\rWing\nDesk\\7")
+    );
+    assert_eq!(record.end_epoch, 1_800_002_400);
+}
+
+#[test]
 fn calendar_source_publishes_calendar_event_and_health() {
     let temp_dir = unique_temp_dir("calendar-source");
     fs::create_dir_all(&temp_dir).expect("create temp dir");
