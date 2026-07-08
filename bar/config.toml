@@ -1,0 +1,71 @@
+primary_output = "DP-5"
+
+[thresholds]
+calendar_soon_minutes = 15
+timer_soon_minutes = 5
+battery_low_percent = 15
+battery_critical_percent = 7
+work_completed_seconds = 30
+
+[modules]
+full = [
+  "workspaces",
+  "focused_app",
+  "focused_title",
+  "context",
+  "keyboard_layout",
+  "resources",
+  "network",
+  "bluetooth_audio",
+  "power",
+  "clock",
+]
+reduced = ["workspaces", "focused_title", "critical_warning", "clock"]
+
+[freshness]
+compositor_seconds = 10
+resources_seconds = 15
+power_seconds = 30
+network_seconds = 30
+bluetooth_seconds = 30
+media_seconds = 15
+calendar_seconds = 60
+activity_seconds = 45
+timers_seconds = 5
+
+[retry_backoff]
+compositor_seconds = 2
+power_seconds = 8
+network_seconds = 8
+bluetooth_seconds = 8
+media_seconds = 8
+calendar_seconds = 30
+activity_seconds = 5
+
+[[command_activity.allowlist]]
+label = "Cargo build"
+prefixes = ["cargo build"]
+
+[[command_activity.allowlist]]
+label = "Cargo test"
+prefixes = ["cargo test"]
+
+[[command_activity.allowlist]]
+label = "Cargo run"
+prefixes = ["cargo run"]
+
+[[command_activity.allowlist]]
+label = "npm test"
+prefixes = ["npm test"]
+
+[[command_activity.allowlist]]
+label = "pnpm test"
+prefixes = ["pnpm test"]
+
+[[command_activity.allowlist]]
+label = "Pytest"
+prefixes = ["pytest"]
+
+[[command_activity.allowlist]]
+label = "Make"
+prefixes = ["make"]
