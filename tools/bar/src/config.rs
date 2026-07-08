@@ -65,6 +65,11 @@ impl AppConfig {
         }
 
         validate_positive(
+            "thresholds.critical_snooze_seconds",
+            self.thresholds.critical_snooze_seconds,
+        )?;
+
+        validate_positive(
             "freshness.compositor_seconds",
             self.freshness.compositor_seconds,
         )?;
@@ -130,6 +135,7 @@ pub struct ThresholdConfig {
     pub battery_low_percent: u8,
     pub battery_critical_percent: u8,
     pub work_completed_seconds: u64,
+    pub critical_snooze_seconds: u64,
 }
 
 impl Default for ThresholdConfig {
@@ -140,6 +146,7 @@ impl Default for ThresholdConfig {
             battery_low_percent: 15,
             battery_critical_percent: 7,
             work_completed_seconds: 30,
+            critical_snooze_seconds: 300,
         }
     }
 }
@@ -317,6 +324,7 @@ mod tests {
         assert_eq!(config.thresholds.timer_soon_minutes, 5);
         assert_eq!(config.thresholds.battery_low_percent, 15);
         assert_eq!(config.thresholds.battery_critical_percent, 7);
+        assert_eq!(config.thresholds.critical_snooze_seconds, 300);
     }
 
     #[test]
@@ -324,6 +332,7 @@ mod tests {
         let config = AppConfig::from_toml(include_str!("../../../bar/config.toml")).unwrap();
         assert_eq!(config.primary_output.as_deref(), Some("DP-5"));
         assert_eq!(config.thresholds.work_completed_seconds, 30);
+        assert_eq!(config.thresholds.critical_snooze_seconds, 300);
         assert_eq!(config.modules.reduced[0], ModuleName::Workspaces);
         assert_eq!(config.command_activity.allowlist.len(), 7);
     }

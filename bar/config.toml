@@ -6,6 +6,7 @@ timer_soon_minutes = 5
 battery_low_percent = 15
 battery_critical_percent = 7
 work_completed_seconds = 30
+critical_snooze_seconds = 300
 
 [modules]
 full = [

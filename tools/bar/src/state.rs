@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use crate::config::FreshnessConfig;
 use crate::{
-    ActivityStatus, ActivityUpdate, BarSnapshot, CommandActivity, SourceHealth, SourceId,
-    StateUpdate, SystemUpdate,
+    ActivityStatus, ActivityUpdate, BarSnapshot, CalendarEvent, CommandActivity, MediaState,
+    OutputState, PowerState, SourceHealth, SourceId, StateUpdate, SystemUpdate, TimerState,
+    WindowState, WorkspaceState,
 };
 
 #[derive(Clone, Debug)]
@@ -39,10 +40,7 @@ impl StateStore {
         let refreshes_health = !matches!(&update, StateUpdate::Health { .. });
         let mut dirty = match update {
             StateUpdate::Outputs(outputs) => {
-                let next_outputs = outputs
-                    .into_iter()
-                    .map(|output| (output.name.clone(), output))
-                    .collect::<BTreeMap<_, _>>();
+                let next_outputs = normalize_outputs(outputs, &self.snapshot.outputs, observed_at);
                 if self.snapshot.outputs == next_outputs {
                     false
                 } else {
@@ -58,7 +56,9 @@ impl StateStore {
                     true
                 }
             }
-            StateUpdate::System(system_update) => self.apply_system_update(system_update),
+            StateUpdate::System(system_update) => {
+                self.apply_system_update(system_update, observed_at)
+            }
             StateUpdate::Activity(activity_update) => self.apply_activity_update(activity_update),
             StateUpdate::Health { source, health } => {
                 self.observed_at.insert(source, observed_at);
@@ -103,7 +103,7 @@ impl StateStore {
         dirty
     }
 
-    fn apply_system_update(&mut self, update: SystemUpdate) -> bool {
+    fn apply_system_update(&mut self, update: SystemUpdate, observed_at: i64) -> bool {
         match update {
             SystemUpdate::KeyboardLayout(value) => {
                 if self.snapshot.system.keyboard_layout == value {
@@ -138,6 +138,7 @@ impl StateStore {
                 }
             }
             SystemUpdate::Power(value) => {
+                let value = normalize_power(value, &self.snapshot.system.power, observed_at);
                 if self.snapshot.system.power == value {
                     false
                 } else {
@@ -154,6 +155,8 @@ impl StateStore {
                 }
             }
             SystemUpdate::Media(value) => {
+                let value =
+                    normalize_media(value, self.snapshot.system.media.as_ref(), observed_at);
                 if self.snapshot.system.media == value {
                     false
                 } else {
@@ -162,6 +165,8 @@ impl StateStore {
                 }
             }
             SystemUpdate::Calendar(value) => {
+                let value =
+                    normalize_calendar(value, self.snapshot.system.calendar.as_ref(), observed_at);
                 if self.snapshot.system.calendar == value {
                     false
                 } else {
@@ -170,6 +175,7 @@ impl StateStore {
                 }
             }
             SystemUpdate::Timers(value) => {
+                let value = normalize_timers(value, &self.snapshot.system.timers, observed_at);
                 if self.snapshot.system.timers == value {
                     false
                 } else {
@@ -252,6 +258,157 @@ impl StateStore {
     }
 }
 
+fn normalize_outputs(
+    outputs: Vec<OutputState>,
+    current: &BTreeMap<String, OutputState>,
+    observed_at: i64,
+) -> BTreeMap<String, OutputState> {
+    outputs
+        .into_iter()
+        .map(|mut output| {
+            let previous = current.get(&output.name);
+            output.changed_at = previous
+                .filter(|previous| output_semantically_equal(&output, previous))
+                .map_or(observed_at, |previous| previous.changed_at);
+
+            for workspace in &mut output.workspaces {
+                let previous_workspace = previous.and_then(|previous| {
+                    previous
+                        .workspaces
+                        .iter()
+                        .find(|candidate| candidate.id == workspace.id)
+                });
+                workspace.changed_at = previous_workspace
+                    .filter(|previous| workspace_semantically_equal(workspace, previous))
+                    .map_or(observed_at, |previous| previous.changed_at);
+            }
+
+            if let Some(window) = output.focused_window.as_mut() {
+                let previous_window =
+                    previous.and_then(|previous| previous.focused_window.as_ref());
+                window.changed_at = previous_window
+                    .filter(|previous| window_semantically_equal(window, previous))
+                    .map_or(observed_at, |previous| previous.changed_at);
+            }
+
+            (output.name.clone(), output)
+        })
+        .collect()
+}
+
+fn normalize_power(mut value: PowerState, current: &PowerState, observed_at: i64) -> PowerState {
+    value.changed_at = if power_semantically_equal(&value, current) {
+        current.changed_at
+    } else {
+        observed_at
+    };
+    value
+}
+
+fn normalize_media(
+    value: Option<MediaState>,
+    current: Option<&MediaState>,
+    observed_at: i64,
+) -> Option<MediaState> {
+    value.map(|mut value| {
+        value.changed_at = current
+            .filter(|current| media_semantically_equal(&value, current))
+            .map_or(observed_at, |current| current.changed_at);
+        value
+    })
+}
+
+fn normalize_calendar(
+    value: Option<CalendarEvent>,
+    current: Option<&CalendarEvent>,
+    observed_at: i64,
+) -> Option<CalendarEvent> {
+    value.map(|mut value| {
+        value.changed_at = current
+            .filter(|current| calendar_semantically_equal(&value, current))
+            .map_or(observed_at, |current| current.changed_at);
+        value
+    })
+}
+
+fn normalize_timers(
+    timers: Vec<TimerState>,
+    current: &[TimerState],
+    observed_at: i64,
+) -> Vec<TimerState> {
+    timers
+        .into_iter()
+        .map(|mut timer| {
+            timer.changed_at = current
+                .iter()
+                .find(|candidate| candidate.id == timer.id)
+                .filter(|current| timer_semantically_equal(&timer, current))
+                .map_or(observed_at, |current| current.changed_at);
+            timer
+        })
+        .collect()
+}
+
+fn output_semantically_equal(left: &OutputState, right: &OutputState) -> bool {
+    left.name == right.name
+        && left.urgent == right.urgent
+        && left.workspaces.len() == right.workspaces.len()
+        && left
+            .workspaces
+            .iter()
+            .zip(&right.workspaces)
+            .all(|(left, right)| workspace_semantically_equal(left, right))
+        && match (&left.focused_window, &right.focused_window) {
+            (Some(left), Some(right)) => window_semantically_equal(left, right),
+            (None, None) => true,
+            _ => false,
+        }
+}
+
+fn workspace_semantically_equal(left: &WorkspaceState, right: &WorkspaceState) -> bool {
+    left.id == right.id
+        && left.label == right.label
+        && left.output == right.output
+        && left.active == right.active
+        && left.urgent == right.urgent
+}
+
+fn window_semantically_equal(left: &WindowState, right: &WindowState) -> bool {
+    left.id == right.id
+        && left.app_id == right.app_id
+        && left.title == right.title
+        && left.urgent == right.urgent
+}
+
+fn power_semantically_equal(left: &PowerState, right: &PowerState) -> bool {
+    left.battery_percent == right.battery_percent
+        && left.charging == right.charging
+        && left.profile == right.profile
+}
+
+fn media_semantically_equal(left: &MediaState, right: &MediaState) -> bool {
+    left.player == right.player
+        && left.status == right.status
+        && left.title == right.title
+        && left.artist == right.artist
+}
+
+fn calendar_semantically_equal(left: &CalendarEvent, right: &CalendarEvent) -> bool {
+    left.id == right.id
+        && left.title == right.title
+        && left.location == right.location
+        && left.start_epoch == right.start_epoch
+        && left.end_epoch == right.end_epoch
+}
+
+fn timer_semantically_equal(left: &TimerState, right: &TimerState) -> bool {
+    left.id == right.id
+        && left.label == right.label
+        && left.remaining_seconds == right.remaining_seconds
+        && left.target_epoch == right.target_epoch
+        && left.completed == right.completed
+}
+
 fn insert_activity(snapshot: &mut BarSnapshot, activity: CommandActivity) -> bool {
     if snapshot.activities.items.get(&activity.id) == Some(&activity) {
         false
@@ -322,7 +479,9 @@ fn freshness_seconds(freshness: &FreshnessConfig, source: SourceId) -> Option<u6
 #[cfg(test)]
 mod tests {
     use crate::{
-        CalendarEvent, SourceHealth, SourceId, StateUpdate, SystemUpdate, config::FreshnessConfig,
+        CalendarEvent, MediaState, OutputState, PlaybackStatus, PowerProfile, PowerState,
+        SourceHealth, SourceId, StateUpdate, SystemUpdate, TimerState, WindowState, WorkspaceState,
+        config::FreshnessConfig,
     };
 
     use super::StateStore;
@@ -336,6 +495,7 @@ mod tests {
             location: Some("Room 1".to_string()),
             start_epoch: 1_800_000_300,
             end_epoch: Some(1_800_000_900),
+            changed_at: 0,
         })));
 
         assert!(store.apply(update.clone(), 1_800_000_000));
@@ -363,6 +523,7 @@ mod tests {
                 location: Some("Room 1".to_string()),
                 start_epoch: 1_800_000_300,
                 end_epoch: Some(1_800_000_900),
+                changed_at: 0,
             }))),
             1_800_000_000,
         ));
@@ -400,5 +561,140 @@ mod tests {
                 since_epoch: 1_800_000_010,
             })
         );
+    }
+
+    #[test]
+    fn meaningful_calendar_changes_receive_observation_timestamp() {
+        let mut store = StateStore::new(FreshnessConfig::default());
+        let event = CalendarEvent {
+            id: "review".to_string(),
+            title: "Review".to_string(),
+            location: Some("Room 1".to_string()),
+            start_epoch: 1_800_000_300,
+            end_epoch: Some(1_800_000_900),
+            changed_at: 0,
+        };
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Calendar(Some(event.clone()))),
+            1_800_000_000,
+        ));
+        assert_eq!(
+            store
+                .snapshot()
+                .system
+                .calendar
+                .as_ref()
+                .unwrap()
+                .changed_at,
+            1_800_000_000
+        );
+
+        assert!(!store.apply(
+            StateUpdate::System(SystemUpdate::Calendar(Some(event.clone()))),
+            1_800_000_030,
+        ));
+        assert_eq!(
+            store
+                .snapshot()
+                .system
+                .calendar
+                .as_ref()
+                .unwrap()
+                .changed_at,
+            1_800_000_000
+        );
+
+        let mut changed = event;
+        changed.title = "Updated review".to_string();
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Calendar(Some(changed))),
+            1_800_000_040,
+        ));
+        assert_eq!(
+            store
+                .snapshot()
+                .system
+                .calendar
+                .as_ref()
+                .unwrap()
+                .changed_at,
+            1_800_000_040
+        );
+    }
+
+    #[test]
+    fn context_sources_receive_observation_timestamps() {
+        let mut store = StateStore::new(FreshnessConfig::default());
+
+        assert!(store.apply(
+            StateUpdate::Outputs(vec![OutputState {
+                name: "DP-5".to_string(),
+                workspaces: vec![WorkspaceState {
+                    id: "1".to_string(),
+                    label: "1".to_string(),
+                    output: "DP-5".to_string(),
+                    active: true,
+                    urgent: true,
+                    changed_at: 0,
+                }],
+                focused_window: Some(WindowState {
+                    id: "window-42".to_string(),
+                    app_id: Some("terminal".to_string()),
+                    title: "Build failed".to_string(),
+                    urgent: true,
+                    changed_at: 0,
+                }),
+                urgent: true,
+                changed_at: 0,
+            }]),
+            1_800_000_010,
+        ));
+        let output = store.snapshot().outputs.get("DP-5").unwrap();
+        assert_eq!(output.changed_at, 1_800_000_010);
+        assert_eq!(output.workspaces[0].changed_at, 1_800_000_010);
+        assert_eq!(
+            output.focused_window.as_ref().unwrap().changed_at,
+            1_800_000_010
+        );
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Power(PowerState {
+                battery_percent: Some(6),
+                charging: false,
+                profile: PowerProfile::Balanced,
+                changed_at: 0,
+            })),
+            1_800_000_020,
+        ));
+        assert_eq!(store.snapshot().system.power.changed_at, 1_800_000_020);
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Media(Some(MediaState {
+                player: "player".to_string(),
+                status: PlaybackStatus::Playing,
+                title: Some("Track".to_string()),
+                artist: Some("Artist".to_string()),
+                changed_at: 0,
+            }))),
+            1_800_000_030,
+        ));
+        assert_eq!(
+            store.snapshot().system.media.as_ref().unwrap().changed_at,
+            1_800_000_030
+        );
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Timers(vec![TimerState {
+                id: "tea".to_string(),
+                label: "Tea".to_string(),
+                remaining_seconds: 60,
+                target_epoch: Some(1_800_000_100),
+                completed: false,
+                changed_at: 0,
+            }])),
+            1_800_000_040,
+        ));
+        assert_eq!(store.snapshot().system.timers[0].changed_at, 1_800_000_040);
     }
 }

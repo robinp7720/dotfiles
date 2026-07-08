@@ -85,6 +85,8 @@ pub struct OutputState {
     pub workspaces: Vec<WorkspaceState>,
     pub focused_window: Option<WindowState>,
     pub urgent: bool,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +96,8 @@ pub struct WorkspaceState {
     pub output: String,
     pub active: bool,
     pub urgent: bool,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +106,8 @@ pub struct WindowState {
     pub app_id: Option<String>,
     pub title: String,
     pub urgent: bool,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +179,8 @@ pub struct PowerState {
     pub battery_percent: Option<u8>,
     pub charging: bool,
     pub profile: PowerProfile,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,6 +203,8 @@ pub struct MediaState {
     pub status: PlaybackStatus,
     pub title: Option<String>,
     pub artist: Option<String>,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -204,6 +214,8 @@ pub struct CalendarEvent {
     pub location: Option<String>,
     pub start_epoch: i64,
     pub end_epoch: Option<i64>,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,6 +225,8 @@ pub struct TimerState {
     pub remaining_seconds: u64,
     pub target_epoch: Option<i64>,
     pub completed: bool,
+    #[serde(default)]
+    pub changed_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

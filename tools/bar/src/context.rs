@@ -55,6 +55,7 @@ pub enum ContextCard {
     Urgent {
         output: String,
         workspace: Option<String>,
+        window_id: Option<String>,
         window_title: Option<String>,
     },
 }
@@ -102,13 +103,16 @@ pub fn select_context(
 }
 
 impl Dismissals {
-    pub fn dismiss(&mut self, card: &ContextCard) {
+    pub fn dismiss(&mut self, card: &ContextCard, now_epoch: i64, critical_snooze_seconds: u64) {
         let (key, generation) = dismissal_identity(card);
+        let until_epoch = is_snoozable_critical(card).then(|| {
+            now_epoch.saturating_add(i64::try_from(critical_snooze_seconds).unwrap_or(i64::MAX))
+        });
         self.entries.insert(
             key,
             DismissalEntry {
                 generation,
-                until_epoch: None,
+                until_epoch,
             },
         );
     }
@@ -125,6 +129,19 @@ impl Dismissals {
     }
 }
 
+fn is_snoozable_critical(card: &ContextCard) -> bool {
+    matches!(
+        card,
+        ContextCard::Battery {
+            tier: ContextTier::Critical,
+            ..
+        } | ContextCard::Timer {
+            completed: true,
+            ..
+        }
+    )
+}
+
 fn candidates(
     snapshot: &BarSnapshot,
     now_epoch: i64,
@@ -133,9 +150,7 @@ fn candidates(
     let mut candidates = Vec::new();
 
     if source_is_healthy(snapshot, SourceId::Compositor) {
-        if let Some(candidate) = urgent_candidate(snapshot) {
-            candidates.push(candidate);
-        }
+        candidates.extend(urgent_candidates(snapshot));
     }
 
     if source_is_healthy(snapshot, SourceId::Power) {
@@ -169,41 +184,49 @@ fn candidates(
     candidates
 }
 
-fn urgent_candidate(snapshot: &BarSnapshot) -> Option<Candidate> {
+fn urgent_candidates(snapshot: &BarSnapshot) -> Vec<Candidate> {
+    let mut candidates = Vec::new();
+
     for (output_name, output) in &snapshot.outputs {
         if output.urgent {
-            return Some(Candidate {
+            candidates.push(Candidate {
                 card: ContextCard::Urgent {
                     output: output_name.clone(),
                     workspace: None,
+                    window_id: None,
                     window_title: output
                         .focused_window
                         .as_ref()
                         .map(|window| window.title.clone()),
                 },
-                key: format!("urgent:{output_name}"),
+                key: urgent_identity(output_name, None, None),
                 generation: "urgent".to_string(),
                 tier: ContextTier::Critical,
                 action_deadline: None,
-                changed_at: 0,
+                changed_at: output.changed_at,
             });
         }
 
-        if let Some(workspace) = output.workspaces.iter().find(|workspace| workspace.urgent) {
-            return Some(Candidate {
+        for workspace in output
+            .workspaces
+            .iter()
+            .filter(|workspace| workspace.urgent)
+        {
+            candidates.push(Candidate {
                 card: ContextCard::Urgent {
                     output: output_name.clone(),
                     workspace: Some(workspace.id.clone()),
+                    window_id: None,
                     window_title: output
                         .focused_window
                         .as_ref()
                         .map(|window| window.title.clone()),
                 },
-                key: format!("urgent:{}:{}", output_name, workspace.id),
+                key: urgent_identity(output_name, Some(&workspace.id), None),
                 generation: "urgent".to_string(),
                 tier: ContextTier::Critical,
                 action_deadline: None,
-                changed_at: 0,
+                changed_at: workspace.changed_at,
             });
         }
 
@@ -212,22 +235,23 @@ fn urgent_candidate(snapshot: &BarSnapshot) -> Option<Candidate> {
             .as_ref()
             .filter(|window| window.urgent)
         {
-            return Some(Candidate {
+            candidates.push(Candidate {
                 card: ContextCard::Urgent {
                     output: output_name.clone(),
                     workspace: None,
+                    window_id: Some(window.id.clone()),
                     window_title: Some(window.title.clone()),
                 },
-                key: format!("urgent:{}:{}", output_name, window.id),
+                key: urgent_identity(output_name, None, Some(&window.id)),
                 generation: "urgent".to_string(),
                 tier: ContextTier::Critical,
                 action_deadline: None,
-                changed_at: 0,
+                changed_at: window.changed_at,
             });
         }
     }
 
-    None
+    candidates
 }
 
 fn battery_candidates(power: &PowerState, thresholds: &ThresholdConfig) -> Vec<Candidate> {
@@ -250,7 +274,7 @@ fn battery_candidates(power: &PowerState, thresholds: &ThresholdConfig) -> Vec<C
             generation: "critical".to_string(),
             tier: ContextTier::Critical,
             action_deadline: None,
-            changed_at: i64::from(percent),
+            changed_at: power.changed_at,
         }];
     }
 
@@ -265,7 +289,7 @@ fn battery_candidates(power: &PowerState, thresholds: &ThresholdConfig) -> Vec<C
             generation: "low".to_string(),
             tier: ContextTier::Imminent,
             action_deadline: None,
-            changed_at: i64::from(percent),
+            changed_at: power.changed_at,
         }];
     }
 
@@ -283,7 +307,6 @@ fn timer_candidates(
         .iter()
         .filter_map(|timer| {
             if timer.completed {
-                let changed_at = timer.target_epoch.unwrap_or(now_epoch);
                 return Some(Candidate {
                     card: ContextCard::Timer {
                         id: timer.id.clone(),
@@ -297,7 +320,7 @@ fn timer_candidates(
                     generation: "completed".to_string(),
                     tier: ContextTier::Critical,
                     action_deadline: timer.target_epoch.or(Some(now_epoch)),
-                    changed_at,
+                    changed_at: timer.changed_at,
                 });
             }
 
@@ -321,7 +344,7 @@ fn timer_candidates(
                     generation: "imminent".to_string(),
                     tier: ContextTier::Imminent,
                     action_deadline: Some(deadline),
-                    changed_at: deadline,
+                    changed_at: timer.changed_at,
                 });
             }
 
@@ -359,7 +382,7 @@ fn calendar_candidate(
         generation: generation.to_string(),
         tier,
         action_deadline: Some(calendar.start_epoch),
-        changed_at: calendar.start_epoch,
+        changed_at: calendar.changed_at,
     }
 }
 
@@ -442,7 +465,7 @@ fn media_candidate(media: &MediaState) -> Candidate {
         ),
         tier: ContextTier::Ambient,
         action_deadline: None,
-        changed_at: 0,
+        changed_at: media.changed_at,
     }
 }
 
@@ -505,17 +528,22 @@ fn dismissal_identity(card: &ContextCard) -> (String, String) {
         ContextCard::Urgent {
             output,
             workspace,
-            window_title,
+            window_id,
+            ..
         } => (
-            format!(
-                "urgent:{}:{}:{}",
-                output,
-                workspace.as_deref().unwrap_or_default(),
-                window_title.as_deref().unwrap_or_default()
-            ),
+            urgent_identity(output, workspace.as_deref(), window_id.as_deref()),
             "urgent".to_string(),
         ),
     }
+}
+
+fn urgent_identity(output: &str, workspace: Option<&str>, window_id: Option<&str>) -> String {
+    format!(
+        "urgent:{}:{}:{}",
+        output,
+        workspace.unwrap_or_default(),
+        window_id.unwrap_or_default()
+    )
 }
 
 fn source_is_healthy(snapshot: &BarSnapshot, source: SourceId) -> bool {
@@ -532,7 +560,8 @@ mod tests {
 
     use crate::{
         ActivityState, ActivityStatus, BarSnapshot, CalendarEvent, CommandActivity, MediaState,
-        PlaybackStatus, PowerProfile, PowerState, ThresholdConfig, TimerState,
+        OutputState, PlaybackStatus, PowerProfile, PowerState, ThresholdConfig, TimerState,
+        WindowState,
     };
 
     use super::{ContextCard, Dismissals, select_context};
@@ -597,7 +626,7 @@ mod tests {
         let selected = select_context(&imminent_timer, now, &thresholds, &dismissals)
             .expect("expected imminent timer");
 
-        dismissals.dismiss(&selected);
+        dismissals.dismiss(&selected, now, thresholds.critical_snooze_seconds);
 
         assert_eq!(
             select_context(&imminent_timer, now, &thresholds, &dismissals),
@@ -626,11 +655,193 @@ mod tests {
         let selected = select_context(&snapshot, now, &thresholds, &dismissals)
             .expect("expected calendar override");
 
-        dismissals.dismiss(&selected);
+        dismissals.dismiss(&selected, now, thresholds.critical_snooze_seconds);
 
         assert!(matches!(
             select_context(&snapshot, now, &thresholds, &dismissals),
             Some(ContextCard::Activity { ref id, .. }) if id == "cargo test"
+        ));
+    }
+
+    #[test]
+    fn urgent_window_dismissal_uses_stable_window_identity() {
+        let now = 1_800_000_000;
+        let thresholds = ThresholdConfig::default();
+        let mut dismissals = Dismissals::default();
+        let mut snapshot = fixture_snapshot()
+            .with_urgent_window("window-42", "Build failed")
+            .build();
+        let selected = select_context(&snapshot, now, &thresholds, &dismissals)
+            .expect("expected urgent window");
+
+        dismissals.dismiss(&selected, now, thresholds.critical_snooze_seconds);
+        snapshot
+            .outputs
+            .get_mut("DP-5")
+            .and_then(|output| output.focused_window.as_mut())
+            .expect("expected focused window")
+            .title = "Build failed again".to_string();
+
+        assert_eq!(
+            select_context(&snapshot, now, &thresholds, &dismissals),
+            None
+        );
+
+        snapshot
+            .outputs
+            .get_mut("DP-5")
+            .and_then(|output| output.focused_window.as_mut())
+            .expect("expected focused window")
+            .id = "window-43".to_string();
+
+        assert!(matches!(
+            select_context(&snapshot, now, &thresholds, &dismissals),
+            Some(ContextCard::Urgent { .. })
+        ));
+    }
+
+    #[test]
+    fn critical_battery_returns_after_configured_snooze() {
+        let now = 1_800_000_000;
+        let thresholds = ThresholdConfig::default();
+        let mut dismissals = Dismissals::default();
+        let snapshot = fixture_snapshot().with_battery(6, false).build();
+        let selected = select_context(&snapshot, now, &thresholds, &dismissals)
+            .expect("expected critical battery");
+
+        dismissals.dismiss(&selected, now, thresholds.critical_snooze_seconds);
+
+        assert_eq!(
+            select_context(&snapshot, now + 299, &thresholds, &dismissals),
+            None
+        );
+        assert!(matches!(
+            select_context(&snapshot, now + 300, &thresholds, &dismissals),
+            Some(ContextCard::Battery { percent: 6, .. })
+        ));
+    }
+
+    #[test]
+    fn completed_timer_returns_after_configured_snooze() {
+        let now = 1_800_000_000;
+        let thresholds = ThresholdConfig::default();
+        let mut dismissals = Dismissals::default();
+        let snapshot = fixture_snapshot()
+            .with_timer("tea", 0, Some(now), true)
+            .build();
+        let selected = select_context(&snapshot, now, &thresholds, &dismissals)
+            .expect("expected completed timer");
+
+        dismissals.dismiss(&selected, now, thresholds.critical_snooze_seconds);
+
+        assert_eq!(
+            select_context(&snapshot, now + 299, &thresholds, &dismissals),
+            None
+        );
+        assert!(matches!(
+            select_context(&snapshot, now + 300, &thresholds, &dismissals),
+            Some(ContextCard::Timer {
+                ref id,
+                completed: true,
+                ..
+            }) if id == "tea"
+        ));
+    }
+
+    #[test]
+    fn newer_timer_wins_when_tier_and_deadline_are_equal() {
+        let now = 1_800_000_000;
+        let deadline = now + 60;
+        let mut snapshot = fixture_snapshot().build();
+        snapshot.system.timers = vec![
+            TimerState {
+                id: "newer".to_string(),
+                label: "newer".to_string(),
+                remaining_seconds: 60,
+                target_epoch: Some(deadline),
+                completed: false,
+                changed_at: now - 5,
+            },
+            TimerState {
+                id: "older".to_string(),
+                label: "older".to_string(),
+                remaining_seconds: 60,
+                target_epoch: Some(deadline),
+                completed: false,
+                changed_at: now - 10,
+            },
+        ];
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Timer { ref id, .. }) if id == "newer"
+        ));
+    }
+
+    #[test]
+    fn newer_timer_beats_calendar_when_tier_and_deadline_are_equal() {
+        let now = 1_800_000_000;
+        let deadline = now + 60;
+        let mut snapshot = fixture_snapshot().build();
+        snapshot.system.calendar = Some(CalendarEvent {
+            id: "review".to_string(),
+            title: "Review".to_string(),
+            location: None,
+            start_epoch: deadline,
+            end_epoch: Some(deadline + 60 * 60),
+            changed_at: now - 10,
+        });
+        snapshot.system.timers = vec![TimerState {
+            id: "tea".to_string(),
+            label: "Tea".to_string(),
+            remaining_seconds: 60,
+            target_epoch: Some(deadline),
+            completed: false,
+            changed_at: now - 5,
+        }];
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Timer { ref id, .. }) if id == "tea"
+        ));
+    }
+
+    #[test]
+    fn newer_urgent_window_beats_battery_when_tier_and_deadline_are_equal() {
+        let now = 1_800_000_000;
+        let mut snapshot = fixture_snapshot()
+            .with_urgent_window("window-42", "Build failed")
+            .with_battery(6, false)
+            .build();
+        snapshot
+            .outputs
+            .get_mut("DP-5")
+            .and_then(|output| output.focused_window.as_mut())
+            .expect("expected focused window")
+            .changed_at = now - 5;
+        snapshot.system.power.changed_at = now - 10;
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Urgent {
+                ref window_id,
+                ..
+            }) if window_id.as_deref() == Some("window-42")
         ));
     }
 
@@ -670,6 +881,7 @@ mod tests {
                 location: Some("Room 1".to_string()),
                 start_epoch,
                 end_epoch: Some(start_epoch + 60 * 60),
+                changed_at: 1_799_999_950,
             });
             self
         }
@@ -679,6 +891,7 @@ mod tests {
                 battery_percent: Some(percent),
                 charging,
                 profile: PowerProfile::Balanced,
+                changed_at: 1_799_999_950,
             };
             self
         }
@@ -696,7 +909,28 @@ mod tests {
                 remaining_seconds,
                 target_epoch,
                 completed,
+                changed_at: 1_799_999_950,
             }];
+            self
+        }
+
+        fn with_urgent_window(mut self, id: &str, title: &str) -> Self {
+            self.snapshot.outputs.insert(
+                "DP-5".to_string(),
+                OutputState {
+                    name: "DP-5".to_string(),
+                    workspaces: Vec::new(),
+                    focused_window: Some(WindowState {
+                        id: id.to_string(),
+                        app_id: Some("terminal".to_string()),
+                        title: title.to_string(),
+                        urgent: true,
+                        changed_at: 1_799_999_950,
+                    }),
+                    urgent: false,
+                    changed_at: 1_799_999_950,
+                },
+            );
             self
         }
 
@@ -707,6 +941,7 @@ mod tests {
                 status: PlaybackStatus::Playing,
                 title: Some(title.to_string()),
                 artist: Some("Artist".to_string()),
+                changed_at: 1_799_999_950,
             });
             self
         }
