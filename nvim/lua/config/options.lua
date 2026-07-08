@@ -1,0 +1,39 @@
+local termfeatures = vim.g.termfeatures or {}
+termfeatures.osc52 = false
+vim.g.termfeatures = termfeatures
+
+vim.g.mapleader = " "
+vim.g.maplocalleader = "\\"
+vim.g.python3_host_prog = "/usr/bin/python3"
+vim.g.loaded_node_provider = 0
+vim.g.loaded_perl_provider = 0
+vim.g.loaded_ruby_provider = 0
+
+local opt = vim.opt
+
+opt.autoindent = true
+opt.backspace = { "indent", "eol", "start" }
+opt.colorcolumn = "80"
+opt.completeopt = { "menu", "menuone", "noselect" }
+opt.expandtab = true
+opt.hidden = true
+opt.ignorecase = true
+opt.inccommand = "nosplit"
+opt.incsearch = true
+opt.mouse = "a"
+opt.number = true
+opt.ruler = true
+opt.shiftwidth = 4
+opt.showcmd = true
+opt.signcolumn = "yes"
+opt.smartcase = true
+opt.spell = true
+opt.spelllang = { "en_us", "de_de" }
+opt.splitbelow = true
+opt.splitright = true
+opt.tabstop = 4
+opt.termguicolors = true
+opt.textwidth = 79
+opt.undofile = true
+opt.updatetime = 250
+opt.wrap = false
