@@ -31,7 +31,10 @@ pub use model::{
     ResourceState, SourceHealth, SourceId, StateUpdate, SystemState, SystemUpdate, TimerState,
     WindowState, WorkspaceState,
 };
-pub use sources::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
+pub use sources::{
+    CalendarRecord, SourceSupervisor, battery_severity, parse_calendar_json, read_proc_sample,
+    spawn_calendar_source, spawn_clock_source, spawn_power_source, spawn_resource_source,
+};
 pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};
 
