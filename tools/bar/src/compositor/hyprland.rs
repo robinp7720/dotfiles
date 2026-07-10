@@ -9,8 +9,8 @@ use serde::Deserialize;
 use crate::StateUpdate;
 
 use super::{
-    CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow, StateTracker,
-    reconnect_error,
+    CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow,
+    StateTracker, reconnect_error,
 };
 
 pub struct HyprlandAdapter {
@@ -18,6 +18,7 @@ pub struct HyprlandAdapter {
     events: Box<dyn BufRead + Send>,
     pending: VecDeque<StateUpdate>,
     command_runner: CommandRunner,
+    command_env: CommandEnv,
     active_keyboard: Option<String>,
 }
 
@@ -44,7 +45,7 @@ impl HyprlandAdapter {
 
     pub fn new_for_test<F>(snapshot_json: &str, events: &str, command_runner: F) -> Self
     where
-        F: FnMut(&str, &[String]) -> Result<()> + Send + 'static,
+        F: FnMut(&str, &[String], &CommandEnv) -> Result<()> + Send + 'static,
     {
         let snapshot: HyprSnapshotBundle =
             serde_json::from_str(snapshot_json).expect("parse Hyprland fixture snapshot");
@@ -68,6 +69,7 @@ impl HyprlandAdapter {
             events,
             pending: VecDeque::new(),
             command_runner,
+            command_env: Vec::new(),
             active_keyboard,
         })
     }
@@ -114,16 +116,19 @@ impl CompositorAdapter for HyprlandAdapter {
                 (self.command_runner)(
                     "hyprctl",
                     &["dispatch".to_string(), "focusmonitor".to_string(), output],
+                    &self.command_env,
                 )?;
                 (self.command_runner)(
                     "hyprctl",
                     &["dispatch".to_string(), "workspace".to_string(), workspace],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::CycleWorkspace { output, direction } => {
                 (self.command_runner)(
                     "hyprctl",
                     &["dispatch".to_string(), "focusmonitor".to_string(), output],
+                    &self.command_env,
                 )?;
                 let step = match direction {
                     crate::Direction::Previous => "e-1",
@@ -136,6 +141,7 @@ impl CompositorAdapter for HyprlandAdapter {
                         "workspace".to_string(),
                         step.to_string(),
                     ],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::FocusWindow { window_id, .. } => {
@@ -147,6 +153,7 @@ impl CompositorAdapter for HyprlandAdapter {
                 (self.command_runner)(
                     "hyprctl",
                     &["dispatch".to_string(), "focuswindow".to_string(), window],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::CycleKeyboardLayout => {
@@ -156,6 +163,7 @@ impl CompositorAdapter for HyprlandAdapter {
                 (self.command_runner)(
                     "hyprctl",
                     &["switchxkblayout".to_string(), keyboard, "next".to_string()],
+                    &self.command_env,
                 )?;
             }
         }
@@ -288,7 +296,7 @@ fn apply_snapshot(
 
 fn apply_event(
     state: &mut NormalizedState,
-    pending: &mut VecDeque<StateUpdate>,
+    _pending: &mut VecDeque<StateUpdate>,
     active_keyboard: &mut Option<String>,
     line: &str,
 ) -> Result<()> {
@@ -391,14 +399,15 @@ fn apply_event(
                 .next()
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| reconnect_error("workspacev2 missing workspace id"))?;
-            if let Some(output_name) = state.focused_output.clone() {
-                let old = state
-                    .workspaces
-                    .values()
-                    .find(|workspace| workspace.output == output_name && workspace.active)
-                    .map(|workspace| workspace.id.clone());
-                if old.as_deref() == Some(workspace_id) {
-                    pending.clear();
+            if let Some(target_output) = state
+                .workspaces
+                .get(workspace_id)
+                .map(|workspace| workspace.output.clone())
+            {
+                for workspace in state.workspaces.values_mut() {
+                    if workspace.output == target_output {
+                        workspace.active = workspace.id == workspace_id;
+                    }
                 }
             }
         }
@@ -428,13 +437,20 @@ where
         .with_context(|| format!("failed to parse hyprctl -j {command} output"))
 }
 
-fn default_command_runner(program: &str, args: &[String]) -> Result<()> {
-    let status = Command::new(program).args(args).status().with_context(|| {
-        format!(
-            "failed to execute compositor command: {program} {}",
-            args.join(" ")
+fn default_command_runner(program: &str, args: &[String], env: &CommandEnv) -> Result<()> {
+    let status = Command::new(program)
+        .args(args)
+        .envs(
+            env.iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
         )
-    })?;
+        .status()
+        .with_context(|| {
+            format!(
+                "failed to execute compositor command: {program} {}",
+                args.join(" ")
+            )
+        })?;
     if !status.success() {
         bail!("compositor command failed: {program} {}", args.join(" "));
     }

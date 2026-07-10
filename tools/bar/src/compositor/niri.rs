@@ -9,8 +9,8 @@ use serde_json::Value;
 use crate::StateUpdate;
 
 use super::{
-    CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow, StateTracker,
-    reconnect_error,
+    CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow,
+    StateTracker, reconnect_error,
 };
 
 pub struct NiriAdapter {
@@ -19,17 +19,25 @@ pub struct NiriAdapter {
     _event_child: Option<Child>,
     pending: VecDeque<StateUpdate>,
     command_runner: CommandRunner,
+    command_env: CommandEnv,
     keyboard_layouts: Vec<String>,
 }
 
 impl NiriAdapter {
-    pub fn from_env(_socket: &str) -> Result<Self> {
-        let outputs = read_niri_json(&["msg", "--json", "outputs"])?;
-        let workspaces = read_niri_json(&["msg", "--json", "workspaces"])?;
-        let windows = read_niri_json(&["msg", "--json", "windows"])?;
-        let keyboard_layouts = read_niri_json(&["msg", "--json", "keyboard-layouts"])?;
+    pub fn from_env(socket: &str) -> Result<Self> {
+        let command_env = vec![("NIRI_SOCKET".to_string(), socket.to_string())];
+        let outputs = read_niri_json(&["msg", "--json", "outputs"], &command_env)?;
+        let workspaces = read_niri_json(&["msg", "--json", "workspaces"], &command_env)?;
+        let windows = read_niri_json(&["msg", "--json", "windows"], &command_env)?;
+        let keyboard_layouts =
+            read_niri_json(&["msg", "--json", "keyboard-layouts"], &command_env)?;
         let mut child = Command::new("niri")
             .args(["msg", "--json", "event-stream"])
+            .envs(
+                command_env
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), value.as_str())),
+            )
             .stdout(Stdio::piped())
             .spawn()
             .context("failed to start niri event stream")?;
@@ -45,6 +53,7 @@ impl NiriAdapter {
             keyboard_layouts,
             Box::new(BufReader::new(stdout)),
             Some(child),
+            command_env,
             Box::new(default_command_runner),
         )
     }
@@ -58,7 +67,7 @@ impl NiriAdapter {
         command_runner: F,
     ) -> Self
     where
-        F: FnMut(&str, &[String]) -> Result<()> + Send + 'static,
+        F: FnMut(&str, &[String], &CommandEnv) -> Result<()> + Send + 'static,
     {
         Self::from_sources(
             outputs_json.to_string(),
@@ -67,6 +76,7 @@ impl NiriAdapter {
             keyboard_layouts_json.to_string(),
             Box::new(Cursor::new(events.as_bytes().to_vec())),
             None,
+            Vec::new(),
             Box::new(command_runner),
         )
         .expect("build Niri fixture adapter")
@@ -79,6 +89,7 @@ impl NiriAdapter {
         keyboard_layouts_json: String,
         events: Box<dyn BufRead + Send>,
         event_child: Option<Child>,
+        command_env: CommandEnv,
         command_runner: CommandRunner,
     ) -> Result<Self> {
         let mut tracker = StateTracker::default();
@@ -96,6 +107,7 @@ impl NiriAdapter {
             _event_child: event_child,
             pending: VecDeque::new(),
             command_runner,
+            command_env,
             keyboard_layouts,
         })
     }
@@ -147,6 +159,7 @@ impl CompositorAdapter for NiriAdapter {
                         "focus-monitor".to_string(),
                         output,
                     ],
+                    &self.command_env,
                 )?;
                 (self.command_runner)(
                     "niri",
@@ -156,6 +169,7 @@ impl CompositorAdapter for NiriAdapter {
                         "focus-workspace".to_string(),
                         workspace,
                     ],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::CycleWorkspace { output, direction } => {
@@ -167,6 +181,7 @@ impl CompositorAdapter for NiriAdapter {
                         "focus-monitor".to_string(),
                         output,
                     ],
+                    &self.command_env,
                 )?;
                 let action = match direction {
                     crate::Direction::Previous => "focus-workspace-up",
@@ -175,6 +190,7 @@ impl CompositorAdapter for NiriAdapter {
                 (self.command_runner)(
                     "niri",
                     &["msg".to_string(), "action".to_string(), action.to_string()],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::FocusWindow { window_id, .. } => {
@@ -187,6 +203,7 @@ impl CompositorAdapter for NiriAdapter {
                         "--id".to_string(),
                         window_id,
                     ],
+                    &self.command_env,
                 )?;
             }
             CompositorAction::CycleKeyboardLayout => {
@@ -198,6 +215,7 @@ impl CompositorAdapter for NiriAdapter {
                         "switch-layout".to_string(),
                         "next".to_string(),
                     ],
+                    &self.command_env,
                 )?;
             }
         }
@@ -440,9 +458,13 @@ struct NiriWindowPayload {
     is_urgent: bool,
 }
 
-fn read_niri_json(args: &[&str]) -> Result<String> {
+fn read_niri_json(args: &[&str], env: &CommandEnv) -> Result<String> {
     let output = Command::new("niri")
         .args(args)
+        .envs(
+            env.iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
+        )
         .output()
         .with_context(|| format!("failed to execute niri {}", args.join(" ")))?;
     if !output.status.success() {
@@ -455,13 +477,20 @@ fn read_niri_json(args: &[&str]) -> Result<String> {
     String::from_utf8(output.stdout).context("niri JSON output was not UTF-8")
 }
 
-fn default_command_runner(program: &str, args: &[String]) -> Result<()> {
-    let status = Command::new(program).args(args).status().with_context(|| {
-        format!(
-            "failed to execute compositor command: {program} {}",
-            args.join(" ")
+fn default_command_runner(program: &str, args: &[String], env: &CommandEnv) -> Result<()> {
+    let status = Command::new(program)
+        .args(args)
+        .envs(
+            env.iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
         )
-    })?;
+        .status()
+        .with_context(|| {
+            format!(
+                "failed to execute compositor command: {program} {}",
+                args.join(" ")
+            )
+        })?;
     if !status.success() {
         bail!("compositor command failed: {program} {}", args.join(" "));
     }

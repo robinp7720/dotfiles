@@ -53,7 +53,8 @@ pub fn detect_compositor(env: &[(&str, &str)]) -> Result<Box<dyn CompositorAdapt
     );
 }
 
-pub(crate) type CommandRunner = Box<dyn FnMut(&str, &[String]) -> Result<()> + Send>;
+pub(crate) type CommandEnv = Vec<(String, String)>;
+pub(crate) type CommandRunner = Box<dyn FnMut(&str, &[String], &CommandEnv) -> Result<()> + Send>;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct NormalizedState {
