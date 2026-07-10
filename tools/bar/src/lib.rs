@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod compositor;
 pub mod config;
 pub mod context;
 pub mod ipc;
@@ -14,6 +15,9 @@ use std::path::Path;
 use anyhow::Result;
 
 pub use activity::ActivityTracker;
+pub use compositor::{
+    CompositorAction, CompositorAdapter, HyprlandAdapter, NiriAdapter, detect_compositor,
+};
 pub use config::{
     AppConfig, CommandActivityConfig, CommandRule, FreshnessConfig, ModuleConfig, ModuleName,
     ThresholdConfig,

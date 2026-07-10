@@ -1,0 +1,26 @@
+[
+  {
+    "id": 100,
+    "title": "Terminal",
+    "app_id": "kitty",
+    "workspace_id": 1,
+    "is_focused": false,
+    "is_urgent": false
+  },
+  {
+    "id": 200,
+    "title": "Signal",
+    "app_id": "org.signal.Signal",
+    "workspace_id": 2,
+    "is_focused": true,
+    "is_urgent": false
+  },
+  {
+    "id": 300,
+    "title": "Docs",
+    "app_id": "firefox",
+    "workspace_id": 1,
+    "is_focused": false,
+    "is_urgent": false
+  }
+]

@@ -1,0 +1,7 @@
+workspacev2>>3,3
+focusedmonv2>>DP-1,3
+movewindowv2>>0x12c,3,3
+windowtitlev2>>0x12c,Docs, Planning
+activewindowv2>>0x12c
+urgent>>0xc8
+activelayout>>at-translated-set-2-keyboard,de
