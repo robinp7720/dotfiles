@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::{io::Write, path::Path};
 
 use anyhow::{Result, anyhow, bail};
 use clap::Parser;
@@ -53,6 +54,7 @@ enum TimerCommand {
 
 #[derive(Debug, clap::Subcommand)]
 enum ActivityCommand {
+    ShellRules,
     Start {
         #[arg(long)]
         id: String,
@@ -101,11 +103,7 @@ fn run_cli(cli: Cli) -> Result<()> {
             let response = cockpit_bar::ControlClient::new()?.send(&request)?;
             handle_control_response(response)
         }
-        Some(Command::Activity { command }) => {
-            let request = activity_request(command, current_epoch())?;
-            let response = cockpit_bar::ControlClient::new()?.send(&request)?;
-            handle_control_response(response)
-        }
+        Some(Command::Activity { command }) => handle_activity_command(command, &cli.config),
         Some(Command::TestControlServer { requests }) => {
             cockpit_bar::run_test_control_server(requests)
         }
@@ -130,6 +128,7 @@ fn activity_request(
     now_epoch: i64,
 ) -> Result<cockpit_bar::ControlRequest> {
     Ok(match command {
+        ActivityCommand::ShellRules => bail!("shell-rules does not produce a control request"),
         ActivityCommand::Start { id, label, cwd } => cockpit_bar::ControlRequest::ActivityStart {
             id,
             label,
@@ -142,6 +141,49 @@ fn activity_request(
             finished_at: now_epoch,
         },
     })
+}
+
+fn handle_activity_command(command: ActivityCommand, config_path: &Path) -> Result<()> {
+    match command {
+        ActivityCommand::ShellRules => print_activity_shell_rules(config_path),
+        other => {
+            let request = activity_request(other, current_epoch())?;
+            let response = cockpit_bar::ControlClient::new()?.send(&request)?;
+            handle_control_response(response)
+        }
+    }
+}
+
+fn print_activity_shell_rules(config_path: &Path) -> Result<()> {
+    let config = cockpit_bar::AppConfig::load(config_path)?;
+    let payload = encode_activity_shell_rules(&config.command_activity.allowlist)?;
+    std::io::stdout().write_all(&payload)?;
+    Ok(())
+}
+
+fn encode_activity_shell_rules(allowlist: &[cockpit_bar::CommandRule]) -> Result<Vec<u8>> {
+    let mut payload = Vec::new();
+
+    for rule in allowlist {
+        validate_activity_shell_rule_field("label", &rule.label)?;
+        for prefix in &rule.prefixes {
+            validate_activity_shell_rule_field("prefix", prefix)?;
+            payload.extend_from_slice(rule.label.as_bytes());
+            payload.push(0);
+            payload.extend_from_slice(prefix.as_bytes());
+            payload.push(0);
+        }
+    }
+
+    Ok(payload)
+}
+
+fn validate_activity_shell_rule_field(field: &str, value: &str) -> Result<()> {
+    if value.contains('\0') {
+        bail!("activity shell rule {field} must not contain NUL bytes");
+    }
+
+    Ok(())
 }
 
 fn handle_control_response(response: cockpit_bar::ControlResponse) -> Result<()> {
@@ -196,7 +238,7 @@ fn parse_duration_seconds(text: &str) -> Result<u64> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{ActivityCommand, activity_request};
+    use super::{ActivityCommand, activity_request, encode_activity_shell_rules};
 
     #[test]
     fn activity_start_request_uses_label_cwd_and_timestamp() {
@@ -239,6 +281,29 @@ mod tests {
                 exit_code: 23,
                 finished_at: 1_800_000_001,
             }
+        );
+    }
+
+    #[test]
+    fn activity_shell_rules_encode_non_default_configured_allowlist() {
+        let config = cockpit_bar::AppConfig::from_toml(
+            r#"
+            [[command_activity.allowlist]]
+            label = "Cargo nextest"
+            prefixes = ["cargo nextest"]
+
+            [[command_activity.allowlist]]
+            label = "Pytest"
+            prefixes = ["pytest"]
+            "#,
+        )
+        .unwrap();
+
+        let payload = encode_activity_shell_rules(&config.command_activity.allowlist).unwrap();
+
+        assert_eq!(
+            payload,
+            b"Cargo nextest\0cargo nextest\0Pytest\0pytest\0".to_vec()
         );
     }
 }

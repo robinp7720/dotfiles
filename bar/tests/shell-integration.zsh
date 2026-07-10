@@ -6,8 +6,6 @@ setopt errexit nounset pipefail
 SCRIPT_DIR=${0:A:h}
 REPO_ROOT=${SCRIPT_DIR:h:h}
 
-source "$REPO_ROOT/bar/shell-integration.zsh"
-
 fail() {
   print -u2 -- "FAIL: $*"
   exit 1
@@ -67,24 +65,72 @@ wait_for_lines() {
   fail "timed out waiting for $expected lines in $path"
 }
 
-assert_eq "$(classify_activity 'cargo test -- --nocapture')" "Cargo test" "cargo test should map to Cargo test"
-assert_eq "$(classify_activity 'pytest -k secret')" "Pytest" "pytest should map to Pytest"
-assert_no_match "git status"
-
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 log_file="$tmpdir/cockpit-bar.log"
 mkdir -p "$tmpdir/bin"
+config_home="$tmpdir/config"
+config_dir="$config_home/cockpit-bar"
+config_path="$config_dir/config.toml"
+mkdir -p "$config_dir"
+
+cat >"$config_path" <<'EOF'
+[[command_activity.allowlist]]
+label = "Cargo build"
+prefixes = ["cargo build"]
+
+[[command_activity.allowlist]]
+label = "Cargo test"
+prefixes = ["cargo test"]
+
+[[command_activity.allowlist]]
+label = "Cargo run"
+prefixes = ["cargo run"]
+
+[[command_activity.allowlist]]
+label = "npm test"
+prefixes = ["npm test"]
+
+[[command_activity.allowlist]]
+label = "pnpm test"
+prefixes = ["pnpm test"]
+
+[[command_activity.allowlist]]
+label = "Pytest"
+prefixes = ["pytest"]
+
+[[command_activity.allowlist]]
+label = "Make"
+prefixes = ["make"]
+
+[[command_activity.allowlist]]
+label = "Cargo nextest"
+prefixes = ["cargo nextest"]
+EOF
 
 cat >"$tmpdir/bin/cockpit-bar" <<'EOF'
 #!/usr/bin/env zsh
+if [[ "$1" == "--config" && "$3" == "activity" && "$4" == "shell-rules" ]]; then
+  [[ "$2" == "$EXPECTED_COCKPIT_BAR_CONFIG" ]] || exit 9
+  print -rn -- $'Cargo build\0cargo build\0Cargo test\0cargo test\0Cargo run\0cargo run\0npm test\0npm test\0pnpm test\0pnpm test\0Pytest\0pytest\0Make\0make\0Cargo nextest\0cargo nextest\0'
+  exit 0
+fi
 print -r -- "$*" >>"$COCKPIT_BAR_LOG_FILE"
 EOF
 chmod +x "$tmpdir/bin/cockpit-bar"
 
 export PATH="$tmpdir/bin:$PATH"
 export COCKPIT_BAR_LOG_FILE="$log_file"
+export XDG_CONFIG_HOME="$config_home"
+export EXPECTED_COCKPIT_BAR_CONFIG="$config_path"
+
+source "$REPO_ROOT/bar/shell-integration.zsh"
+
+assert_eq "$(classify_activity 'cargo nextest run')" "Cargo nextest" "cargo nextest should come from configured allowlist"
+assert_eq "$(classify_activity 'cargo test -- --nocapture')" "Cargo test" "cargo test should map to Cargo test"
+assert_eq "$(classify_activity 'pytest -k secret')" "Pytest" "pytest should map to Pytest"
+assert_no_match "git status"
 
 cd "$tmpdir"
 __cockpit_bar_preexec "pytest -k secret"
