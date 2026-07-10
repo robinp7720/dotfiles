@@ -218,9 +218,9 @@ import subprocess
 import time
 
 
-def epoch(date_value, time_value):
+def epoch(value):
     result = subprocess.run(
-        ["date", "-d", f"{date_value} {time_value}", "+%s"],
+        ["date", "-d", value, "+%s"],
         check=True,
         capture_output=True,
         text=True,
@@ -249,16 +249,21 @@ if len(row) < 5:
 
 row.extend([""] * (6 - len(row)))
 start_date, start_time, end_date, end_time, summary, location = row[:6]
-if not start_time:
-    raise ValueError("gcalcli start time is missing")
-start_epoch = epoch(start_date, start_time)
+if start_time:
+    start_epoch = epoch(f"{start_date} {start_time}")
+else:
+    if not start_date:
+        raise ValueError("gcalcli start date is missing")
+    start_epoch = epoch(start_date)
 if end_time:
-    end_epoch = epoch(end_date or start_date, end_time)
+    end_epoch = epoch(f"{end_date or start_date} {end_time}")
 else:
     end_epoch = start_epoch
 
 title = summary.split(",", 1)[0]
-text = f"{title} in {format_eta(start_epoch)}"
+text = title
+if start_time:
+    text = f"{text} in {format_eta(start_epoch)}"
 if location:
     text = f"{text} at {location}"
 

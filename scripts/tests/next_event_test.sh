@@ -68,7 +68,7 @@ PY
 run_script() {
   local workdir="$1"
   local backend="$2"
-  local mode="$3"
+  shift 2
 
   HOME="$workdir/home" \
   PATH="$workdir/bin:$PATH" \
@@ -76,7 +76,7 @@ run_script() {
   XDG_CACHE_HOME="$workdir/cache" \
   CALENDAR_BACKEND="$backend" \
   NEXT_EVENT_NOW_EPOCH="1800000000" \
-    "$SCRIPT_UNDER_TEST" "$mode"
+    "$SCRIPT_UNDER_TEST" "$@"
 }
 
 test_gcalcli_json_and_waybar_contract() {
@@ -194,6 +194,35 @@ FAKE_GCALCLI
   assert_json_field "$json_output" "end_epoch" "1800000600"
 }
 
+test_date_only_gcalcli_rows_preserve_legacy_rendering() {
+  local workdir="$1"
+  local text_output blank_output waybar_output json_output
+
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+printf 'start_date\tstart_time\tend_date\tend_time\tsummary\tlocation\n'
+printf '2027-01-16\t\t\t\tCompany holiday, Personal\tHQ Atrium\n'
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/gcalcli"
+
+  text_output="$(run_script "$workdir" gcalcli)"
+  [[ "$text_output" == "Company holiday at HQ Atrium" ]] || fail "expected legacy text output, got: $text_output"
+
+  blank_output="$(run_script "$workdir" gcalcli --blank-when-empty)"
+  [[ "$blank_output" == "Company holiday at HQ Atrium" ]] || fail "expected blank-when-empty to keep event text, got: $blank_output"
+
+  waybar_output="$(run_script "$workdir" gcalcli --waybar)"
+  assert_waybar_payload "$waybar_output" "  Company holiday at HQ Atrium"
+
+  json_output="$(run_script "$workdir" gcalcli --json)"
+  assert_json_field "$json_output" "title" "Company holiday"
+  assert_json_field "$json_output" "location" "HQ Atrium"
+  assert_json_field "$json_output" "start_epoch" "1800057600"
+  assert_json_field "$json_output" "end_epoch" "1800057600"
+  assert_json_bool "$json_output" "healthy" "true"
+}
+
 test_control_characters_are_serialized_by_python_json() {
   local workdir="$1"
   local json_output title location
@@ -251,6 +280,9 @@ main() {
     missing-end)
       test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"
       ;;
+    date-only-gcalcli)
+      test_date_only_gcalcli_rows_preserve_legacy_rendering "$tmpdir/date-only-gcalcli"
+      ;;
     control-characters)
       test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
       ;;
@@ -259,6 +291,7 @@ main() {
       test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
       test_khal_all_day_event_uses_explicit_format "$tmpdir/khal-all-day"
       test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"
+      test_date_only_gcalcli_rows_preserve_legacy_rendering "$tmpdir/date-only-gcalcli"
       test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
       ;;
     *)
