@@ -130,14 +130,22 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
     let system = &snapshot.system;
     let network_available = system.network.wifi_enabled.is_some();
     let network_enabled = system.network.wifi_enabled.unwrap_or(false);
-    let network_detail = system.network.label.clone().unwrap_or_else(|| {
-        if network_enabled {
-            "Not connected"
-        } else {
-            "Off"
-        }
-        .to_string()
-    });
+    let wired_connection = system
+        .network
+        .icon_hint
+        .as_deref()
+        .is_some_and(|icon| icon.contains("wired"));
+    let network_detail = if !network_enabled {
+        "Off".to_string()
+    } else if wired_connection {
+        "On".to_string()
+    } else {
+        system
+            .network
+            .label
+            .clone()
+            .unwrap_or_else(|| "Not connected".to_string())
+    };
     let bluetooth_detail = system
         .bluetooth
         .connected_device
@@ -881,6 +889,21 @@ mod tests {
         let spec = build_control_center_spec(&BarSnapshot::default());
 
         assert_eq!(spec.brightness, None);
+    }
+
+    #[test]
+    fn wifi_tile_does_not_present_a_wired_connection_as_its_network_name() {
+        let mut snapshot = BarSnapshot::default();
+        snapshot.system.network = NetworkState {
+            connectivity: ConnectivityState::Connected,
+            icon_hint: Some("network-wired-symbolic".to_string()),
+            label: Some("Ethernet connection 1".to_string()),
+            wifi_enabled: Some(true),
+        };
+
+        let spec = build_control_center_spec(&snapshot);
+
+        assert_eq!(spec.network.detail, "On");
     }
 
     #[test]
