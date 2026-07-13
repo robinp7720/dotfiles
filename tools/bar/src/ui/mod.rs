@@ -2,6 +2,7 @@ pub mod context_card;
 pub mod popovers;
 pub mod surface;
 pub mod system;
+pub mod theme;
 pub mod wm;
 
 use std::cell::{Cell, RefCell};
@@ -24,10 +25,10 @@ use tracing::warn;
 use crate::{
     ActionCompletion, ActionRequest, ActionResult, ActionRouter, ActivityStatus, ActivityTracker,
     ActivityUpdate, AppConfig, CommandActivity, ControlRequest, ControlResponse, ControlSocket,
-    SourceHealth, SourceId, StateStore, StateUpdate, SystemActionBackend, SystemUpdate, TimerStore,
-    detect_compositor, spawn_action_worker, spawn_audio_source, spawn_bluetooth_source,
-    spawn_clock_source, spawn_media_source, spawn_network_source, spawn_power_source,
-    spawn_resource_source,
+    ReloadStatus, SourceHealth, SourceId, StateStore, StateUpdate, SystemActionBackend,
+    SystemUpdate, TimerStore, detect_compositor, reload_runtime_config, spawn_action_worker,
+    spawn_audio_source, spawn_bluetooth_source, spawn_clock_source, spawn_media_source,
+    spawn_network_source, spawn_power_source, spawn_resource_source,
 };
 
 pub use surface::{PrimarySurface, ReducedSurface, SurfaceRegistry, surface_specs};
@@ -37,6 +38,7 @@ const CONTROL_SOCKET_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const TIMER_TICK_INTERVAL: Duration = Duration::from_secs(1);
 const COMPOSITOR_RECONNECT_INTERVAL: Duration = Duration::from_secs(2);
 const INITIAL_DRAIN_WINDOW: Duration = Duration::from_millis(150);
+static RELOAD_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub struct BarApplication {
     application: gtk::Application,
@@ -50,6 +52,7 @@ struct RuntimeHandles {
 
 struct UiRuntime {
     config: AppConfig,
+    config_path: PathBuf,
     store: StateStore,
     activity_tracker: ActivityTracker,
     registry: SurfaceRegistry,
@@ -60,6 +63,7 @@ struct UiRuntime {
 
 impl BarApplication {
     pub fn new(config: AppConfig, config_path: &Path) -> Result<Self> {
+        install_sighup_handler()?;
         let (ui_runtime, runtime) = start_runtime(config, config_path)?;
         let application = gtk::Application::builder()
             .application_id("dev.robin.cockpit-bar")
@@ -116,8 +120,17 @@ fn install_ui_loop(
     monitor_dirty: Rc<Cell<bool>>,
 ) {
     let state = Rc::new(RefCell::new(runtime));
+    let theme_provider = Rc::new(RefCell::new(None::<gtk::CssProvider>));
 
     if let Some(display) = gtk::gdk::Display::default() {
+        if let Err(error) = refresh_theme_provider(
+            &display,
+            &state.borrow().config_path,
+            &mut theme_provider.borrow_mut(),
+        ) {
+            warn!("theme css unavailable: {error:#}");
+        }
+
         let monitors = display.monitors();
         let monitor_dirty_flag = Rc::clone(&monitor_dirty);
         monitors.connect_items_changed(move |_, _, _, _| {
@@ -129,10 +142,17 @@ fn install_ui_loop(
         let monitor_dirty = Rc::clone(&monitor_dirty);
         let state = Rc::clone(&state);
         let application = application.clone();
+        let theme_provider = Rc::clone(&theme_provider);
         glib::timeout_add_local(UI_TICK_INTERVAL, move || {
             let mut runtime = state.borrow_mut();
             let now_epoch = current_epoch();
             let mut dirty = drain_updates(&mut runtime, now_epoch);
+            dirty |= handle_reload_request(
+                &mut runtime,
+                gtk::gdk::Display::default().as_ref(),
+                &mut theme_provider.borrow_mut(),
+                now_epoch,
+            );
             dirty |= runtime.store.expire(now_epoch);
 
             if dirty || monitor_dirty.replace(false) {
@@ -259,6 +279,7 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
     Ok((
         UiRuntime {
             config,
+            config_path: config_path.to_path_buf(),
             store,
             activity_tracker,
             registry: SurfaceRegistry::default(),
@@ -509,6 +530,93 @@ fn current_epoch() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system time");
     i64::try_from(now.as_secs()).unwrap_or(i64::MAX)
+}
+
+extern "C" fn handle_sighup(_: libc::c_int) {
+    RELOAD_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn handle_reload_request(
+    runtime: &mut UiRuntime,
+    display: Option<&gtk::gdk::Display>,
+    theme_provider: &mut Option<gtk::CssProvider>,
+    now_epoch: i64,
+) -> bool {
+    if !RELOAD_REQUESTED.swap(false, Ordering::Relaxed) {
+        return false;
+    }
+
+    match AppConfig::load(&runtime.config_path) {
+        Ok(next) => match reload_runtime_config(&runtime.config, next) {
+            crate::RuntimeConfigReload {
+                config,
+                status: ReloadStatus::Applied,
+            } => {
+                let threshold_changed = runtime.config.thresholds.work_completed_seconds
+                    != config.thresholds.work_completed_seconds;
+                runtime.config = config;
+                if threshold_changed {
+                    let activities = runtime
+                        .activity_tracker
+                        .snapshot()
+                        .items
+                        .into_values()
+                        .collect::<Vec<_>>();
+                    let mut tracker =
+                        ActivityTracker::new(runtime.config.thresholds.work_completed_seconds);
+                    let _ = tracker.apply(ActivityUpdate::Snapshot(activities), now_epoch);
+                    runtime.activity_tracker = tracker;
+                }
+                if let Some(display) = display {
+                    if let Err(error) =
+                        refresh_theme_provider(display, &runtime.config_path, theme_provider)
+                    {
+                        warn!("theme reload failed: {error:#}");
+                    }
+                }
+                true
+            }
+            crate::RuntimeConfigReload {
+                status: ReloadStatus::RestartRequired { reasons },
+                ..
+            } => {
+                warn!("config reload requires restart: {}", reasons.join(", "));
+                false
+            }
+        },
+        Err(error) => {
+            warn!("config reload rejected: {error:#}");
+            false
+        }
+    }
+}
+
+fn refresh_theme_provider(
+    display: &gtk::gdk::Display,
+    config_path: &Path,
+    theme_provider: &mut Option<gtk::CssProvider>,
+) -> Result<()> {
+    if let Some(provider) = theme_provider.as_ref() {
+        theme::reload_css(provider, config_path)?;
+        return Ok(());
+    }
+
+    *theme_provider = Some(theme::load_css(display, config_path)?);
+    Ok(())
+}
+
+fn install_sighup_handler() -> Result<()> {
+    let previous = unsafe {
+        libc::signal(
+            libc::SIGHUP,
+            handle_sighup as *const () as libc::sighandler_t,
+        )
+    };
+    if previous == libc::SIG_ERR {
+        return Err(anyhow!("failed to install SIGHUP handler"));
+    }
+
+    Ok(())
 }
 
 fn wait_for_cancellation(cancelled: &AtomicBool, duration: Duration) -> bool {

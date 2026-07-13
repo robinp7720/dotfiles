@@ -127,6 +127,44 @@ impl AppConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeConfigReload {
+    pub config: AppConfig,
+    pub status: ReloadStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReloadStatus {
+    Applied,
+    RestartRequired { reasons: Vec<String> },
+}
+
+pub fn reload_runtime_config(current: &AppConfig, next: AppConfig) -> RuntimeConfigReload {
+    let mut reasons = Vec::new();
+
+    if current.freshness != next.freshness {
+        reasons.push("freshness changes require restart".to_string());
+    }
+    if current.retry_backoff != next.retry_backoff {
+        reasons.push("retry_backoff changes require restart".to_string());
+    }
+    if current.command_activity != next.command_activity {
+        reasons.push("command_activity changes require restart".to_string());
+    }
+
+    if reasons.is_empty() {
+        RuntimeConfigReload {
+            config: next,
+            status: ReloadStatus::Applied,
+        }
+    } else {
+        RuntimeConfigReload {
+            config: current.clone(),
+            status: ReloadStatus::RestartRequired { reasons },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ThresholdConfig {
@@ -314,7 +352,7 @@ fn validate_positive(path: &str, value: u64) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppConfig, ModuleName};
+    use super::{AppConfig, ModuleName, ReloadStatus, reload_runtime_config};
 
     #[test]
     fn defaults_match_the_approved_urgency_policy() {
@@ -342,5 +380,41 @@ mod tests {
         let text = "[thresholds]\nbattery_low_percent=7\nbattery_critical_percent=15\n";
         let error = AppConfig::from_toml(text).unwrap_err().to_string();
         assert!(error.contains("battery_critical_percent must be lower"));
+    }
+
+    #[test]
+    fn reload_runtime_config_applies_threshold_module_and_primary_output_changes() {
+        let current = AppConfig::default();
+        let mut next = current.clone();
+        next.primary_output = Some("DP-4".to_string());
+        next.thresholds.battery_low_percent = 12;
+        next.modules.reduced = vec![ModuleName::Workspaces, ModuleName::Clock];
+
+        let reloaded = reload_runtime_config(&current, next.clone());
+
+        assert_eq!(reloaded.config, next);
+        assert_eq!(reloaded.status, ReloadStatus::Applied);
+    }
+
+    #[test]
+    fn reload_runtime_config_rejects_process_level_changes_and_preserves_current_config() {
+        let current = AppConfig::default();
+        let mut next = current.clone();
+        next.thresholds.battery_low_percent = 12;
+        next.freshness.network_seconds = 5;
+
+        let reloaded = reload_runtime_config(&current, next);
+
+        assert_eq!(reloaded.config, current);
+        match reloaded.status {
+            ReloadStatus::RestartRequired { reasons } => {
+                assert!(
+                    reasons
+                        .iter()
+                        .any(|reason: &String| reason.contains("freshness"))
+                );
+            }
+            ReloadStatus::Applied => panic!("expected restart-required reload"),
+        }
     }
 }

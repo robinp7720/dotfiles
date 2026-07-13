@@ -382,10 +382,13 @@ impl PrimarySurface {
         action_sender: Sender<ActionRequest>,
     ) -> Self {
         let window = base_window(application, monitor);
+        window.add_css_class("bar-window");
+        window.add_css_class("primary-bar");
         let popover_coordinator = Rc::new(RefCell::new(PopoverCoordinator::default()));
         let popover_registry = Rc::new(RefCell::new(BTreeMap::new()));
 
         let grid = gtk::Grid::new();
+        grid.add_css_class("bar-root");
         grid.set_column_spacing(12);
         grid.set_margin_start(12);
         grid.set_margin_end(12);
@@ -407,14 +410,17 @@ impl PrimarySurface {
         right.set_halign(gtk::Align::End);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        workspaces.add_css_class("workspace-strip");
         install_workspace_scroll(&workspaces, action_sender.clone(), spec.output_name.clone());
         left.append(&workspaces);
 
         let title_button = gtk::Button::new();
+        title_button.add_css_class("title-button");
         title_button.set_has_frame(false);
         title_button.set_hexpand(true);
         title_button.set_halign(gtk::Align::Fill);
         let title_label = gtk::Label::new(None);
+        title_label.add_css_class("title-label");
         title_label.set_hexpand(true);
         title_label.set_max_width_chars(48);
         title_label.set_ellipsize(EllipsizeMode::End);
@@ -437,6 +443,7 @@ impl PrimarySurface {
         context_stack.set_transition_type(context_transition_type());
         let context_empty = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let context_label = gtk::Label::new(None);
+        context_label.add_css_class("context-chip");
         context_label.set_xalign(0.0);
         context_label.set_ellipsize(EllipsizeMode::End);
         context_stack.add_named(&context_empty, Some("empty"));
@@ -447,6 +454,7 @@ impl PrimarySurface {
         center_slot.append(&context_stack);
 
         let system_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        system_box.add_css_class("system-cluster");
         right.append(&system_box);
 
         grid.attach(&left, 0, 0, 1, 1);
@@ -505,9 +513,11 @@ impl PrimarySurface {
         if plan.context {
             if let Some(context) = spec.context.as_ref() {
                 self.context_label.set_label(&context.text);
+                apply_tier_classes(&self.context_label, context.tier);
                 self.context_stack.set_visible_child_name("card");
             } else {
                 self.context_label.set_label("");
+                clear_tier_classes(&self.context_label);
                 self.context_stack.set_visible_child_name("empty");
             }
         }
@@ -625,21 +635,27 @@ impl ReducedSurface {
         action_sender: Sender<ActionRequest>,
     ) -> Self {
         let window = base_window(application, monitor);
+        window.add_css_class("bar-window");
+        window.add_css_class("reduced-bar");
         let popover_coordinator = Rc::new(RefCell::new(PopoverCoordinator::default()));
         let popover_registry = Rc::new(RefCell::new(BTreeMap::new()));
 
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        root.add_css_class("bar-root");
         root.set_margin_start(12);
         root.set_margin_end(12);
         root.set_size_request(-1, BAR_HEIGHT);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        workspaces.add_css_class("workspace-strip");
         install_workspace_scroll(&workspaces, action_sender.clone(), spec.output_name.clone());
         let title_button = gtk::Button::new();
+        title_button.add_css_class("title-button");
         title_button.set_has_frame(false);
         title_button.set_hexpand(true);
         title_button.set_halign(gtk::Align::Fill);
         let title_label = gtk::Label::new(None);
+        title_label.add_css_class("title-label");
         title_label.set_hexpand(true);
         title_label.set_max_width_chars(42);
         title_label.set_ellipsize(EllipsizeMode::End);
@@ -657,10 +673,12 @@ impl ReducedSurface {
         );
 
         let warning_label = gtk::Label::new(None);
+        warning_label.add_css_class("warning-chip");
         warning_label.set_visible(false);
         warning_label.set_ellipsize(EllipsizeMode::End);
 
         let clock_label = gtk::Label::new(None);
+        clock_label.add_css_class("clock-chip");
 
         root.append(&workspaces);
         root.append(&title_button);
@@ -710,9 +728,11 @@ impl ReducedSurface {
         if plan.warning {
             if let Some(warning) = spec.warning.as_ref() {
                 self.warning_label.set_label(&warning.text);
+                apply_tier_classes(&self.warning_label, warning.tier);
                 self.warning_label.set_visible(true);
             } else {
                 self.warning_label.set_label("");
+                clear_tier_classes(&self.warning_label);
                 self.warning_label.set_visible(false);
             }
         }
@@ -755,6 +775,9 @@ fn render_workspaces(
 
     for workspace in workspaces {
         let button = gtk::Button::with_label(&workspace.label);
+        button.add_css_class("workspace-button");
+        update_state_class(&button, "active", workspace.active);
+        update_state_class(&button, "urgent", workspace.urgent);
         button.set_size_request(WORKSPACE_BUTTON_MIN_WIDTH, WORKSPACE_BUTTON_MIN_HEIGHT);
         button.set_has_frame(workspace.active || workspace.urgent);
         let sender = action_sender.clone();
@@ -897,6 +920,30 @@ fn context_transition_type() -> gtk::StackTransitionType {
         gtk::StackTransitionType::Crossfade
     } else {
         gtk::StackTransitionType::None
+    }
+}
+
+fn apply_tier_classes(widget: &impl IsA<gtk::Widget>, tier: crate::ContextTier) {
+    clear_tier_classes(widget);
+    match tier {
+        crate::ContextTier::Critical => widget.add_css_class("critical"),
+        crate::ContextTier::Imminent => widget.add_css_class("warning"),
+        crate::ContextTier::Work => widget.add_css_class("active"),
+        crate::ContextTier::Ambient => {}
+    }
+}
+
+fn clear_tier_classes(widget: &impl IsA<gtk::Widget>) {
+    widget.remove_css_class("active");
+    widget.remove_css_class("warning");
+    widget.remove_css_class("critical");
+}
+
+fn update_state_class(widget: &impl IsA<gtk::Widget>, class_name: &str, present: bool) {
+    if present {
+        widget.add_css_class(class_name);
+    } else {
+        widget.remove_css_class(class_name);
     }
 }
 
@@ -1210,7 +1257,7 @@ mod tests {
 
     use crate::{
         AppConfig, BarSnapshot, ClockState, OutputRole, OutputState, PowerProfile, PowerState,
-        WindowState, WorkspaceState,
+        WindowState, WorkspaceState, reload_runtime_config,
     };
 
     use super::{RenderPlan, SurfaceSpec, surface_specs};
@@ -1321,6 +1368,33 @@ mod tests {
             surface_specs(&restored, &AppConfig::default())[0].output_name,
             "DP-5"
         );
+    }
+
+    #[test]
+    fn surface_specs_recalculate_primary_role_after_runtime_reload() {
+        let snapshot = snapshot([
+            output(
+                "DP-4",
+                &[workspace("1", "1", "DP-4", true, false)],
+                Some(window("notes", "Notes")),
+                false,
+            ),
+            output(
+                "DP-5",
+                &[workspace("2", "2", "DP-5", true, false)],
+                Some(window("editor", "Editor")),
+                false,
+            ),
+        ]);
+        let current = AppConfig::default();
+        let mut next = current.clone();
+        next.primary_output = Some("DP-4".to_string());
+
+        let reloaded = reload_runtime_config(&current, next);
+        let specs = surface_specs(&snapshot, &reloaded.config);
+
+        assert_eq!(specs[0].output_name, "DP-4");
+        assert_eq!(specs[0].role, OutputRole::Primary);
     }
 
     #[test]

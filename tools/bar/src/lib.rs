@@ -26,7 +26,7 @@ pub use compositor::{
 };
 pub use config::{
     AppConfig, CommandActivityConfig, CommandRule, FreshnessConfig, ModuleConfig, ModuleName,
-    ThresholdConfig,
+    ReloadStatus, RuntimeConfigReload, ThresholdConfig, reload_runtime_config,
 };
 pub use context::{ContextCard, ContextTier, Dismissals, select_context};
 pub use ipc::{ControlClient, ControlRequest, ControlResponse, ControlSocket, control_socket_path};
