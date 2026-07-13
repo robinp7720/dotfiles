@@ -115,6 +115,29 @@ impl SliderDebounce {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ControlCenterErrors {
+    messages: BTreeMap<ControlCenterFocus, String>,
+}
+
+impl ControlCenterErrors {
+    pub fn record_failure(&mut self, focus: ControlCenterFocus, detail: &str) {
+        self.messages.insert(focus, detail.to_string());
+    }
+
+    pub fn retry(&mut self, focus: ControlCenterFocus) {
+        self.messages.remove(&focus);
+    }
+
+    pub fn close(&mut self) {
+        self.messages.clear();
+    }
+
+    pub fn message(&self, focus: ControlCenterFocus) -> Option<&str> {
+        self.messages.get(&focus).map(String::as_str)
+    }
+}
+
 pub fn control_center_origin(focus: ControlCenterFocus, action: &str) -> String {
     format!("control-center:{}:{action}", focus.as_str())
 }
@@ -285,8 +308,22 @@ pub struct ControlCenterView {
     resources_label: gtk::Label,
     battery_label: gtk::Label,
     time_label: gtk::Label,
-    error_label: gtk::Label,
+    errors: Rc<RefCell<ControlCenterErrors>>,
+    error_labels: BTreeMap<ControlCenterFocus, gtk::Label>,
     suppress_slider_actions: Rc<Cell<bool>>,
+}
+
+#[derive(Clone)]
+struct SectionErrorHandle {
+    errors: Rc<RefCell<ControlCenterErrors>>,
+    label: gtk::Label,
+    focus: ControlCenterFocus,
+}
+
+impl SectionErrorHandle {
+    fn clear(&self) {
+        clear_section_error(&self.errors, &self.label, self.focus);
+    }
 }
 
 impl ControlCenterView {
@@ -322,11 +359,11 @@ impl ControlCenterView {
 
         let current = Rc::new(RefCell::new(spec.clone()));
         let focus = Rc::new(Cell::new(ControlCenterFocus::Network));
-        let error_label = gtk::Label::new(None);
-        error_label.add_css_class("control-error");
-        error_label.set_xalign(0.0);
-        error_label.set_wrap(true);
-        error_label.set_visible(false);
+        let errors = Rc::new(RefCell::new(ControlCenterErrors::default()));
+        let error_labels = ControlCenterFocus::ALL
+            .into_iter()
+            .map(|focus| (focus, section_error_label()))
+            .collect::<BTreeMap<_, _>>();
 
         let quick_grid = gtk::Grid::new();
         quick_grid.add_css_class("control-grid");
@@ -337,13 +374,18 @@ impl ControlCenterView {
         let (network_button, network_detail) = quick_tile("network-wireless-symbolic", "Wi-Fi");
         let current_for_network = current.clone();
         let sender_for_network = action_sender.clone();
-        let error_for_network = error_label.clone();
+        let errors_for_network = errors.clone();
+        let error_for_network = error_labels[&ControlCenterFocus::Network].clone();
         network_button.connect_clicked(move |_| {
             let network = &current_for_network.borrow().network;
             if !network.available {
                 return;
             }
-            clear_error(&error_for_network);
+            clear_section_error(
+                &errors_for_network,
+                &error_for_network,
+                ControlCenterFocus::Network,
+            );
             send_action(
                 &sender_for_network,
                 ControlCenterFocus::Network,
@@ -357,10 +399,15 @@ impl ControlCenterView {
         let (bluetooth_button, bluetooth_detail) = quick_tile("bluetooth-symbolic", "Bluetooth");
         let current_for_bluetooth = current.clone();
         let sender_for_bluetooth = action_sender.clone();
-        let error_for_bluetooth = error_label.clone();
+        let errors_for_bluetooth = errors.clone();
+        let error_for_bluetooth = error_labels[&ControlCenterFocus::Audio].clone();
         bluetooth_button.connect_clicked(move |_| {
             let powered = current_for_bluetooth.borrow().bluetooth.enabled;
-            clear_error(&error_for_bluetooth);
+            clear_section_error(
+                &errors_for_bluetooth,
+                &error_for_bluetooth,
+                ControlCenterFocus::Audio,
+            );
             send_action(
                 &sender_for_bluetooth,
                 ControlCenterFocus::Audio,
@@ -371,9 +418,10 @@ impl ControlCenterView {
 
         let (audio_button, audio_detail) = quick_tile("audio-volume-high-symbolic", "Audio");
         let sender_for_mute = action_sender.clone();
-        let error_for_mute = error_label.clone();
+        let errors_for_mute = errors.clone();
+        let error_for_mute = error_labels[&ControlCenterFocus::Audio].clone();
         audio_button.connect_clicked(move |_| {
-            clear_error(&error_for_mute);
+            clear_section_error(&errors_for_mute, &error_for_mute, ControlCenterFocus::Audio);
             send_action(
                 &sender_for_mute,
                 ControlCenterFocus::Audio,
@@ -384,9 +432,14 @@ impl ControlCenterView {
 
         let (power_button, power_detail) = quick_tile("power-profile-balanced-symbolic", "Power");
         let sender_for_power = action_sender.clone();
-        let error_for_power = error_label.clone();
+        let errors_for_power = errors.clone();
+        let error_for_power = error_labels[&ControlCenterFocus::Power].clone();
         power_button.connect_clicked(move |_| {
-            clear_error(&error_for_power);
+            clear_section_error(
+                &errors_for_power,
+                &error_for_power,
+                ControlCenterFocus::Power,
+            );
             send_action(
                 &sender_for_power,
                 ControlCenterFocus::Power,
@@ -399,8 +452,11 @@ impl ControlCenterView {
 
         quick_grid.attach(&network_button, 0, 0, 1, 1);
         quick_grid.attach(&audio_button, 1, 0, 1, 1);
-        quick_grid.attach(&bluetooth_button, 0, 1, 1, 1);
-        quick_grid.attach(&power_button, 1, 1, 1, 1);
+        quick_grid.attach(&error_labels[&ControlCenterFocus::Network], 0, 1, 1, 1);
+        quick_grid.attach(&error_labels[&ControlCenterFocus::Audio], 1, 1, 1, 1);
+        quick_grid.attach(&bluetooth_button, 0, 2, 1, 1);
+        quick_grid.attach(&power_button, 1, 2, 1, 1);
+        quick_grid.attach(&error_labels[&ControlCenterFocus::Power], 1, 3, 1, 1);
         root.append(&quick_grid);
 
         let suppress_slider_actions = Rc::new(Cell::new(false));
@@ -417,7 +473,7 @@ impl ControlCenterView {
             &volume_scale,
             suppress_slider_actions.clone(),
             action_sender.clone(),
-            ControlCenterFocus::Audio,
+            section_error_handle(&errors, &error_labels, ControlCenterFocus::Audio),
             "set-volume",
             move |percent| ActionIntent::SetVolumePercent { percent },
         );
@@ -439,7 +495,7 @@ impl ControlCenterView {
             &brightness_scale,
             suppress_slider_actions.clone(),
             action_sender.clone(),
-            ControlCenterFocus::Power,
+            section_error_handle(&errors, &error_labels, ControlCenterFocus::Power),
             "set-brightness",
             move |percent| ActionIntent::SetBrightnessPercent {
                 device: device_for_slider.borrow().clone().unwrap_or_default(),
@@ -465,7 +521,8 @@ impl ControlCenterView {
         connect_static_action(
             &previous_button,
             action_sender.clone(),
-            error_label.clone(),
+            errors.clone(),
+            error_labels[&ControlCenterFocus::Audio].clone(),
             ControlCenterFocus::Audio,
             "previous",
             ActionIntent::ControlMedia(MediaControlAction::Previous),
@@ -473,7 +530,8 @@ impl ControlCenterView {
         connect_static_action(
             &play_button,
             action_sender.clone(),
-            error_label.clone(),
+            errors.clone(),
+            error_labels[&ControlCenterFocus::Audio].clone(),
             ControlCenterFocus::Audio,
             "play-pause",
             ActionIntent::ControlMedia(MediaControlAction::PlayPause),
@@ -481,7 +539,8 @@ impl ControlCenterView {
         connect_static_action(
             &next_button,
             action_sender.clone(),
-            error_label.clone(),
+            errors.clone(),
+            error_labels[&ControlCenterFocus::Audio].clone(),
             ControlCenterFocus::Audio,
             "next",
             ActionIntent::ControlMedia(MediaControlAction::Next),
@@ -502,7 +561,8 @@ impl ControlCenterView {
         connect_static_action(
             &keyboard_button,
             action_sender.clone(),
-            error_label.clone(),
+            errors.clone(),
+            error_labels[&ControlCenterFocus::Keyboard].clone(),
             ControlCenterFocus::Keyboard,
             "cycle-layout",
             ActionIntent::ToggleKeyboardLayout,
@@ -510,7 +570,8 @@ impl ControlCenterView {
         connect_static_action(
             &time_button,
             action_sender.clone(),
-            error_label.clone(),
+            errors.clone(),
+            error_labels[&ControlCenterFocus::Clock].clone(),
             ControlCenterFocus::Clock,
             "start-timer",
             ActionIntent::StartTimer {
@@ -522,17 +583,22 @@ impl ControlCenterView {
         summaries.attach(&resources_button, 1, 0, 1, 1);
         summaries.attach(&battery_button, 2, 0, 1, 1);
         summaries.attach(&time_button, 3, 0, 1, 1);
+        summaries.attach(&error_labels[&ControlCenterFocus::Keyboard], 0, 1, 1, 1);
+        summaries.attach(&error_labels[&ControlCenterFocus::Resources], 1, 1, 1, 1);
+        summaries.attach(&error_labels[&ControlCenterFocus::Clock], 3, 1, 1, 1);
         root.append(&summaries);
-        root.append(&error_label);
 
         let footer = gtk::Button::with_label("Open in Luma");
         footer.add_css_class("control-footer");
         footer.set_has_frame(false);
         let focus_for_footer = focus.clone();
         let sender_for_footer = action_sender;
-        let popover_for_footer = popover.clone();
+        let errors_for_footer = errors.clone();
+        let error_labels_for_footer = error_labels.clone();
+        let popover_for_footer = popover.downgrade();
         footer.connect_clicked(move |_| {
             let focus = focus_for_footer.get();
+            clear_section_error(&errors_for_footer, &error_labels_for_footer[&focus], focus);
             send_action(
                 &sender_for_footer,
                 focus,
@@ -541,10 +607,21 @@ impl ControlCenterView {
                     query: focus.luma_query().to_string(),
                 },
             );
-            popover_for_footer.popdown();
+            if let Some(popover) = popover_for_footer.upgrade() {
+                popover.popdown();
+            }
         });
         root.append(&footer);
         popover.set_child(Some(&root));
+
+        let errors_for_close = errors.clone();
+        let error_labels_for_close = error_labels.clone();
+        popover.connect_closed(move |_| {
+            errors_for_close.borrow_mut().close();
+            for label in error_labels_for_close.values() {
+                clear_error(label);
+            }
+        });
 
         let mut focus_widgets = BTreeMap::new();
         focus_widgets.insert(ControlCenterFocus::Keyboard, keyboard_button.upcast());
@@ -582,7 +659,8 @@ impl ControlCenterView {
             resources_label,
             battery_label,
             time_label,
-            error_label,
+            errors,
+            error_labels,
             suppress_slider_actions,
         };
         view.update(spec);
@@ -608,7 +686,6 @@ impl ControlCenterView {
                 widget.remove_css_class("focused");
             }
         }
-        clear_error(&self.error_label);
     }
 
     pub fn update(&self, spec: &ControlCenterSpec) {
@@ -673,14 +750,19 @@ impl ControlCenterView {
     }
 
     pub fn handle_completion(&self, completion: &ActionCompletion) -> bool {
-        if focus_from_origin(&completion.origin).is_none() {
+        let Some(focus) = focus_from_origin(&completion.origin) else {
             return false;
-        }
+        };
+        let label = &self.error_labels[&focus];
         match &completion.result {
-            ActionResult::Completed => clear_error(&self.error_label),
+            ActionResult::Completed => {
+                self.errors.borrow_mut().retry(focus);
+                clear_error(label);
+            }
             ActionResult::Failed { detail, .. } => {
-                self.error_label.set_label(detail);
-                self.error_label.set_visible(true);
+                self.errors.borrow_mut().record_failure(focus, detail);
+                label.set_label(detail);
+                label.set_visible(true);
             }
         }
         true
@@ -746,7 +828,7 @@ fn install_percent_debounce<F>(
     scale: &gtk::Scale,
     suppress: Rc<Cell<bool>>,
     sender: Sender<ActionRequest>,
-    focus: ControlCenterFocus,
+    error: SectionErrorHandle,
     action: &'static str,
     intent: F,
 ) where
@@ -757,6 +839,7 @@ fn install_percent_debounce<F>(
         if suppress.get() {
             return;
         }
+        error.clear();
         if let Some(source) = pending.borrow_mut().take() {
             source.remove();
         }
@@ -764,6 +847,7 @@ fn install_percent_debounce<F>(
         let sender = sender.clone();
         let pending_for_timeout = pending.clone();
         let intent = intent.clone();
+        let focus = error.focus;
         *pending.borrow_mut() = Some(glib::timeout_add_local_once(
             Duration::from_millis(150),
             move || {
@@ -777,13 +861,14 @@ fn install_percent_debounce<F>(
 fn connect_static_action(
     button: &gtk::Button,
     sender: Sender<ActionRequest>,
+    errors: Rc<RefCell<ControlCenterErrors>>,
     error_label: gtk::Label,
     focus: ControlCenterFocus,
     action: &'static str,
     intent: ActionIntent,
 ) {
     button.connect_clicked(move |_| {
-        clear_error(&error_label);
+        clear_section_error(&errors, &error_label, focus);
         send_action(&sender, focus, action, intent.clone());
     });
 }
@@ -819,6 +904,36 @@ fn clear_error(label: &gtk::Label) {
     label.set_visible(false);
 }
 
+fn clear_section_error(
+    errors: &Rc<RefCell<ControlCenterErrors>>,
+    label: &gtk::Label,
+    focus: ControlCenterFocus,
+) {
+    errors.borrow_mut().retry(focus);
+    clear_error(label);
+}
+
+fn section_error_label() -> gtk::Label {
+    let label = gtk::Label::new(None);
+    label.add_css_class("control-error");
+    label.set_xalign(0.0);
+    label.set_wrap(true);
+    label.set_visible(false);
+    label
+}
+
+fn section_error_handle(
+    errors: &Rc<RefCell<ControlCenterErrors>>,
+    labels: &BTreeMap<ControlCenterFocus, gtk::Label>,
+    focus: ControlCenterFocus,
+) -> SectionErrorHandle {
+    SectionErrorHandle {
+        errors: errors.clone(),
+        label: labels[&focus].clone(),
+        focus,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -827,8 +942,8 @@ mod tests {
     };
 
     use super::{
-        ControlCenterFocus, SliderDebounce, build_control_center_spec, control_center_origin,
-        focus_from_origin,
+        ControlCenterErrors, ControlCenterFocus, SliderDebounce, build_control_center_spec,
+        control_center_origin, focus_from_origin,
     };
 
     #[test]
@@ -923,5 +1038,22 @@ mod tests {
 
         assert_eq!(debounce.take(), Some(100));
         assert_eq!(debounce.take(), None);
+    }
+
+    #[test]
+    fn action_errors_are_retained_per_section_until_retry_or_close() {
+        let mut errors = ControlCenterErrors::default();
+        errors.record_failure(ControlCenterFocus::Network, "nmcli failed");
+        errors.record_failure(ControlCenterFocus::Audio, "wpctl failed");
+
+        errors.retry(ControlCenterFocus::Audio);
+        assert_eq!(
+            errors.message(ControlCenterFocus::Network),
+            Some("nmcli failed")
+        );
+        assert_eq!(errors.message(ControlCenterFocus::Audio), None);
+
+        errors.close();
+        assert_eq!(errors.message(ControlCenterFocus::Network), None);
     }
 }

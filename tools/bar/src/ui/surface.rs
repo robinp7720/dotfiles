@@ -208,6 +208,7 @@ type PopoverRegistry = Rc<RefCell<BTreeMap<String, gtk::Popover>>>;
 
 pub struct SurfaceRegistry {
     surfaces: BTreeMap<String, SurfaceHandle>,
+    connectors: BTreeSet<String>,
 }
 
 impl Default for SurfaceRegistry {
@@ -220,6 +221,7 @@ impl SurfaceRegistry {
     pub fn new() -> Self {
         Self {
             surfaces: BTreeMap::new(),
+            connectors: BTreeSet::new(),
         }
     }
 
@@ -241,6 +243,13 @@ impl SurfaceRegistry {
             .filter(|spec| monitors.contains_key(&spec.output_name))
             .map(|spec| spec.output_name.clone())
             .collect::<BTreeSet<_>>();
+
+        if topology_changed(&self.connectors, &desired_connectors) {
+            for surface in self.surfaces.values() {
+                surface.dismiss_popovers();
+            }
+        }
+        self.connectors = desired_connectors.clone();
 
         let stale = self
             .surfaces
@@ -283,6 +292,7 @@ impl SurfaceRegistry {
         for (_, surface) in std::mem::take(&mut self.surfaces) {
             surface.close();
         }
+        self.connectors.clear();
     }
 
     pub fn handle_completion(&mut self, completion: &ActionCompletion) -> bool {
@@ -361,6 +371,12 @@ impl SurfaceHandle {
             Self::Reduced(surface) => surface.window.close(),
         }
     }
+
+    fn dismiss_popovers(&self) {
+        if let Self::Primary(surface) = self {
+            surface.dismiss_popovers();
+        }
+    }
 }
 
 pub struct PrimarySurface {
@@ -371,7 +387,7 @@ pub struct PrimarySurface {
     title_groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     context_stack: gtk::Stack,
     context_label: gtk::Label,
-    system_items: gtk::Box,
+    status_buttons: BTreeMap<SystemModuleId, StatusButtonView>,
     control_center: Rc<ControlCenterView>,
     popover_coordinator: Rc<RefCell<PopoverCoordinator>>,
     popover_registry: PopoverRegistry,
@@ -482,6 +498,18 @@ impl PrimarySurface {
             popover_coordinator.clone(),
             popover_registry.clone(),
         );
+        let mut status_buttons = BTreeMap::new();
+        for module in initial_system.modules() {
+            let status_button = build_status_button(
+                &module.button,
+                &action_sender,
+                control_center.clone(),
+                popover_coordinator.clone(),
+                popover_registry.clone(),
+            );
+            system_items.append(&status_button.button);
+            status_buttons.insert(module.button.id, status_button);
+        }
 
         root.set_start_widget(Some(&left));
         root.set_center_widget(Some(&center_slot_frame));
@@ -503,7 +531,7 @@ impl PrimarySurface {
             title_groups,
             context_stack,
             context_label,
-            system_items,
+            status_buttons,
             control_center,
             popover_coordinator,
             popover_registry,
@@ -558,22 +586,18 @@ impl PrimarySurface {
         self.control_center.handle_completion(completion)
     }
 
-    fn render_system_modules(&self, system: &SystemCluster) {
+    fn dismiss_popovers(&self) {
+        popdown_active_popover(&self.popover_coordinator, &self.popover_registry);
+    }
+
+    fn render_system_modules(&mut self, system: &SystemCluster) {
         self.control_center.update(system.control_center());
-
-        while let Some(child) = self.system_items.first_child() {
-            self.system_items.remove(&child);
-        }
-
         for module in system.modules() {
-            let button = build_status_button(
-                &module.button,
-                &self.action_sender,
-                self.control_center.clone(),
-                self.popover_coordinator.clone(),
-                self.popover_registry.clone(),
-            );
-            self.system_items.append(&button);
+            let status_button = self
+                .status_buttons
+                .get_mut(&module.button.id)
+                .expect("stable system status button");
+            status_button.update(&module.button);
         }
     }
 }
@@ -749,6 +773,10 @@ fn base_window(application: &gtk::Application, monitor: &gdk::Monitor) -> gtk::A
 
 fn bar_window_width_for_monitor_width(monitor_width: i32) -> i32 {
     monitor_width.saturating_sub(SURFACE_MARGIN * 2).max(1)
+}
+
+fn topology_changed(previous: &BTreeSet<String>, next: &BTreeSet<String>) -> bool {
+    !previous.is_empty() && previous != next
 }
 
 fn render_workspaces(
@@ -934,25 +962,49 @@ fn update_state_class(widget: &impl IsA<gtk::Widget>, class_name: &str, present:
     }
 }
 
+struct StatusButtonView {
+    button: gtk::Button,
+    icon: gtk::Image,
+    label: gtk::Label,
+    classes: Vec<String>,
+}
+
+impl StatusButtonView {
+    fn update(&mut self, spec: &SystemButtonSpec) {
+        self.button.set_tooltip_text(Some(&spec.tooltip));
+        for class_name in std::mem::take(&mut self.classes) {
+            self.button.remove_css_class(&class_name);
+        }
+        for class_name in &spec.classes {
+            self.button.add_css_class(class_name);
+        }
+        self.classes = spec.classes.clone();
+        self.icon.set_icon_name(Some(&spec.icon_name));
+        if let Some(text) = spec.label.as_deref() {
+            self.label.set_label(text);
+            self.label.set_visible(true);
+        } else {
+            self.label.set_label("");
+            self.label.set_visible(false);
+        }
+    }
+}
+
 fn build_status_button(
     button_spec: &SystemButtonSpec,
     action_sender: &Sender<ActionRequest>,
     control_center: Rc<ControlCenterView>,
     coordinator: Rc<RefCell<PopoverCoordinator>>,
     registry: PopoverRegistry,
-) -> gtk::Button {
+) -> StatusButtonView {
     let button = gtk::Button::new();
     button.set_has_frame(false);
-    button.set_tooltip_text(Some(&button_spec.tooltip));
-    for class_name in &button_spec.classes {
-        button.add_css_class(class_name);
-    }
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-    row.append(&gtk::Image::from_icon_name(&button_spec.icon_name));
-    if let Some(label_text) = button_spec.label.as_ref() {
-        row.append(&gtk::Label::new(Some(label_text)));
-    }
+    let icon = gtk::Image::new();
+    let label = gtk::Label::new(None);
+    row.append(&icon);
+    row.append(&label);
     button.set_child(Some(&row));
 
     let focus = control_focus(button_spec.id);
@@ -977,7 +1029,14 @@ fn build_status_button(
         );
     }
 
-    button
+    let mut view = StatusButtonView {
+        button,
+        icon,
+        label,
+        classes: Vec::new(),
+    };
+    view.update(button_spec);
+    view
 }
 
 fn control_focus(module_id: SystemModuleId) -> ControlCenterFocus {
@@ -1113,14 +1172,30 @@ fn scroll_actions(module_id: SystemModuleId) -> Option<(ActionIntent, ActionInte
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use crate::{
         AppConfig, BarSnapshot, ClockState, OutputRole, OutputState, PowerProfile, PowerState,
         WindowState, WorkspaceState, reload_runtime_config,
     };
 
-    use super::{RenderPlan, SurfaceSpec, surface_specs};
+    use super::{RenderPlan, SurfaceSpec, surface_specs, topology_changed};
+
+    #[test]
+    fn output_topology_changes_after_initialization_dismiss_open_panels() {
+        let empty = BTreeSet::new();
+        let two = BTreeSet::from(["DP-4".to_string(), "DP-5".to_string()]);
+        let three = BTreeSet::from([
+            "DP-4".to_string(),
+            "DP-5".to_string(),
+            "HDMI-A-2".to_string(),
+        ]);
+
+        assert!(!topology_changed(&empty, &two));
+        assert!(!topology_changed(&two, &two));
+        assert!(topology_changed(&two, &three));
+        assert!(topology_changed(&three, &two));
+    }
 
     #[test]
     fn surface_specs_choose_configured_primary_and_reduce_other_outputs() {

@@ -188,7 +188,8 @@ require_fixed 'match namespace="^cockpit-bar$"' "niri/config.kdl"
 
 require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
 require_fixed 'root.set_center_widget(Some(&center_slot_frame));' "tools/bar/src/ui/surface.rs"
-require_fixed 'while let Some(child) = self.system_items.first_child()' "tools/bar/src/ui/surface.rs"
+require_fixed 'system_box.append(&system_items);' "tools/bar/src/ui/surface.rs"
+require_fixed 'status_button.update(&module.button);' "tools/bar/src/ui/surface.rs"
 
 require_path "waybar/launch.sh"
 require_path "waybar/config"
