@@ -128,6 +128,15 @@ impl ControlSocket {
         &self.socket_path
     }
 
+    pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
+        self.listener.set_nonblocking(nonblocking).with_context(|| {
+            format!(
+                "failed to update blocking mode for {}",
+                self.socket_path.display()
+            )
+        })
+    }
+
     pub fn serve_once<F>(&self, handler: F) -> Result<()>
     where
         F: FnOnce(ControlRequest) -> Result<ControlResponse>,
@@ -151,6 +160,33 @@ impl ControlSocket {
             },
         };
         write_json_line(&mut stream, &response).context("failed to write control response")
+    }
+
+    pub fn try_serve_once<F>(&self, handler: F) -> Result<bool>
+    where
+        F: FnOnce(ControlRequest) -> Result<ControlResponse>,
+    {
+        let (mut stream, _) = match self.listener.accept() {
+            Ok(accepted) => accepted,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+            Err(error) => return Err(error).context("failed to accept control connection"),
+        };
+        let request = {
+            let mut reader = BufReader::new(
+                stream
+                    .try_clone()
+                    .context("failed to clone accepted control stream")?,
+            );
+            read_json_line(&mut reader).context("failed to read control request")?
+        };
+        let response = match handler(request) {
+            Ok(response) => response,
+            Err(error) => ControlResponse::Error {
+                message: error.to_string(),
+            },
+        };
+        write_json_line(&mut stream, &response).context("failed to write control response")?;
+        Ok(true)
     }
 }
 

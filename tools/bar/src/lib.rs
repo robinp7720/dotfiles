@@ -8,6 +8,7 @@ pub mod model;
 pub mod sources;
 pub mod state;
 pub mod timers;
+pub mod ui;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -43,6 +44,7 @@ pub use sources::{
 };
 pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};
+pub use ui::BarApplication;
 
 pub fn startup(_config: &AppConfig) -> Result<()> {
     Ok(())
@@ -72,7 +74,9 @@ pub fn run_test_control_server(requests: usize) -> Result<()> {
 
 pub fn run(config_path: &Path) -> Result<()> {
     let config = AppConfig::load(config_path)?;
-    startup(&config)
+    startup(&config)?;
+    BarApplication::new(config, config_path)?.run();
+    Ok(())
 }
 
 fn current_epoch() -> i64 {
