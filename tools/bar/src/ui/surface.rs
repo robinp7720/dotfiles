@@ -740,13 +740,14 @@ impl ReducedSurface {
 }
 
 fn base_window(application: &gtk::Application, monitor: &gdk::Monitor) -> gtk::ApplicationWindow {
+    let width = bar_window_width_for_monitor_width(monitor.geometry().width());
     let window = gtk::ApplicationWindow::builder()
         .application(application)
         .title("cockpit-bar")
         .build();
     window.set_decorated(false);
     window.set_resizable(false);
-    window.set_default_size(1, BAR_HEIGHT);
+    window.set_default_size(width, BAR_HEIGHT);
     window.init_layer_shell();
     window.set_namespace(Some("cockpit-bar"));
     window.set_layer(Layer::Top);
@@ -759,6 +760,10 @@ fn base_window(application: &gtk::Application, monitor: &gdk::Monitor) -> gtk::A
     window.set_margin(Edge::Right, SURFACE_MARGIN);
     window.set_monitor(Some(monitor));
     window
+}
+
+fn bar_window_width_for_monitor_width(monitor_width: i32) -> i32 {
+    monitor_width.saturating_sub(SURFACE_MARGIN * 2).max(1)
 }
 
 fn render_workspaces(
@@ -1206,6 +1211,7 @@ fn close_system_popovers(registry: &PopoverRegistry) {
     for key in system_keys {
         if let Some(popover) = registry.borrow_mut().remove(&key) {
             popover.popdown();
+            popover.unparent();
         }
     }
 }
@@ -1569,6 +1575,12 @@ mod tests {
         assert!(!plan.workspaces);
         assert!(!plan.title);
         assert!(plan.clock);
+    }
+
+    #[test]
+    fn bar_window_width_matches_monitor_width_minus_layer_margins() {
+        assert_eq!(super::bar_window_width_for_monitor_width(3_840), 3_830);
+        assert_eq!(super::bar_window_width_for_monitor_width(1), 1);
     }
 
     fn snapshot<const N: usize>(outputs: [OutputState; N]) -> BarSnapshot {

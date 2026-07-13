@@ -228,6 +228,7 @@ struct HyprClient {
     workspace: HyprClientWorkspace,
     class: Option<String>,
     title: Option<String>,
+    #[serde(default)]
     urgent: bool,
     #[serde(default = "default_true")]
     mapped: bool,

@@ -735,6 +735,72 @@ fn compositor_hyprland_workspacev2_updates_same_output_activity() {
 }
 
 #[test]
+fn compositor_hyprland_clients_default_missing_urgent_to_false() {
+    let snapshot = r#"{
+  "monitors": [
+    {
+      "id": 1,
+      "name": "DP-1",
+      "focused": true,
+      "activeWorkspace": { "id": 1, "name": "1" },
+      "specialWorkspace": { "id": 0, "name": "" },
+      "lastWindow": "0x64"
+    }
+  ],
+  "workspaces": [
+    { "id": 1, "name": "1", "monitor": "DP-1" }
+  ],
+  "clients": [
+    {
+      "address": "0x64",
+      "workspace": { "id": 1, "name": "1" },
+      "class": "kitty",
+      "title": "Terminal",
+      "mapped": true
+    }
+  ],
+  "devices": { "keyboards": [] }
+}"#;
+    let mut adapter = HyprlandAdapter::new_for_test(snapshot, "", |_, _, _| Ok(()));
+
+    assert_eq!(
+        adapter.initial_snapshot().expect("hyprland snapshot"),
+        vec![
+            StateUpdate::Outputs(vec![OutputState {
+                name: "DP-1".to_string(),
+                workspaces: vec![WorkspaceState {
+                    id: "1".to_string(),
+                    label: "1".to_string(),
+                    output: "DP-1".to_string(),
+                    active: true,
+                    urgent: false,
+                    changed_at: 0,
+                }],
+                windows: vec![WindowState {
+                    id: "100".to_string(),
+                    app_id: Some("kitty".to_string()),
+                    title: "Terminal".to_string(),
+                    urgent: false,
+                    workspace_id: Some("1".to_string()),
+                    changed_at: 0,
+                }],
+                focused_window: Some(WindowState {
+                    id: "100".to_string(),
+                    app_id: Some("kitty".to_string()),
+                    title: "Terminal".to_string(),
+                    urgent: false,
+                    workspace_id: Some("1".to_string()),
+                    changed_at: 0,
+                }),
+                urgent: false,
+                changed_at: 0,
+            }]),
+            StateUpdate::FocusedOutput(Some("DP-1".to_string())),
+        ]
+    );
+}
+
+#[test]
 fn compositor_hyprland_actions_use_direct_argv() {
     let recorded = Arc::new(Mutex::new(Vec::<(String, Vec<String>)>::new()));
     let capture = recorded.clone();
