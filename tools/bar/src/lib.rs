@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod activity;
 pub mod compositor;
 pub mod config;
@@ -14,6 +15,10 @@ use std::path::Path;
 
 use anyhow::Result;
 
+pub use actions::{
+    ActionBackend, ActionCompletion, ActionResult, ActionRouter, ProcessSpec, SystemActionBackend,
+    spawn_action_worker,
+};
 pub use activity::ActivityTracker;
 pub use compositor::{
     CompositorAction, CompositorAdapter, HyprlandAdapter, NiriAdapter, detect_compositor,
