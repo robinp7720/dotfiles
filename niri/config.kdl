@@ -92,6 +92,17 @@ layer-rule {
     geometry-corner-radius 22
 }
 
+// Add a shadow for cockpit-bar.
+layer-rule {
+    match namespace="^cockpit-bar$"
+
+    shadow {
+        on
+    }
+
+    geometry-corner-radius 18
+}
+
 // Add a shadow for waybar.
 layer-rule {
     match namespace="^waybar$"
@@ -326,8 +337,12 @@ layout {
 // which may be more convenient to use.
 // See the binds section below for more spawn examples.
 
+spawn-sh-at-startup "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
+spawn-sh-at-startup "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
+spawn-sh-at-startup "systemctl --user restart cockpit-bar.service"
+
 // This line starts waybar, a commonly used bar for Wayland compositors.
-spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"
+// spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"
 spawn-sh-at-startup "command -v eww >/dev/null 2>&1 && eww -c ~/.config/eww daemon"
 spawn-at-startup "~/.dotfiles/scripts/awww_wallpaper_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"

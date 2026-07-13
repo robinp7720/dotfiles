@@ -1,0 +1,15 @@
+[Unit]
+Description=Wayland command cockpit bar
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cockpit-bar
+Restart=on-failure
+RestartSec=2
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+Environment=XDG_CONFIG_HOME=%h/.config
+
+[Install]
+WantedBy=graphical-session.target

@@ -124,6 +124,8 @@ for dir in "${directories[@]}"; do
   target="$HOME/.config/$dir"
   link_path "$DIR/$dir" "$target"
 done
+echo "Linking cockpit-bar configuration"
+link_path "$DIR/bar" "$HOME/.config/cockpit-bar"
 remove_managed_symlink "$HOME/.config/rofi" "$DIR/rofi"
 
 # Setup custom scripts in ~/.local/bin
@@ -144,6 +146,14 @@ for script_pair in "${scripts[@]}"; do
   link_path "$src" "$target"
   echo "Linked $target -> $src"
 done
+
+if [[ -x "$DIR/tools/bar/target/release/cockpit-bar" ]]; then
+  link_path "$DIR/tools/bar/target/release/cockpit-bar" "$HOME/.local/bin/cockpit-bar"
+  echo "Linked $HOME/.local/bin/cockpit-bar -> $DIR/tools/bar/target/release/cockpit-bar"
+else
+  warn "skipping cockpit-bar binary link because tools/bar/target/release/cockpit-bar is missing"
+fi
+
 remove_managed_symlink "$HOME/.local/bin/rofi" "$DIR/scripts/rofi_wrapper.sh"
 
 # Link user systemd units
