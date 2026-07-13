@@ -27,8 +27,8 @@ use crate::{
     ActivityUpdate, AppConfig, CommandActivity, ControlRequest, ControlResponse, ControlSocket,
     ReloadStatus, SourceHealth, SourceId, StateStore, StateUpdate, SystemActionBackend,
     SystemUpdate, TimerStore, detect_compositor, reload_runtime_config, spawn_action_worker,
-    spawn_audio_source, spawn_bluetooth_source, spawn_clock_source, spawn_media_source,
-    spawn_network_source, spawn_power_source, spawn_resource_source,
+    spawn_audio_source, spawn_bluetooth_source, spawn_brightness_source, spawn_clock_source,
+    spawn_media_source, spawn_network_source, spawn_power_source, spawn_resource_source,
 };
 
 pub use surface::{PrimarySurface, ReducedSurface, SurfaceRegistry, surface_specs};
@@ -231,6 +231,7 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
         spawn_network_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_bluetooth_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_audio_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_brightness_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_media_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_clock_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_timer_tick_worker(

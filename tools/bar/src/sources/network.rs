@@ -51,7 +51,11 @@ fn map_connectivity_state(value: u32) -> ConnectivityState {
     }
 }
 
-fn build_network_state(connectivity: u32, active: Option<&ActiveConnection>) -> NetworkState {
+fn build_network_state(
+    connectivity: u32,
+    wifi_enabled: Option<bool>,
+    active: Option<&ActiveConnection>,
+) -> NetworkState {
     let connectivity = map_connectivity_state(connectivity);
 
     match active {
@@ -60,6 +64,7 @@ fn build_network_state(connectivity: u32, active: Option<&ActiveConnection>) -> 
                 connectivity,
                 icon_hint: Some(wifi_signal_icon(active.signal_percent).to_string()),
                 label: active.label.clone(),
+                wifi_enabled,
             },
             ConnectionKind::Ethernet => NetworkState {
                 connectivity,
@@ -69,11 +74,13 @@ fn build_network_state(connectivity: u32, active: Option<&ActiveConnection>) -> 
                     .clone()
                     .filter(|label| !label.trim().is_empty())
                     .or_else(|| Some("Ethernet".to_string())),
+                wifi_enabled,
             },
             ConnectionKind::Other => NetworkState {
                 connectivity,
                 icon_hint: Some("network-idle-symbolic".to_string()),
                 label: active.label.clone(),
+                wifi_enabled,
             },
         },
         None => NetworkState {
@@ -88,6 +95,7 @@ fn build_network_state(connectivity: u32, active: Option<&ActiveConnection>) -> 
                 .to_string(),
             ),
             label: None,
+            wifi_enabled,
         },
     }
 }
@@ -129,6 +137,7 @@ fn read_network_state(connection: &Connection) -> Result<NetworkState> {
     let connectivity: u32 = manager
         .get_property("Connectivity")
         .context("failed to read NetworkManager Connectivity")?;
+    let wifi_enabled = manager.get_property::<bool>("WirelessEnabled").ok();
     let primary: OwnedObjectPath = manager
         .get_property("PrimaryConnection")
         .context("failed to read NetworkManager PrimaryConnection")?;
@@ -136,7 +145,11 @@ fn read_network_state(connection: &Connection) -> Result<NetworkState> {
         .or_else(|_| read_network_state_nmcli())
         .ok();
 
-    Ok(build_network_state(connectivity, active.as_ref()))
+    Ok(build_network_state(
+        connectivity,
+        wifi_enabled,
+        active.as_ref(),
+    ))
 }
 
 fn read_active_connection(connection: &Connection, path: &str) -> Result<ActiveConnection> {
@@ -345,6 +358,7 @@ mod tests {
     fn wifi_connections_preserve_ssid_and_signal_bucket() {
         let state = build_network_state(
             4,
+            Some(true),
             Some(&ActiveConnection {
                 kind: ConnectionKind::Wifi,
                 label: Some("Cafe | Wi-Fi".to_string()),
@@ -358,7 +372,16 @@ mod tests {
                 connectivity: ConnectivityState::Connected,
                 icon_hint: Some("network-wireless-signal-good-symbolic".to_string()),
                 label: Some("Cafe | Wi-Fi".to_string()),
+                wifi_enabled: Some(true),
             }
         );
+    }
+
+    #[test]
+    fn wifi_radio_state_is_preserved_without_an_active_connection() {
+        let state = build_network_state(1, Some(false), None);
+
+        assert_eq!(state.wifi_enabled, Some(false));
+        assert_eq!(state.connectivity, ConnectivityState::Disconnected);
     }
 }

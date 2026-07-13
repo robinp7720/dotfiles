@@ -145,6 +145,14 @@ impl StateStore {
                     true
                 }
             }
+            SystemUpdate::Brightness(value) => {
+                if self.snapshot.system.brightness == value {
+                    false
+                } else {
+                    self.snapshot.system.brightness = value;
+                    true
+                }
+            }
             SystemUpdate::Power(value) => {
                 let value = normalize_power(value, &self.snapshot.system.power, observed_at);
                 if self.snapshot.system.power == value {
@@ -249,6 +257,14 @@ impl StateStore {
                     false
                 } else {
                     self.snapshot.activities.items.clear();
+                    true
+                }
+            }
+            SourceId::Brightness => {
+                if self.snapshot.system.brightness == crate::BrightnessState::default() {
+                    false
+                } else {
+                    self.snapshot.system.brightness = crate::BrightnessState::default();
                     true
                 }
             }
@@ -478,6 +494,7 @@ fn source_for_update(update: &StateUpdate) -> SourceId {
             SystemUpdate::Network(_) => SourceId::Network,
             SystemUpdate::Bluetooth(_) => SourceId::Bluetooth,
             SystemUpdate::Audio(_) => SourceId::Audio,
+            SystemUpdate::Brightness(_) => SourceId::Brightness,
             SystemUpdate::Power(_) => SourceId::Power,
             SystemUpdate::Clock(_) => SourceId::Clock,
             SystemUpdate::Media(_) => SourceId::Media,
@@ -496,6 +513,7 @@ fn freshness_seconds(freshness: &FreshnessConfig, source: SourceId) -> Option<u6
         SourceId::Resources => Some(freshness.resources_seconds),
         SourceId::Network => Some(freshness.network_seconds),
         SourceId::Bluetooth | SourceId::Audio => Some(freshness.bluetooth_seconds),
+        SourceId::Brightness => Some(freshness.brightness_seconds),
         SourceId::Media => Some(freshness.media_seconds),
         SourceId::Calendar => Some(freshness.calendar_seconds),
         SourceId::Timers => Some(freshness.timers_seconds),
@@ -507,12 +525,39 @@ fn freshness_seconds(freshness: &FreshnessConfig, source: SourceId) -> Option<u6
 #[cfg(test)]
 mod tests {
     use crate::{
-        CalendarEvent, MediaState, OutputState, PlaybackStatus, PowerProfile, PowerState,
-        SourceHealth, SourceId, StateUpdate, SystemUpdate, TimerState, WindowState, WorkspaceState,
-        config::FreshnessConfig,
+        BrightnessState, CalendarEvent, MediaState, OutputState, PlaybackStatus, PowerProfile,
+        PowerState, SourceHealth, SourceId, StateUpdate, SystemUpdate, TimerState, WindowState,
+        WorkspaceState, config::FreshnessConfig,
     };
 
     use super::StateStore;
+
+    #[test]
+    fn stale_brightness_is_hidden_after_its_freshness_window() {
+        let mut store = StateStore::new(FreshnessConfig::default());
+        let brightness = BrightnessState {
+            device: Some("intel_backlight".to_string()),
+            percent: Some(70),
+        };
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Brightness(brightness)),
+            1_800_000_000,
+        ));
+        assert!(store.expire(1_800_000_011));
+        assert_eq!(
+            store.snapshot().system.brightness,
+            BrightnessState::default()
+        );
+        assert!(matches!(
+            store
+                .snapshot()
+                .system
+                .source_health
+                .get(&SourceId::Brightness),
+            Some(SourceHealth::Stale { .. })
+        ));
+    }
 
     #[test]
     fn equivalent_updates_return_false_but_refresh_freshness() {

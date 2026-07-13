@@ -117,6 +117,19 @@ impl<B: ActionBackend> ActionRouter<B> {
             ActionIntent::ControlMedia(action) => {
                 self.backend.execute_service_command(media_process(action))
             }
+            ActionIntent::SetVolumePercent { percent } => self
+                .backend
+                .execute_service_command(volume_process(percent)),
+            ActionIntent::ToggleMute => self.backend.execute_service_command(mute_process()),
+            ActionIntent::SetWifiEnabled { enabled } => {
+                self.backend.execute_service_command(wifi_process(enabled))
+            }
+            ActionIntent::SetBluetoothPowered { powered } => self
+                .backend
+                .execute_service_command(bluetooth_power_process(powered)),
+            ActionIntent::SetBrightnessPercent { device, percent } => self
+                .backend
+                .execute_service_command(brightness_process(&device, percent)),
             ActionIntent::CyclePowerProfile { direction } => {
                 let next = cycle_power_profile(&self.power_profile, direction);
                 self.backend
@@ -271,6 +284,46 @@ fn media_process(action: MediaControlAction) -> ProcessSpec {
     ProcessSpec::new("playerctl", [verb])
 }
 
+fn volume_process(percent: u8) -> ProcessSpec {
+    ProcessSpec::new(
+        "wpctl",
+        [
+            "set-volume".to_string(),
+            "@DEFAULT_AUDIO_SINK@".to_string(),
+            format!("{}%", percent.min(100)),
+        ],
+    )
+}
+
+fn mute_process() -> ProcessSpec {
+    ProcessSpec::new("wpctl", ["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+}
+
+fn wifi_process(enabled: bool) -> ProcessSpec {
+    ProcessSpec::new("nmcli", ["radio", "wifi", on_off(enabled)])
+}
+
+fn bluetooth_power_process(powered: bool) -> ProcessSpec {
+    ProcessSpec::new("bluetoothctl", ["power", on_off(powered)])
+}
+
+fn brightness_process(device: &str, percent: u8) -> ProcessSpec {
+    ProcessSpec::new(
+        "brightnessctl",
+        [
+            "--class=backlight".to_string(),
+            "--device".to_string(),
+            device.to_string(),
+            "set".to_string(),
+            format!("{}%", percent.min(100)),
+        ],
+    )
+}
+
+fn on_off(enabled: bool) -> &'static str {
+    if enabled { "on" } else { "off" }
+}
+
 fn power_profile_process(profile: &PowerProfile) -> ProcessSpec {
     ProcessSpec::new("powerprofilesctl", ["set", power_profile_name(profile)])
 }
@@ -377,6 +430,49 @@ mod tests {
             vec![
                 ProcessSpec::new("powerprofilesctl", ["set", "performance"]),
                 ProcessSpec::new("powerprofilesctl", ["set", "balanced"]),
+            ]
+        );
+        assert_no_shell_expansion(&commands);
+    }
+
+    #[test]
+    fn essential_controls_use_direct_argv_and_clamp_percentages() {
+        let state = SpyState::default_shared();
+        let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
+
+        let intents = [
+            ActionIntent::SetVolumePercent { percent: 140 },
+            ActionIntent::ToggleMute,
+            ActionIntent::SetWifiEnabled { enabled: false },
+            ActionIntent::SetBluetoothPowered { powered: true },
+            ActionIntent::SetBrightnessPercent {
+                device: "intel_backlight".to_string(),
+                percent: 0,
+            },
+        ];
+
+        for intent in intents {
+            assert_eq!(router.execute(intent), ActionResult::Completed);
+        }
+
+        let commands = state.lock().unwrap().service_commands.clone();
+        assert_eq!(
+            commands,
+            vec![
+                ProcessSpec::new("wpctl", ["set-volume", "@DEFAULT_AUDIO_SINK@", "100%"],),
+                ProcessSpec::new("wpctl", ["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]),
+                ProcessSpec::new("nmcli", ["radio", "wifi", "off"]),
+                ProcessSpec::new("bluetoothctl", ["power", "on"]),
+                ProcessSpec::new(
+                    "brightnessctl",
+                    [
+                        "--class=backlight",
+                        "--device",
+                        "intel_backlight",
+                        "set",
+                        "0%",
+                    ],
+                ),
             ]
         );
         assert_no_shell_expansion(&commands);

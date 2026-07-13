@@ -121,6 +121,8 @@ pub struct SystemState {
     pub network: NetworkState,
     pub bluetooth: BluetoothState,
     pub audio: AudioState,
+    #[serde(default)]
+    pub brightness: BrightnessState,
     pub power: PowerState,
     pub clock: ClockState,
     pub media: Option<MediaState>,
@@ -136,6 +138,7 @@ pub enum SystemUpdate {
     Network(NetworkState),
     Bluetooth(BluetoothState),
     Audio(AudioState),
+    Brightness(BrightnessState),
     Power(PowerState),
     Clock(ClockState),
     Media(Option<MediaState>),
@@ -163,6 +166,8 @@ pub struct NetworkState {
     pub connectivity: ConnectivityState,
     pub icon_hint: Option<String>,
     pub label: Option<String>,
+    #[serde(default)]
+    pub wifi_enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,6 +181,12 @@ pub struct BluetoothState {
 pub struct AudioState {
     pub volume_percent: Option<u8>,
     pub muted: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BrightnessState {
+    pub device: Option<String>,
+    pub percent: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -288,6 +299,7 @@ pub enum SourceId {
     Network,
     Bluetooth,
     Audio,
+    Brightness,
     Media,
     Calendar,
     Timers,
@@ -329,6 +341,20 @@ pub enum ActionIntent {
         query: String,
     },
     ControlMedia(MediaControlAction),
+    SetVolumePercent {
+        percent: u8,
+    },
+    ToggleMute,
+    SetWifiEnabled {
+        enabled: bool,
+    },
+    SetBluetoothPowered {
+        powered: bool,
+    },
+    SetBrightnessPercent {
+        device: String,
+        percent: u8,
+    },
     CyclePowerProfile {
         direction: Direction,
     },
@@ -345,4 +371,19 @@ pub enum ActionIntent {
     CancelTimer {
         id: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetworkState;
+
+    #[test]
+    fn network_state_deserializes_without_new_wifi_radio_field() {
+        let state: NetworkState = serde_json::from_str(
+            r#"{"connectivity":"Connected","icon_hint":null,"label":"Ethernet"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(state.wifi_enabled, None);
+    }
 }

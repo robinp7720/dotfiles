@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod bluetooth;
+pub mod brightness;
 pub mod calendar;
 pub mod media;
 pub mod network;
@@ -21,6 +22,7 @@ use crate::{ClockState, StateUpdate, SystemUpdate};
 
 pub use audio::spawn_audio_source;
 pub use bluetooth::spawn_bluetooth_source;
+pub use brightness::{parse_brightnessctl_output, spawn_brightness_source};
 pub use calendar::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
 pub use media::spawn_media_source;
 pub use network::spawn_network_source;

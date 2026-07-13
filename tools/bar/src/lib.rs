@@ -32,15 +32,16 @@ pub use context::{ContextCard, ContextTier, Dismissals, select_context};
 pub use ipc::{ControlClient, ControlRequest, ControlResponse, ControlSocket, control_socket_path};
 pub use model::{
     ActionIntent, ActivityState, ActivityStatus, ActivityUpdate, AudioState, BarSnapshot,
-    BluetoothState, CalendarEvent, ClockState, CommandActivity, ConnectivityState, Direction,
-    MediaControlAction, MediaState, NetworkState, OutputRole, OutputState, PlaybackStatus,
-    PowerProfile, PowerState, ResourceState, SourceHealth, SourceId, StateUpdate, SystemState,
-    SystemUpdate, TimerState, WindowState, WorkspaceState,
+    BluetoothState, BrightnessState, CalendarEvent, ClockState, CommandActivity, ConnectivityState,
+    Direction, MediaControlAction, MediaState, NetworkState, OutputRole, OutputState,
+    PlaybackStatus, PowerProfile, PowerState, ResourceState, SourceHealth, SourceId, StateUpdate,
+    SystemState, SystemUpdate, TimerState, WindowState, WorkspaceState,
 };
 pub use sources::{
     CalendarRecord, SourceSupervisor, battery_severity, parse_calendar_json, read_proc_sample,
-    spawn_audio_source, spawn_bluetooth_source, spawn_calendar_source, spawn_clock_source,
-    spawn_media_source, spawn_network_source, spawn_power_source, spawn_resource_source,
+    spawn_audio_source, spawn_bluetooth_source, spawn_brightness_source, spawn_calendar_source,
+    spawn_clock_source, spawn_media_source, spawn_network_source, spawn_power_source,
+    spawn_resource_source,
 };
 pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};

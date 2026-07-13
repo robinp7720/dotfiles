@@ -80,6 +80,10 @@ impl AppConfig {
         validate_positive("freshness.power_seconds", self.freshness.power_seconds)?;
         validate_positive("freshness.network_seconds", self.freshness.network_seconds)?;
         validate_positive(
+            "freshness.brightness_seconds",
+            self.freshness.brightness_seconds,
+        )?;
+        validate_positive(
             "freshness.bluetooth_seconds",
             self.freshness.bluetooth_seconds,
         )?;
@@ -105,6 +109,10 @@ impl AppConfig {
         validate_positive(
             "retry_backoff.network_seconds",
             self.retry_backoff.network_seconds,
+        )?;
+        validate_positive(
+            "retry_backoff.brightness_seconds",
+            self.retry_backoff.brightness_seconds,
         )?;
         validate_positive(
             "retry_backoff.bluetooth_seconds",
@@ -244,6 +252,7 @@ pub struct FreshnessConfig {
     pub resources_seconds: u64,
     pub power_seconds: u64,
     pub network_seconds: u64,
+    pub brightness_seconds: u64,
     pub bluetooth_seconds: u64,
     pub media_seconds: u64,
     pub calendar_seconds: u64,
@@ -258,6 +267,7 @@ impl Default for FreshnessConfig {
             resources_seconds: 15,
             power_seconds: 30,
             network_seconds: 30,
+            brightness_seconds: 10,
             bluetooth_seconds: 30,
             media_seconds: 15,
             calendar_seconds: 60,
@@ -273,6 +283,7 @@ pub struct RetryBackoffConfig {
     pub compositor_seconds: u64,
     pub power_seconds: u64,
     pub network_seconds: u64,
+    pub brightness_seconds: u64,
     pub bluetooth_seconds: u64,
     pub media_seconds: u64,
     pub calendar_seconds: u64,
@@ -285,6 +296,7 @@ impl Default for RetryBackoffConfig {
             compositor_seconds: 2,
             power_seconds: 8,
             network_seconds: 8,
+            brightness_seconds: 5,
             bluetooth_seconds: 8,
             media_seconds: 8,
             calendar_seconds: 30,

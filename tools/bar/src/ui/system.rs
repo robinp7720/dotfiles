@@ -805,6 +805,7 @@ mod tests {
             connectivity: ConnectivityState::Connected,
             icon_hint: Some("network-wireless-signal-good-symbolic".to_string()),
             label: Some("Office Wi-Fi".to_string()),
+            wifi_enabled: Some(true),
         };
 
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
@@ -926,6 +927,7 @@ mod tests {
                     connectivity: ConnectivityState::Disconnected,
                     icon_hint: Some("network-offline-symbolic".to_string()),
                     label: None,
+                    wifi_enabled: Some(false),
                 },
                 ..crate::SystemState::default()
             },
