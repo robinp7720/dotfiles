@@ -17,7 +17,7 @@ use zbus::{
 
 use crate::{ConnectivityState, NetworkState, SourceHealth, SourceId, StateUpdate, SystemUpdate};
 
-use super::SourceSupervisor;
+use super::{CancellableRecv, SourceSupervisor, forward_blocking_iterator, recv_with_cancellation};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ActiveConnection {
@@ -307,20 +307,22 @@ pub fn spawn_network_source(
 fn run_network_worker(sender: &Sender<StateUpdate>, cancelled: &Arc<AtomicBool>) -> Result<bool> {
     let connection =
         Connection::system().context("failed to connect to system D-Bus for NetworkManager")?;
-    let mut signals = network_signal_stream(&connection)?;
+    let signals = network_signal_stream(&connection)?;
+    let signal_events = forward_blocking_iterator(signals);
 
     publish_network_snapshot(sender, cancelled, &connection)?;
 
     loop {
-        if cancelled.load(Ordering::Relaxed) {
-            return Ok(false);
+        match recv_with_cancellation(&signal_events, cancelled, Duration::from_millis(100)) {
+            CancellableRecv::Item(Some(message)) => {
+                message.context("failed to receive NetworkManager signal")?;
+                publish_network_snapshot(sender, cancelled, &connection)?;
+            }
+            CancellableRecv::Item(None) | CancellableRecv::Disconnected => {
+                return Err(anyhow!("NetworkManager signal stream closed unexpectedly"));
+            }
+            CancellableRecv::Cancelled => return Ok(false),
         }
-
-        let Some(message) = signals.next() else {
-            return Err(anyhow!("NetworkManager signal stream closed unexpectedly"));
-        };
-        message.context("failed to receive NetworkManager signal")?;
-        publish_network_snapshot(sender, cancelled, &connection)?;
     }
 }
 

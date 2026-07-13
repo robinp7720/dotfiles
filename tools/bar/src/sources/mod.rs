@@ -10,7 +10,7 @@ use std::ffi::CStr;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc::Sender,
+    mpsc::{self, Receiver, RecvTimeoutError, Sender},
 };
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -53,6 +53,50 @@ impl RetryState {
     fn reset(&mut self) {
         self.index = 0;
     }
+}
+
+pub(crate) enum CancellableRecv<T> {
+    Item(T),
+    Cancelled,
+    Disconnected,
+}
+
+pub(crate) fn recv_with_cancellation<T>(
+    receiver: &Receiver<T>,
+    cancelled: &Arc<AtomicBool>,
+    poll_interval: Duration,
+) -> CancellableRecv<T> {
+    loop {
+        if cancelled.load(Ordering::Relaxed) {
+            return CancellableRecv::Cancelled;
+        }
+
+        match receiver.recv_timeout(poll_interval) {
+            Ok(value) => return CancellableRecv::Item(value),
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return CancellableRecv::Disconnected,
+        }
+    }
+}
+
+pub(crate) fn forward_blocking_iterator<I, T>(iterator: I) -> Receiver<Option<T>>
+where
+    I: Iterator<Item = T> + Send + 'static,
+    T: Send + 'static,
+{
+    let (sender, receiver) = mpsc::channel();
+
+    thread::spawn(move || {
+        for item in iterator {
+            if sender.send(Some(item)).is_err() {
+                return;
+            }
+        }
+
+        let _ = sender.send(None);
+    });
+
+    receiver
 }
 
 pub struct SourceSupervisor;
@@ -197,7 +241,15 @@ fn format_clock_label(epoch_seconds: i64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{RETRY_DELAYS, RetryState};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    };
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use super::{CancellableRecv, RETRY_DELAYS, RetryState, recv_with_cancellation};
 
     #[test]
     fn retry_state_uses_the_required_backoff_sequence() {
@@ -226,5 +278,35 @@ mod tests {
         retry.reset();
 
         assert_eq!(retry.failure_delay(), RETRY_DELAYS[0]);
+    }
+
+    #[test]
+    fn cancellable_receive_exits_promptly_while_idle_after_cancellation() {
+        let (_sender, receiver) = mpsc::channel::<u8>();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_cancelled = cancelled.clone();
+        let started = Instant::now();
+
+        let handle = thread::spawn(move || {
+            recv_with_cancellation(&receiver, &worker_cancelled, Duration::from_millis(10))
+        });
+
+        thread::sleep(Duration::from_millis(25));
+        cancelled.store(true, Ordering::Relaxed);
+
+        assert!(matches!(handle.join().unwrap(), CancellableRecv::Cancelled));
+        assert!(started.elapsed() < Duration::from_millis(250));
+    }
+
+    #[test]
+    fn cancellable_receive_still_delivers_available_items() {
+        let (sender, receiver) = mpsc::channel();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        sender.send(42_u8).unwrap();
+
+        assert!(matches!(
+            recv_with_cancellation(&receiver, &cancelled, Duration::from_millis(10)),
+            CancellableRecv::Item(42)
+        ));
     }
 }
