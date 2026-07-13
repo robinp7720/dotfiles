@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
-use std::io::{BufRead, BufReader, Cursor};
+use std::io::Cursor;
 use std::os::unix::net::UnixStream;
 use std::process::Command;
+use std::sync::atomic::AtomicBool;
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -9,13 +10,13 @@ use serde::Deserialize;
 use crate::StateUpdate;
 
 use super::{
-    CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow,
-    StateTracker, reconnect_error,
+    BlockingEventReader, CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, EventRead,
+    EventReader, NormalizedState, PollingEventReader, RawWindow, StateTracker, reconnect_error,
 };
 
 pub struct HyprlandAdapter {
     tracker: StateTracker,
-    events: Box<dyn BufRead + Send>,
+    events: Box<dyn EventReader>,
     pending: VecDeque<StateUpdate>,
     command_runner: CommandRunner,
     command_env: CommandEnv,
@@ -38,7 +39,7 @@ impl HyprlandAdapter {
 
         Self::from_sources(
             snapshot,
-            Box::new(BufReader::new(stream)),
+            Box::new(PollingEventReader::new(stream)),
             Box::new(default_command_runner),
         )
     }
@@ -51,7 +52,9 @@ impl HyprlandAdapter {
             serde_json::from_str(snapshot_json).expect("parse Hyprland fixture snapshot");
         Self::from_sources(
             snapshot,
-            Box::new(Cursor::new(events.as_bytes().to_vec())),
+            Box::new(BlockingEventReader::new(Box::new(Cursor::new(
+                events.as_bytes().to_vec(),
+            )))),
             Box::new(command_runner),
         )
         .expect("build Hyprland fixture adapter")
@@ -59,7 +62,7 @@ impl HyprlandAdapter {
 
     fn from_sources(
         snapshot: HyprSnapshotBundle,
-        events: Box<dyn BufRead + Send>,
+        events: Box<dyn EventReader>,
         command_runner: CommandRunner,
     ) -> Result<Self> {
         let mut tracker = StateTracker::default();
@@ -81,33 +84,12 @@ impl CompositorAdapter for HyprlandAdapter {
     }
 
     fn next_update(&mut self) -> Result<StateUpdate> {
-        loop {
-            if let Some(update) = self.pending.pop_front() {
-                return Ok(update);
-            }
+        self.next_update_inner(None)?
+            .ok_or_else(|| reconnect_error("Hyprland event stream cancelled").into())
+    }
 
-            let mut line = String::new();
-            let read = self
-                .events
-                .read_line(&mut line)
-                .map_err(|error| reconnect_error(error))?;
-            if read == 0 {
-                bail!(reconnect_error("Hyprland event stream reached EOF"));
-            }
-
-            let trimmed = line.trim_end();
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            apply_event(
-                &mut self.tracker.state,
-                &mut self.pending,
-                &mut self.active_keyboard,
-                trimmed,
-            )?;
-            self.tracker.push_diffs(&mut self.pending);
-        }
+    fn next_update_interruptibly(&mut self, cancelled: &AtomicBool) -> Result<Option<StateUpdate>> {
+        self.next_update_inner(Some(cancelled))
     }
 
     fn execute(&mut self, action: CompositorAction) -> Result<()> {
@@ -169,6 +151,44 @@ impl CompositorAdapter for HyprlandAdapter {
         }
 
         Ok(())
+    }
+}
+
+impl HyprlandAdapter {
+    fn next_update_inner(&mut self, cancelled: Option<&AtomicBool>) -> Result<Option<StateUpdate>> {
+        loop {
+            if let Some(update) = self.pending.pop_front() {
+                return Ok(Some(update));
+            }
+
+            let mut line = String::new();
+            let read = self
+                .events
+                .read_line(&mut line, cancelled)
+                .map_err(|error| reconnect_error(error))?;
+            if matches!(read, EventRead::Cancelled) {
+                return Ok(None);
+            }
+            let EventRead::Line(read) = read else {
+                unreachable!();
+            };
+            if read == 0 {
+                bail!(reconnect_error("Hyprland event stream reached EOF"));
+            }
+
+            let trimmed = line.trim_end();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            apply_event(
+                &mut self.tracker.state,
+                &mut self.pending,
+                &mut self.active_keyboard,
+                trimmed,
+            )?;
+            self.tracker.push_diffs(&mut self.pending);
+        }
     }
 }
 

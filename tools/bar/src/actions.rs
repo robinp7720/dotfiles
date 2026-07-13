@@ -1,6 +1,8 @@
 use std::process::Command;
-use std::sync::mpsc::{self, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
@@ -145,23 +147,34 @@ impl<B: ActionBackend> ActionRouter<B> {
 pub fn spawn_action_worker<B>(
     mut router: ActionRouter<B>,
     sender: Sender<ActionCompletion>,
+    cancelled: std::sync::Arc<AtomicBool>,
 ) -> (Sender<ActionRequest>, JoinHandle<()>)
 where
     B: ActionBackend + 'static,
 {
     let (request_sender, request_receiver) = mpsc::channel::<ActionRequest>();
     let handle = thread::spawn(move || {
-        for request in request_receiver {
-            let result = router.execute(request.intent.clone());
-            if sender
-                .send(ActionCompletion {
-                    origin: request.origin,
-                    intent: request.intent,
-                    result,
-                })
-                .is_err()
-            {
+        loop {
+            if cancelled.load(Ordering::Relaxed) {
                 break;
+            }
+
+            match request_receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(request) => {
+                    let result = router.execute(request.intent.clone());
+                    if sender
+                        .send(ActionCompletion {
+                            origin: request.origin,
+                            intent: request.intent,
+                            result,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
     });
@@ -290,6 +303,7 @@ fn cycle_power_profile(current: &PowerProfile, direction: Direction) -> PowerPro
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
@@ -476,7 +490,8 @@ mod tests {
         let router = ActionRouter::new(SpyBackend::new(state.clone()))
             .with_power_profile_state(PowerProfile::Balanced);
         let (completion_tx, completion_rx) = mpsc::channel();
-        let (request_tx, handle) = spawn_action_worker(router, completion_tx);
+        let (request_tx, handle) =
+            spawn_action_worker(router, completion_tx, Arc::new(AtomicBool::new(false)));
 
         request_tx
             .send(ActionRequest {
@@ -516,7 +531,8 @@ mod tests {
         let state = SpyState::default_shared();
         let router = ActionRouter::new(SpyBackend::new(state));
         let (completion_tx, completion_rx) = mpsc::channel();
-        let (request_tx, handle) = spawn_action_worker(router, completion_tx);
+        let (request_tx, handle) =
+            spawn_action_worker(router, completion_tx, Arc::new(AtomicBool::new(false)));
 
         request_tx
             .send(ActionRequest {

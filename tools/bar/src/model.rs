@@ -83,6 +83,8 @@ pub enum StateUpdate {
 pub struct OutputState {
     pub name: String,
     pub workspaces: Vec<WorkspaceState>,
+    #[serde(default)]
+    pub windows: Vec<WindowState>,
     pub focused_window: Option<WindowState>,
     pub urgent: bool,
     #[serde(default)]
@@ -106,6 +108,8 @@ pub struct WindowState {
     pub app_id: Option<String>,
     pub title: String,
     pub urgent: bool,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub changed_at: i64,
 }

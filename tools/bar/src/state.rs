@@ -291,6 +291,18 @@ fn normalize_outputs(
                     .map_or(observed_at, |previous| previous.changed_at);
             }
 
+            for window in &mut output.windows {
+                let previous_window = previous.and_then(|previous| {
+                    previous
+                        .windows
+                        .iter()
+                        .find(|candidate| candidate.id == window.id)
+                });
+                window.changed_at = previous_window
+                    .filter(|previous| window_semantically_equal(window, previous))
+                    .map_or(observed_at, |previous| previous.changed_at);
+            }
+
             if let Some(window) = output.focused_window.as_mut() {
                 let previous_window =
                     previous.and_then(|previous| previous.focused_window.as_ref());
@@ -366,6 +378,12 @@ fn output_semantically_equal(left: &OutputState, right: &OutputState) -> bool {
             .iter()
             .zip(&right.workspaces)
             .all(|(left, right)| workspace_semantically_equal(left, right))
+        && left.windows.len() == right.windows.len()
+        && left
+            .windows
+            .iter()
+            .zip(&right.windows)
+            .all(|(left, right)| window_semantically_equal(left, right))
         && match (&left.focused_window, &right.focused_window) {
             (Some(left), Some(right)) => window_semantically_equal(left, right),
             (None, None) => true,
@@ -386,6 +404,7 @@ fn window_semantically_equal(left: &WindowState, right: &WindowState) -> bool {
         && left.app_id == right.app_id
         && left.title == right.title
         && left.urgent == right.urgent
+        && left.workspace_id == right.workspace_id
 }
 
 fn power_semantically_equal(left: &PowerState, right: &PowerState) -> bool {
@@ -647,11 +666,20 @@ mod tests {
                     urgent: true,
                     changed_at: 0,
                 }],
+                windows: vec![WindowState {
+                    id: "window-42".to_string(),
+                    app_id: Some("terminal".to_string()),
+                    title: "Build failed".to_string(),
+                    urgent: true,
+                    workspace_id: Some("1".to_string()),
+                    changed_at: 0,
+                }],
                 focused_window: Some(WindowState {
                     id: "window-42".to_string(),
                     app_id: Some("terminal".to_string()),
                     title: "Build failed".to_string(),
                     urgent: true,
+                    workspace_id: Some("1".to_string()),
                     changed_at: 0,
                 }),
                 urgent: true,

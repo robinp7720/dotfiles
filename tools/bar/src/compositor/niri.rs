@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
-use std::io::{BufRead, BufReader, Cursor};
+use std::io::Cursor;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::AtomicBool;
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -9,14 +10,14 @@ use serde_json::Value;
 use crate::StateUpdate;
 
 use super::{
-    CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, NormalizedState, RawWindow,
-    StateTracker, reconnect_error,
+    BlockingEventReader, CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, EventRead,
+    EventReader, NormalizedState, PollingEventReader, RawWindow, StateTracker, reconnect_error,
 };
 
 pub struct NiriAdapter {
     tracker: StateTracker,
-    events: Box<dyn BufRead + Send>,
-    _event_child: Option<Child>,
+    events: Box<dyn EventReader>,
+    event_child: Option<Child>,
     pending: VecDeque<StateUpdate>,
     command_runner: CommandRunner,
     command_env: CommandEnv,
@@ -51,7 +52,7 @@ impl NiriAdapter {
             workspaces,
             windows,
             keyboard_layouts,
-            Box::new(BufReader::new(stdout)),
+            Box::new(PollingEventReader::new(stdout)),
             Some(child),
             command_env,
             Box::new(default_command_runner),
@@ -74,7 +75,9 @@ impl NiriAdapter {
             workspaces_json.to_string(),
             windows_json.to_string(),
             keyboard_layouts_json.to_string(),
-            Box::new(Cursor::new(events.as_bytes().to_vec())),
+            Box::new(BlockingEventReader::new(Box::new(Cursor::new(
+                events.as_bytes().to_vec(),
+            )))),
             None,
             Vec::new(),
             Box::new(command_runner),
@@ -87,7 +90,7 @@ impl NiriAdapter {
         workspaces_json: String,
         windows_json: String,
         keyboard_layouts_json: String,
-        events: Box<dyn BufRead + Send>,
+        events: Box<dyn EventReader>,
         event_child: Option<Child>,
         command_env: CommandEnv,
         command_runner: CommandRunner,
@@ -104,7 +107,7 @@ impl NiriAdapter {
         Ok(Self {
             tracker,
             events,
-            _event_child: event_child,
+            event_child,
             pending: VecDeque::new(),
             command_runner,
             command_env,
@@ -113,39 +116,23 @@ impl NiriAdapter {
     }
 }
 
+fn kill_child(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 impl CompositorAdapter for NiriAdapter {
     fn initial_snapshot(&mut self) -> Result<Vec<StateUpdate>> {
         Ok(self.tracker.snapshot_updates())
     }
 
     fn next_update(&mut self) -> Result<StateUpdate> {
-        loop {
-            if let Some(update) = self.pending.pop_front() {
-                return Ok(update);
-            }
+        self.next_update_inner(None)?
+            .ok_or_else(|| reconnect_error("Niri event stream cancelled").into())
+    }
 
-            let mut line = String::new();
-            let read = self
-                .events
-                .read_line(&mut line)
-                .map_err(|error| reconnect_error(error))?;
-            if read == 0 {
-                bail!(reconnect_error("Niri event stream reached EOF"));
-            }
-
-            let trimmed = line.trim_end();
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            apply_event(
-                &mut self.tracker.state,
-                &mut self.pending,
-                &mut self.keyboard_layouts,
-                trimmed,
-            )?;
-            self.tracker.push_diffs(&mut self.pending);
-        }
+    fn next_update_interruptibly(&mut self, cancelled: &AtomicBool) -> Result<Option<StateUpdate>> {
+        self.next_update_inner(Some(cancelled))
     }
 
     fn execute(&mut self, action: CompositorAction) -> Result<()> {
@@ -221,6 +208,46 @@ impl CompositorAdapter for NiriAdapter {
         }
 
         Ok(())
+    }
+}
+
+impl NiriAdapter {
+    fn next_update_inner(&mut self, cancelled: Option<&AtomicBool>) -> Result<Option<StateUpdate>> {
+        loop {
+            if let Some(update) = self.pending.pop_front() {
+                return Ok(Some(update));
+            }
+
+            let mut line = String::new();
+            let read = self
+                .events
+                .read_line(&mut line, cancelled)
+                .map_err(|error| reconnect_error(error))?;
+            if matches!(read, EventRead::Cancelled) {
+                if let Some(child) = self.event_child.as_mut() {
+                    kill_child(child);
+                }
+                return Ok(None);
+            }
+            let EventRead::Line(read) = read else {
+                unreachable!();
+            };
+            if read == 0 {
+                bail!(reconnect_error("Niri event stream reached EOF"));
+            }
+
+            let trimmed = line.trim_end();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            apply_event(
+                &mut self.tracker,
+                &mut self.pending,
+                &mut self.keyboard_layouts,
+                trimmed,
+            )?;
+        }
     }
 }
 
@@ -339,8 +366,8 @@ fn apply_snapshot(
 }
 
 fn apply_event(
-    state: &mut NormalizedState,
-    _pending: &mut VecDeque<StateUpdate>,
+    tracker: &mut StateTracker,
+    pending: &mut VecDeque<StateUpdate>,
     keyboard_layouts: &mut Vec<String>,
     line: &str,
 ) -> Result<()> {
@@ -356,16 +383,22 @@ fn apply_event(
             .get("focused")
             .and_then(Value::as_bool)
             .ok_or_else(|| reconnect_error("WorkspaceActivated missing focused flag"))?;
-        if let Some(workspace) = state.workspaces.get(&workspace_id.to_string()).cloned() {
-            for candidate in state.workspaces.values_mut() {
+        if let Some(workspace) = tracker
+            .state
+            .workspaces
+            .get(&workspace_id.to_string())
+            .cloned()
+        {
+            for candidate in tracker.state.workspaces.values_mut() {
                 if candidate.output == workspace.output {
                     candidate.active = candidate.id == workspace.id;
                 }
             }
             if focused {
-                state.focused_output = Some(workspace.output);
+                tracker.state.focused_output = Some(workspace.output);
             }
         }
+        tracker.push_diffs(pending);
         return Ok(());
     }
 
@@ -377,27 +410,7 @@ fn apply_event(
                 .ok_or_else(|| reconnect_error("WindowOpenedOrChanged missing window"))?,
         )
         .map_err(|error| reconnect_error(error))?;
-        let window_id = window.id.to_string();
-        state.windows.insert(
-            window_id.clone(),
-            RawWindow {
-                id: window_id.clone(),
-                app_id: window.app_id,
-                title: window.title.unwrap_or_default(),
-                workspace_id: window.workspace_id.map(|id| id.to_string()),
-                urgent: window.is_urgent,
-            },
-        );
-        if window.is_focused {
-            if let Some(workspace_id) = window.workspace_id.map(|id| id.to_string()) {
-                if let Some(workspace) = state.workspaces.get(&workspace_id) {
-                    state.focused_output = Some(workspace.output.clone());
-                    if let Some(output) = state.outputs.get_mut(&workspace.output) {
-                        output.last_window_id = Some(window_id);
-                    }
-                }
-            }
-        }
+        apply_window_event(tracker, pending, window);
         return Ok(());
     }
 
@@ -410,9 +423,10 @@ fn apply_event(
             .get("urgent")
             .and_then(Value::as_bool)
             .ok_or_else(|| reconnect_error("WindowUrgencyChanged missing urgent flag"))?;
-        if let Some(window) = state.windows.get_mut(&window_id.to_string()) {
+        if let Some(window) = tracker.state.windows.get_mut(&window_id.to_string()) {
             window.urgent = urgent;
         }
+        tracker.push_diffs(pending);
         return Ok(());
     }
 
@@ -427,7 +441,8 @@ fn apply_event(
                 "KeyboardLayoutSwitched index {idx} out of range"
             )));
         };
-        state.keyboard_layout = Some(layout.clone());
+        tracker.state.keyboard_layout = Some(layout.clone());
+        tracker.push_diffs(pending);
         return Ok(());
     }
 
@@ -439,11 +454,85 @@ fn apply_event(
             .map_err(|error| reconnect_error(error))?;
         *keyboard_layouts = parsed.names.clone();
         if parsed.current_idx < keyboard_layouts.len() {
-            state.keyboard_layout = Some(keyboard_layouts[parsed.current_idx].clone());
+            tracker.state.keyboard_layout = Some(keyboard_layouts[parsed.current_idx].clone());
         }
+        tracker.push_diffs(pending);
     }
 
     Ok(())
+}
+
+fn apply_window_event(
+    tracker: &mut StateTracker,
+    pending: &mut VecDeque<StateUpdate>,
+    window: NiriWindowPayload,
+) {
+    let window_id = window.id.to_string();
+    let next_workspace_id = window.workspace_id.map(|id| id.to_string());
+    let next_app_id = window.app_id;
+    let next_title = window.title.unwrap_or_default();
+    let next_urgent = window.is_urgent;
+
+    if let Some(mut current) = tracker.state.windows.get(&window_id).cloned() {
+        if current.workspace_id != next_workspace_id {
+            current.workspace_id = next_workspace_id.clone();
+            tracker
+                .state
+                .windows
+                .insert(window_id.clone(), current.clone());
+            tracker.push_diffs(pending);
+        }
+
+        if current.app_id != next_app_id {
+            current.app_id = next_app_id.clone();
+            tracker
+                .state
+                .windows
+                .insert(window_id.clone(), current.clone());
+            tracker.push_diffs(pending);
+        }
+
+        if current.title != next_title {
+            current.title = next_title.clone();
+            tracker
+                .state
+                .windows
+                .insert(window_id.clone(), current.clone());
+            tracker.push_diffs(pending);
+        }
+
+        if current.urgent != next_urgent {
+            current.urgent = next_urgent;
+            tracker.state.windows.insert(window_id.clone(), current);
+            tracker.push_diffs(pending);
+        }
+    } else {
+        tracker.state.windows.insert(
+            window_id.clone(),
+            RawWindow {
+                id: window_id.clone(),
+                app_id: next_app_id.clone(),
+                title: next_title,
+                workspace_id: next_workspace_id.clone(),
+                urgent: next_urgent,
+            },
+        );
+        tracker.push_diffs(pending);
+    }
+
+    if window.is_focused {
+        let Some(workspace_id) = next_workspace_id else {
+            return;
+        };
+        let Some(workspace) = tracker.state.workspaces.get(&workspace_id) else {
+            return;
+        };
+        tracker.state.focused_output = Some(workspace.output.clone());
+        if let Some(output) = tracker.state.outputs.get_mut(&workspace.output) {
+            output.last_window_id = Some(window_id);
+        }
+        tracker.push_diffs(pending);
+    }
 }
 
 #[derive(Deserialize)]

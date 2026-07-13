@@ -62,6 +62,36 @@ pub struct WarningSpec {
     pub tier: ContextTier,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderPlan {
+    pub workspaces: bool,
+    pub title: bool,
+    pub context: bool,
+    pub warning: bool,
+    pub clock: bool,
+}
+
+impl RenderPlan {
+    pub fn between(previous: Option<&SurfaceSpec>, next: &SurfaceSpec) -> Self {
+        match previous {
+            None => Self {
+                workspaces: true,
+                title: true,
+                context: true,
+                warning: true,
+                clock: true,
+            },
+            Some(previous) => Self {
+                workspaces: previous.workspaces != next.workspaces,
+                title: previous.title != next.title,
+                context: previous.context != next.context,
+                warning: previous.warning != next.warning,
+                clock: previous.clock_label != next.clock_label,
+            },
+        }
+    }
+}
+
 pub fn surface_specs(snapshot: &BarSnapshot, config: &AppConfig) -> Vec<SurfaceSpec> {
     let Some(primary_output) = select_primary_output(snapshot, config) else {
         return Vec::new();
@@ -329,12 +359,17 @@ impl PrimarySurface {
 
         let left = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         let center_slot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let center_slot_frame = gtk::ScrolledWindow::new();
         let right = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
         left.set_halign(gtk::Align::Start);
         center_slot.set_hexpand(true);
         center_slot.set_halign(gtk::Align::Center);
-        center_slot.set_size_request(CENTER_SLOT_MAX_WIDTH, BAR_HEIGHT);
+        center_slot_frame.set_hexpand(true);
+        center_slot_frame.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
+        center_slot_frame.set_max_content_width(CENTER_SLOT_MAX_WIDTH);
+        center_slot_frame.set_propagate_natural_width(true);
+        center_slot_frame.set_child(Some(&center_slot));
         right.set_halign(gtk::Align::End);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -378,7 +413,7 @@ impl PrimarySurface {
         right.append(&clock_label);
 
         grid.attach(&left, 0, 0, 1, 1);
-        grid.attach(&center_slot, 1, 0, 1, 1);
+        grid.attach(&center_slot_frame, 1, 0, 1, 1);
         grid.attach(&right, 2, 0, 1, 1);
 
         window.set_child(Some(&grid));
@@ -400,26 +435,35 @@ impl PrimarySurface {
     }
 
     pub fn render(&mut self, spec: &SurfaceSpec) {
-        if self.current_spec.as_ref() == Some(spec) {
+        let plan = RenderPlan::between(self.current_spec.as_ref(), spec);
+        if plan == RenderPlan::default() {
             return;
         }
 
-        render_workspaces(
-            &self.workspaces,
-            &self.action_sender,
-            &spec.output_name,
-            &spec.workspaces,
-        );
-        self.title_label.set_label(&spec.title.text);
-        *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
-        self.clock_label.set_label(&spec.clock_label);
+        if plan.workspaces {
+            render_workspaces(
+                &self.workspaces,
+                &self.action_sender,
+                &spec.output_name,
+                &spec.workspaces,
+            );
+        }
+        if plan.title {
+            self.title_label.set_label(&spec.title.text);
+            *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
+        }
+        if plan.clock {
+            self.clock_label.set_label(&spec.clock_label);
+        }
 
-        if let Some(context) = spec.context.as_ref() {
-            self.context_label.set_label(&context.text);
-            self.context_stack.set_visible_child_name("card");
-        } else {
-            self.context_label.set_label("");
-            self.context_stack.set_visible_child_name("empty");
+        if plan.context {
+            if let Some(context) = spec.context.as_ref() {
+                self.context_label.set_label(&context.text);
+                self.context_stack.set_visible_child_name("card");
+            } else {
+                self.context_label.set_label("");
+                self.context_stack.set_visible_child_name("empty");
+            }
         }
 
         self.current_spec = Some(spec.clone());
@@ -500,26 +544,35 @@ impl ReducedSurface {
     }
 
     pub fn render(&mut self, spec: &SurfaceSpec) {
-        if self.current_spec.as_ref() == Some(spec) {
+        let plan = RenderPlan::between(self.current_spec.as_ref(), spec);
+        if plan == RenderPlan::default() {
             return;
         }
 
-        render_workspaces(
-            &self.workspaces,
-            &self.action_sender,
-            &spec.output_name,
-            &spec.workspaces,
-        );
-        self.title_label.set_label(&spec.title.text);
-        *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
-        self.clock_label.set_label(&spec.clock_label);
+        if plan.workspaces {
+            render_workspaces(
+                &self.workspaces,
+                &self.action_sender,
+                &spec.output_name,
+                &spec.workspaces,
+            );
+        }
+        if plan.title {
+            self.title_label.set_label(&spec.title.text);
+            *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
+        }
+        if plan.clock {
+            self.clock_label.set_label(&spec.clock_label);
+        }
 
-        if let Some(warning) = spec.warning.as_ref() {
-            self.warning_label.set_label(&warning.text);
-            self.warning_label.set_visible(true);
-        } else {
-            self.warning_label.set_label("");
-            self.warning_label.set_visible(false);
+        if plan.warning {
+            if let Some(warning) = spec.warning.as_ref() {
+                self.warning_label.set_label(&warning.text);
+                self.warning_label.set_visible(true);
+            } else {
+                self.warning_label.set_label("");
+                self.warning_label.set_visible(false);
+            }
         }
 
         self.current_spec = Some(spec.clone());
@@ -677,7 +730,7 @@ mod tests {
         WindowState, WorkspaceState,
     };
 
-    use super::surface_specs;
+    use super::{RenderPlan, SurfaceSpec, surface_specs};
 
     #[test]
     fn surface_specs_choose_configured_primary_and_reduce_other_outputs() {
@@ -894,6 +947,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn render_plan_skips_workspace_rebuilds_for_clock_only_changes() {
+        let previous = SurfaceSpec {
+            output_name: "DP-5".to_string(),
+            role: OutputRole::Primary,
+            workspaces: vec![super::WorkspaceButtonSpec {
+                id: "1".to_string(),
+                label: "1".to_string(),
+                active: true,
+                urgent: false,
+            }],
+            title: super::TitleSpec {
+                text: "Editor".to_string(),
+                window_groups: Vec::new(),
+            },
+            context: None,
+            warning: None,
+            clock_label: "12:00".to_string(),
+        };
+        let next = SurfaceSpec {
+            clock_label: "12:01".to_string(),
+            ..previous.clone()
+        };
+
+        let plan = RenderPlan::between(Some(&previous), &next);
+
+        assert!(!plan.workspaces);
+        assert!(!plan.title);
+        assert!(plan.clock);
+    }
+
     fn snapshot<const N: usize>(outputs: [OutputState; N]) -> BarSnapshot {
         let outputs = outputs
             .into_iter()
@@ -923,6 +1007,7 @@ mod tests {
         OutputState {
             name: name.to_string(),
             workspaces: workspaces.to_vec(),
+            windows: focused_window.iter().cloned().collect(),
             focused_window,
             urgent,
             changed_at: 0,
@@ -952,6 +1037,7 @@ mod tests {
             app_id: None,
             title: title.to_string(),
             urgent: false,
+            workspace_id: None,
             changed_at: 0,
         }
     }

@@ -920,11 +920,20 @@ mod tests {
                 OutputState {
                     name: "DP-5".to_string(),
                     workspaces: Vec::new(),
+                    windows: vec![WindowState {
+                        id: id.to_string(),
+                        app_id: Some("terminal".to_string()),
+                        title: title.to_string(),
+                        urgent: true,
+                        workspace_id: None,
+                        changed_at: 1_799_999_950,
+                    }],
                     focused_window: Some(WindowState {
                         id: id.to_string(),
                         app_id: Some("terminal".to_string()),
                         title: title.to_string(),
                         urgent: true,
+                        workspace_id: None,
                         changed_at: 1_799_999_950,
                     }),
                     urgent: false,

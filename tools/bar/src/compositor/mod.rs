@@ -1,4 +1,8 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::io::{self, BufRead, Read};
+use std::os::fd::AsRawFd;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 
@@ -13,6 +17,13 @@ pub use niri::NiriAdapter;
 pub trait CompositorAdapter: Send {
     fn initial_snapshot(&mut self) -> Result<Vec<StateUpdate>>;
     fn next_update(&mut self) -> Result<StateUpdate>;
+    fn next_update_interruptibly(&mut self, cancelled: &AtomicBool) -> Result<Option<StateUpdate>> {
+        if cancelled.load(Ordering::Relaxed) {
+            Ok(None)
+        } else {
+            self.next_update().map(Some)
+        }
+    }
     fn execute(&mut self, action: CompositorAction) -> Result<()>;
 }
 
@@ -162,9 +173,31 @@ impl NormalizedState {
                         app_id: window.app_id.clone(),
                         title: window.title.clone(),
                         urgent: window.urgent,
+                        workspace_id: window.workspace_id.clone(),
                         changed_at: 0,
                     })
                 });
+                let mut windows = self
+                    .windows
+                    .values()
+                    .filter(|window| {
+                        window
+                            .workspace_id
+                            .as_ref()
+                            .and_then(|workspace_id| self.workspaces.get(workspace_id))
+                            .map(|workspace| workspace.output == output.name)
+                            .unwrap_or(false)
+                    })
+                    .map(|window| WindowState {
+                        id: window.id.clone(),
+                        app_id: window.app_id.clone(),
+                        title: window.title.clone(),
+                        urgent: window.urgent,
+                        workspace_id: window.workspace_id.clone(),
+                        changed_at: 0,
+                    })
+                    .collect::<Vec<_>>();
+                windows.sort_by(window_sort_key);
 
                 let urgent = workspaces.iter().any(|workspace| workspace.urgent)
                     || self
@@ -183,6 +216,7 @@ impl NormalizedState {
                 OutputState {
                     name: output.name.clone(),
                     workspaces,
+                    windows,
                     focused_window,
                     urgent,
                     changed_at: 0,
@@ -213,6 +247,19 @@ fn workspace_sort_key(workspace: &WorkspaceState, other: &WorkspaceState) -> std
     }
 }
 
+fn window_sort_key(left: &WindowState, right: &WindowState) -> std::cmp::Ordering {
+    match (&left.workspace_id, &right.workspace_id) {
+        (Some(left_workspace), Some(right_workspace)) => left_workspace
+            .cmp(right_workspace)
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.id.cmp(&right.id)),
+        _ => left
+            .title
+            .cmp(&right.title)
+            .then_with(|| left.id.cmp(&right.id)),
+    }
+}
+
 pub(crate) fn reconnect_error(detail: impl std::fmt::Display) -> anyhow::Error {
     anyhow!("compositor stream requires resync: {detail}")
 }
@@ -225,4 +272,112 @@ pub(crate) fn normalize_window_id(value: &str) -> String {
             .unwrap_or_else(|_| trimmed.to_string());
     }
     trimmed.to_string()
+}
+
+pub(crate) enum EventRead {
+    Line(usize),
+    Cancelled,
+}
+
+pub(crate) trait EventReader: Send {
+    fn read_line(
+        &mut self,
+        line: &mut String,
+        cancelled: Option<&AtomicBool>,
+    ) -> io::Result<EventRead>;
+}
+
+pub(crate) struct BlockingEventReader {
+    reader: Box<dyn BufRead + Send>,
+}
+
+impl BlockingEventReader {
+    pub(crate) fn new(reader: Box<dyn BufRead + Send>) -> Self {
+        Self { reader }
+    }
+}
+
+impl EventReader for BlockingEventReader {
+    fn read_line(
+        &mut self,
+        line: &mut String,
+        cancelled: Option<&AtomicBool>,
+    ) -> io::Result<EventRead> {
+        if cancelled.is_some_and(|cancelled| cancelled.load(Ordering::Relaxed)) {
+            return Ok(EventRead::Cancelled);
+        }
+        self.reader.read_line(line).map(EventRead::Line)
+    }
+}
+
+pub(crate) struct PollingEventReader<R> {
+    reader: R,
+    pending: Vec<u8>,
+    poll_interval: Duration,
+}
+
+impl<R> PollingEventReader<R> {
+    pub(crate) fn new(reader: R) -> Self {
+        Self {
+            reader,
+            pending: Vec::new(),
+            poll_interval: Duration::from_millis(100),
+        }
+    }
+}
+
+impl<R> EventReader for PollingEventReader<R>
+where
+    R: Read + AsRawFd + Send,
+{
+    fn read_line(
+        &mut self,
+        line: &mut String,
+        cancelled: Option<&AtomicBool>,
+    ) -> io::Result<EventRead> {
+        loop {
+            if let Some(position) = self.pending.iter().position(|byte| *byte == b'\n') {
+                let bytes = self.pending.drain(..=position).collect::<Vec<_>>();
+                line.push_str(&String::from_utf8_lossy(&bytes));
+                return Ok(EventRead::Line(bytes.len()));
+            }
+
+            if cancelled.is_some_and(|cancelled| cancelled.load(Ordering::Relaxed)) {
+                return Ok(EventRead::Cancelled);
+            }
+
+            let mut pollfd = libc::pollfd {
+                fd: self.reader.as_raw_fd(),
+                events: libc::POLLIN | libc::POLLHUP | libc::POLLERR,
+                revents: 0,
+            };
+            let timeout = i32::try_from(self.poll_interval.as_millis()).unwrap_or(i32::MAX);
+            let polled = unsafe { libc::poll(&mut pollfd, 1, timeout) };
+            if polled < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(error);
+            }
+            if polled == 0 {
+                continue;
+            }
+
+            let mut buffer = [0_u8; 4096];
+            match self.reader.read(&mut buffer) {
+                Ok(0) => {
+                    if self.pending.is_empty() {
+                        return Ok(EventRead::Line(0));
+                    }
+                    let bytes = std::mem::take(&mut self.pending);
+                    line.push_str(&String::from_utf8_lossy(&bytes));
+                    return Ok(EventRead::Line(bytes.len()));
+                }
+                Ok(read) => self.pending.extend_from_slice(&buffer[..read]),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(error) => return Err(error),
+            }
+        }
+    }
 }

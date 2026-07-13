@@ -100,13 +100,9 @@ impl BarApplication {
 impl RuntimeHandles {
     fn shutdown(self) {
         self.cancelled.store(true, Ordering::Relaxed);
-        thread::sleep(Duration::from_millis(150));
-
         for handle in self.joins {
-            if handle.is_finished() {
-                let _ = handle.join();
-            } else {
-                warn!("worker did not finish before shutdown barrier");
+            if let Err(error) = handle.join() {
+                warn!("worker panicked during shutdown: {:?}", error);
             }
         }
     }
@@ -253,7 +249,8 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
     let router = ActionRouter::new(SystemActionBackend::from_env()?)
         .with_power_profile_state(store.snapshot().system.power.profile.clone());
     let (completion_tx, completion_rx) = mpsc::channel();
-    let (action_tx, action_handle) = spawn_action_worker(router, completion_tx);
+    let (action_tx, action_handle) =
+        spawn_action_worker(router, completion_tx, Arc::clone(&cancelled));
     joins.push(action_handle);
 
     Ok((
@@ -334,13 +331,14 @@ fn spawn_compositor_worker(
                             return;
                         }
 
-                        match compositor.next_update() {
-                            Ok(update) => {
+                        match compositor.next_update_interruptibly(cancelled.as_ref()) {
+                            Ok(Some(update)) => {
                                 if sender.send(update).is_err() {
                                     cancelled.store(true, Ordering::Relaxed);
                                     return;
                                 }
                             }
+                            Ok(None) => return,
                             Err(error) => {
                                 let _ = sender.send(StateUpdate::Health {
                                     source: SourceId::Compositor,
@@ -366,7 +364,9 @@ fn spawn_compositor_worker(
             if cancelled.load(Ordering::Relaxed) {
                 break;
             }
-            thread::sleep(COMPOSITOR_RECONNECT_INTERVAL);
+            if !wait_for_cancellation(&cancelled, COMPOSITOR_RECONNECT_INTERVAL) {
+                break;
+            }
         }
     })
 }
@@ -385,10 +385,16 @@ fn spawn_control_socket_server(
                 .try_serve_once(|request| handle_control_request(request, &sender, &timer_store))
             {
                 Ok(true) => {}
-                Ok(false) => thread::sleep(CONTROL_SOCKET_POLL_INTERVAL),
+                Ok(false) => {
+                    if !wait_for_cancellation(&cancelled, CONTROL_SOCKET_POLL_INTERVAL) {
+                        break;
+                    }
+                }
                 Err(error) => {
                     warn!("control socket error: {error:#}");
-                    thread::sleep(CONTROL_SOCKET_POLL_INTERVAL);
+                    if !wait_for_cancellation(&cancelled, CONTROL_SOCKET_POLL_INTERVAL) {
+                        break;
+                    }
                 }
             }
         }
@@ -472,7 +478,9 @@ fn spawn_timer_tick_worker(
                 Err(error) => warn!("timer tick error: {error:#}"),
             }
 
-            thread::sleep(TIMER_TICK_INTERVAL);
+            if !wait_for_cancellation(&cancelled, TIMER_TICK_INTERVAL) {
+                break;
+            }
         }
     })
 }
@@ -498,4 +506,50 @@ fn current_epoch() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system time");
     i64::try_from(now.as_secs()).unwrap_or(i64::MAX)
+}
+
+fn wait_for_cancellation(cancelled: &AtomicBool, duration: Duration) -> bool {
+    let deadline = Instant::now() + duration;
+    while Instant::now() < deadline {
+        if cancelled.load(Ordering::Relaxed) {
+            return false;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        thread::sleep(remaining.min(Duration::from_millis(25)));
+    }
+    !cancelled.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use std::thread;
+    use std::time::Duration;
+
+    use super::RuntimeHandles;
+
+    #[test]
+    fn shutdown_joins_workers_that_finish_after_cancellation() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_finished = Arc::new(AtomicBool::new(false));
+        let worker_finished_flag = Arc::clone(&worker_finished);
+        let cancelled_flag = Arc::clone(&cancelled);
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(250));
+            if cancelled_flag.load(Ordering::Relaxed) {
+                worker_finished_flag.store(true, Ordering::Relaxed);
+            }
+        });
+
+        RuntimeHandles {
+            cancelled,
+            joins: vec![handle],
+        }
+        .shutdown();
+
+        assert!(worker_finished.load(Ordering::Relaxed));
+    }
 }
