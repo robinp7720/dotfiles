@@ -532,7 +532,21 @@ impl PrimarySurface {
     }
 
     fn render_system_modules(&self, system: &SystemCluster) {
-        close_system_popovers(&self.popover_coordinator, &self.popover_registry);
+        let system_keys = self
+            .popover_registry
+            .borrow()
+            .keys()
+            .filter(|key| key.starts_with("system:"))
+            .cloned()
+            .collect::<Vec<_>>();
+        let refresh = self
+            .popover_coordinator
+            .borrow_mut()
+            .prepare_system_popover_rebuild(
+                system_keys.iter().map(String::as_str),
+                system.modules().iter().map(|module| module.button.id),
+            );
+        close_system_popovers(&self.popover_registry);
 
         while let Some(child) = self.system_box.first_child() {
             self.system_box.remove(&child);
@@ -547,6 +561,17 @@ impl PrimarySurface {
                 self.popover_registry.clone(),
             );
             self.system_box.append(&button);
+        }
+
+        if let Some(active_id) = refresh.preserved_active_id {
+            if let Some(popover) = self.popover_registry.borrow().get(&active_id).cloned() {
+                show_managed_popover(
+                    &active_id,
+                    &popover,
+                    self.popover_coordinator.clone(),
+                    self.popover_registry.clone(),
+                );
+            }
         }
     }
 
@@ -1120,10 +1145,7 @@ fn install_escape_dismiss(
     window.add_controller(keys);
 }
 
-fn close_system_popovers(
-    coordinator: &Rc<RefCell<PopoverCoordinator>>,
-    registry: &PopoverRegistry,
-) {
+fn close_system_popovers(registry: &PopoverRegistry) {
     let system_keys = registry
         .borrow()
         .keys()
@@ -1134,7 +1156,6 @@ fn close_system_popovers(
         if let Some(popover) = registry.borrow_mut().remove(&key) {
             popover.popdown();
         }
-        coordinator.borrow_mut().close(&key);
     }
 }
 
@@ -1339,6 +1360,37 @@ mod tests {
         assert_eq!(reduced.title.text, "cargo test");
         assert!(reduced.workspaces[1].active);
         assert!(reduced.workspaces[1].urgent);
+    }
+
+    #[test]
+    fn surface_specs_keep_reduced_outputs_free_of_system_modules() {
+        let snapshot = snapshot([
+            output(
+                "DP-4",
+                &[workspace("1", "web", "DP-4", false, false)],
+                Some(window("terminal", "cargo test")),
+                false,
+            ),
+            output(
+                "DP-5",
+                &[workspace("2", "edit", "DP-5", true, false)],
+                Some(window("editor", "nvim")),
+                false,
+            ),
+        ]);
+
+        let specs = surface_specs(&snapshot, &AppConfig::default());
+        let primary = specs
+            .iter()
+            .find(|spec| spec.output_name == "DP-5")
+            .expect("primary output spec");
+        let reduced = specs
+            .iter()
+            .find(|spec| spec.output_name == "DP-4")
+            .expect("reduced output spec");
+
+        assert!(primary.system.is_some());
+        assert_eq!(reduced.system, None);
     }
 
     #[test]
