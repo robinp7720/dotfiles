@@ -116,6 +116,7 @@ pub struct SystemState {
     pub resources: ResourceState,
     pub network: NetworkState,
     pub bluetooth: BluetoothState,
+    pub audio: AudioState,
     pub power: PowerState,
     pub clock: ClockState,
     pub media: Option<MediaState>,
@@ -130,6 +131,7 @@ pub enum SystemUpdate {
     Resources(ResourceState),
     Network(NetworkState),
     Bluetooth(BluetoothState),
+    Audio(AudioState),
     Power(PowerState),
     Clock(ClockState),
     Media(Option<MediaState>),
@@ -164,6 +166,12 @@ pub struct BluetoothState {
     pub powered: bool,
     pub connected_device: Option<String>,
     pub audio_device: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioState {
+    pub volume_percent: Option<u8>,
+    pub muted: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]

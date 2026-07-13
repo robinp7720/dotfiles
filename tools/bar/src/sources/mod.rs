@@ -1,4 +1,8 @@
+pub mod audio;
+pub mod bluetooth;
 pub mod calendar;
+pub mod media;
+pub mod network;
 pub mod power;
 pub mod resources;
 
@@ -15,7 +19,11 @@ use anyhow::Result;
 
 use crate::{ClockState, StateUpdate, SystemUpdate};
 
+pub use audio::spawn_audio_source;
+pub use bluetooth::spawn_bluetooth_source;
 pub use calendar::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
+pub use media::spawn_media_source;
+pub use network::spawn_network_source;
 pub use power::{battery_severity, spawn_power_source};
 pub use resources::{read_proc_sample, spawn_resource_source};
 

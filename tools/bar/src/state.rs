@@ -137,6 +137,14 @@ impl StateStore {
                     true
                 }
             }
+            SystemUpdate::Audio(value) => {
+                if self.snapshot.system.audio == value {
+                    false
+                } else {
+                    self.snapshot.system.audio = value;
+                    true
+                }
+            }
             SystemUpdate::Power(value) => {
                 let value = normalize_power(value, &self.snapshot.system.power, observed_at);
                 if self.snapshot.system.power == value {
@@ -450,6 +458,7 @@ fn source_for_update(update: &StateUpdate) -> SourceId {
             SystemUpdate::Resources(_) => SourceId::Resources,
             SystemUpdate::Network(_) => SourceId::Network,
             SystemUpdate::Bluetooth(_) => SourceId::Bluetooth,
+            SystemUpdate::Audio(_) => SourceId::Audio,
             SystemUpdate::Power(_) => SourceId::Power,
             SystemUpdate::Clock(_) => SourceId::Clock,
             SystemUpdate::Media(_) => SourceId::Media,
