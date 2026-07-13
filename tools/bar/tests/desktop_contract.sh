@@ -54,6 +54,7 @@ make_setup_fixture() {
     "$repo_root/scripts" \
     "$repo_root/systemd/user" \
     "$repo_root/tools/bar/target/release" \
+    "$repo_root/tools/launcher/target/release" \
     "$repo_root/nwg-hello" \
     "$repo_root/hypr/hyprland-config" \
     "$repo_root/hypr/monitor_layouts" \
@@ -63,16 +64,45 @@ make_setup_fixture() {
   touch \
     "$repo_root/scripts/launch_kitty.sh" \
     "$repo_root/systemd/user/example.service" \
+    "$repo_root/tools/launcher/target/release/Luma" \
     "$repo_root/nwg-hello/hyprland.conf" \
     "$repo_root/hypr/hyprland-config/base.conf" \
     "$repo_root/hypr/monitor_layouts/default.conf" \
     "$repo_root/matugen/templates/greetd.css" \
     "$repo_root/greetd/config.toml"
 
+  chmod +x "$repo_root/tools/launcher/target/release/Luma"
+
   local dir
   for dir in bspwm cairo-dock dunst hypr kitty matugen eww niri nvim polybar sxhkd waybar nwg-hello greetd anyrun bar; do
     mkdir -p "$repo_root/$dir"
   done
+}
+
+verify_luma_binary_link() {
+  local temp_root
+  local fixture_root
+  local stub_root
+  local test_home
+
+  temp_root="$(mktemp -d)"
+  trap 'rm -rf -- "$temp_root"' RETURN
+
+  fixture_root="$temp_root/repo"
+  stub_root="$temp_root/stubs"
+  test_home="$temp_root/home"
+
+  make_setup_fixture "$fixture_root"
+  make_stub_commands "$stub_root"
+  mkdir -p "$test_home"
+
+  PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+
+  if [[ ! -L "$test_home/.local/bin/Luma" ]] \
+    || [[ "$(readlink "$test_home/.local/bin/Luma")" != "$fixture_root/tools/launcher/target/release/Luma" ]]; then
+    printf 'setup should expose the built Luma binary in ~/.local/bin\n' >&2
+    exit 1
+  fi
 }
 
 make_stub_commands() {
@@ -162,5 +192,6 @@ require_fixed 'git checkout 2187ecb^ -- setup.sh hypr/hyprland-config/startup.co
 require_fixed 'rm -f systemd/user/cockpit-bar.service' "tools/bar/README.md"
 
 verify_managed_stale_binary_link_cleanup
+verify_luma_binary_link
 
 printf 'desktop contract ok\n'

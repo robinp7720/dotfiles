@@ -147,6 +147,14 @@ for script_pair in "${scripts[@]}"; do
   echo "Linked $target -> $src"
 done
 
+if [[ -x "$DIR/tools/launcher/target/release/Luma" ]]; then
+  link_path "$DIR/tools/launcher/target/release/Luma" "$HOME/.local/bin/Luma"
+  echo "Linked $HOME/.local/bin/Luma -> $DIR/tools/launcher/target/release/Luma"
+else
+  remove_managed_symlink "$HOME/.local/bin/Luma" "$DIR/tools/launcher/target/release/Luma"
+  warn "skipping Luma binary link because tools/launcher/target/release/Luma is missing"
+fi
+
 if [[ -x "$DIR/tools/bar/target/release/cockpit-bar" ]]; then
   link_path "$DIR/tools/bar/target/release/cockpit-bar" "$HOME/.local/bin/cockpit-bar"
   echo "Linked $HOME/.local/bin/cockpit-bar -> $DIR/tools/bar/target/release/cockpit-bar"
