@@ -5,17 +5,24 @@ use std::sync::mpsc::Sender;
 
 use gtk::gdk;
 use gtk::gio::prelude::ListModelExtManual;
+use gtk::glib;
 use gtk::pango::EllipsizeMode;
 use gtk::prelude::*;
 use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 
 use crate::{
-    ActionIntent, ActionRequest, AppConfig, BarSnapshot, ContextCard, ContextTier, Dismissals,
-    OutputRole, WorkspaceState, select_context,
+    ActionCompletion, ActionIntent, ActionRequest, AppConfig, BarSnapshot, ContextCard,
+    ContextTier, Direction, Dismissals, MediaControlAction, OutputRole, WorkspaceState,
+    select_context,
 };
 
 use super::context_card::{context_text, context_tier, warning_text};
+use super::popovers::{PopoverCoordinator, popover_id_from_origin};
+use super::system::{
+    SystemActionSpec, SystemButtonSpec, SystemCluster, SystemModuleId, SystemPopoverSpec,
+    build_system_cluster,
+};
 use super::wm::{WindowGroupSpec, select_primary_output, title_for_output, window_groups};
 
 const BAR_HEIGHT: i32 = 44;
@@ -32,6 +39,7 @@ pub struct SurfaceSpec {
     pub title: TitleSpec,
     pub context: Option<ContextSpec>,
     pub warning: Option<WarningSpec>,
+    pub system: Option<SystemCluster>,
     pub clock_label: String,
 }
 
@@ -68,6 +76,7 @@ pub struct RenderPlan {
     pub title: bool,
     pub context: bool,
     pub warning: bool,
+    pub system: bool,
     pub clock: bool,
 }
 
@@ -79,6 +88,7 @@ impl RenderPlan {
                 title: true,
                 context: true,
                 warning: true,
+                system: true,
                 clock: true,
             },
             Some(previous) => Self {
@@ -86,6 +96,7 @@ impl RenderPlan {
                 title: previous.title != next.title,
                 context: previous.context != next.context,
                 warning: previous.warning != next.warning,
+                system: previous.system != next.system,
                 clock: previous.clock_label != next.clock_label,
             },
         }
@@ -124,6 +135,7 @@ pub fn surface_specs(snapshot: &BarSnapshot, config: &AppConfig) -> Vec<SurfaceS
         specs.push(spec_for_output(
             output,
             OutputRole::Primary,
+            Some(build_system_cluster(snapshot, config)),
             snapshot.system.clock.label.clone(),
             groups.clone(),
             primary_context.clone(),
@@ -139,6 +151,7 @@ pub fn surface_specs(snapshot: &BarSnapshot, config: &AppConfig) -> Vec<SurfaceS
         specs.push(spec_for_output(
             output,
             OutputRole::Reduced,
+            None,
             snapshot.system.clock.label.clone(),
             groups.clone(),
             None,
@@ -152,6 +165,7 @@ pub fn surface_specs(snapshot: &BarSnapshot, config: &AppConfig) -> Vec<SurfaceS
 fn spec_for_output(
     output: &crate::OutputState,
     role: OutputRole,
+    system: Option<SystemCluster>,
     clock_label: String,
     window_groups: Vec<WindowGroupSpec>,
     context: Option<ContextSpec>,
@@ -171,6 +185,7 @@ fn spec_for_output(
         },
         context,
         warning,
+        system,
         clock_label,
     }
 }
@@ -183,6 +198,8 @@ fn workspace_button_spec(workspace: &WorkspaceState) -> WorkspaceButtonSpec {
         urgent: workspace.urgent,
     }
 }
+
+type PopoverRegistry = Rc<RefCell<BTreeMap<String, gtk::Popover>>>;
 
 pub struct SurfaceRegistry {
     surfaces: BTreeMap<String, SurfaceHandle>,
@@ -264,6 +281,12 @@ impl SurfaceRegistry {
             surface.close();
         }
     }
+
+    pub fn handle_completion(&mut self, completion: &ActionCompletion) -> bool {
+        self.surfaces
+            .values_mut()
+            .any(|surface| surface.handle_completion(completion))
+    }
 }
 
 fn monitors_by_connector(display: &gdk::Display) -> BTreeMap<String, gdk::Monitor> {
@@ -322,6 +345,13 @@ impl SurfaceHandle {
         }
     }
 
+    fn handle_completion(&mut self, completion: &ActionCompletion) -> bool {
+        match self {
+            Self::Primary(surface) => surface.handle_completion(completion),
+            Self::Reduced(_) => false,
+        }
+    }
+
     fn close(self) {
         match self {
             Self::Primary(surface) => surface.window.close(),
@@ -337,7 +367,9 @@ pub struct PrimarySurface {
     title_groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     context_stack: gtk::Stack,
     context_label: gtk::Label,
-    clock_label: gtk::Label,
+    system_box: gtk::Box,
+    popover_coordinator: Rc<RefCell<PopoverCoordinator>>,
+    popover_registry: PopoverRegistry,
     action_sender: Sender<ActionRequest>,
     current_spec: Option<SurfaceSpec>,
 }
@@ -350,6 +382,8 @@ impl PrimarySurface {
         action_sender: Sender<ActionRequest>,
     ) -> Self {
         let window = base_window(application, monitor);
+        let popover_coordinator = Rc::new(RefCell::new(PopoverCoordinator::default()));
+        let popover_registry = Rc::new(RefCell::new(BTreeMap::new()));
 
         let grid = gtk::Grid::new();
         grid.set_column_spacing(12);
@@ -373,6 +407,7 @@ impl PrimarySurface {
         right.set_halign(gtk::Align::End);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        install_workspace_scroll(&workspaces, action_sender.clone(), spec.output_name.clone());
         left.append(&workspaces);
 
         let title_button = gtk::Button::new();
@@ -392,6 +427,8 @@ impl PrimarySurface {
             title_groups.clone(),
             action_sender.clone(),
             spec.output_name.clone(),
+            popover_coordinator.clone(),
+            popover_registry.clone(),
         );
 
         let context_stack = gtk::Stack::new();
@@ -409,14 +446,19 @@ impl PrimarySurface {
         center_slot.append(&title_button);
         center_slot.append(&context_stack);
 
-        let clock_label = gtk::Label::new(None);
-        right.append(&clock_label);
+        let system_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        right.append(&system_box);
 
         grid.attach(&left, 0, 0, 1, 1);
         grid.attach(&center_slot_frame, 1, 0, 1, 1);
         grid.attach(&right, 2, 0, 1, 1);
 
         window.set_child(Some(&grid));
+        install_escape_dismiss(
+            &window,
+            popover_coordinator.clone(),
+            popover_registry.clone(),
+        );
         window.present();
 
         let mut surface = Self {
@@ -426,7 +468,9 @@ impl PrimarySurface {
             title_groups,
             context_stack,
             context_label,
-            clock_label,
+            system_box,
+            popover_coordinator,
+            popover_registry,
             action_sender,
             current_spec: None,
         };
@@ -452,8 +496,10 @@ impl PrimarySurface {
             self.title_label.set_label(&spec.title.text);
             *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
         }
-        if plan.clock {
-            self.clock_label.set_label(&spec.clock_label);
+        if plan.system {
+            if let Some(system) = spec.system.as_ref() {
+                self.render_system_modules(system);
+            }
         }
 
         if plan.context {
@@ -467,6 +513,71 @@ impl PrimarySurface {
         }
 
         self.current_spec = Some(spec.clone());
+    }
+
+    pub fn handle_completion(&mut self, completion: &ActionCompletion) -> bool {
+        let Some(module_name) = popover_id_from_origin(&completion.origin) else {
+            return false;
+        };
+        let registry_key = format!("system:{module_name}");
+        if self.popover_coordinator.borrow().active_id() != Some(registry_key.as_str()) {
+            return false;
+        }
+
+        self.popover_coordinator
+            .borrow_mut()
+            .record_completion(&completion.origin, &completion.result);
+        self.refresh_system_popover(&module_name);
+        true
+    }
+
+    fn render_system_modules(&self, system: &SystemCluster) {
+        close_system_popovers(&self.popover_coordinator, &self.popover_registry);
+
+        while let Some(child) = self.system_box.first_child() {
+            self.system_box.remove(&child);
+        }
+
+        for module in system.modules() {
+            let button = build_system_button(
+                &module.button,
+                &module.popover,
+                &self.action_sender,
+                self.popover_coordinator.clone(),
+                self.popover_registry.clone(),
+            );
+            self.system_box.append(&button);
+        }
+    }
+
+    fn refresh_system_popover(&self, module_name: &str) {
+        let Some(spec) = self.current_spec.as_ref() else {
+            return;
+        };
+        let Some(system) = spec.system.as_ref() else {
+            return;
+        };
+        let Some(module_id) = parse_system_module_id(module_name) else {
+            return;
+        };
+        let key = format!("system:{module_name}");
+        let popover = self.popover_registry.borrow().get(&key).cloned();
+        let Some(popover) = popover else {
+            return;
+        };
+        let base = system.popover(module_id).clone();
+        let error = self
+            .popover_coordinator
+            .borrow()
+            .error_for(module_name)
+            .map(str::to_string);
+        rebuild_system_popover(
+            &popover,
+            &base,
+            error,
+            &self.action_sender,
+            self.popover_coordinator.clone(),
+        );
     }
 }
 
@@ -489,6 +600,8 @@ impl ReducedSurface {
         action_sender: Sender<ActionRequest>,
     ) -> Self {
         let window = base_window(application, monitor);
+        let popover_coordinator = Rc::new(RefCell::new(PopoverCoordinator::default()));
+        let popover_registry = Rc::new(RefCell::new(BTreeMap::new()));
 
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         root.set_margin_start(12);
@@ -496,6 +609,7 @@ impl ReducedSurface {
         root.set_size_request(-1, BAR_HEIGHT);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        install_workspace_scroll(&workspaces, action_sender.clone(), spec.output_name.clone());
         let title_button = gtk::Button::new();
         title_button.set_has_frame(false);
         title_button.set_hexpand(true);
@@ -513,6 +627,8 @@ impl ReducedSurface {
             title_groups.clone(),
             action_sender.clone(),
             spec.output_name.clone(),
+            popover_coordinator.clone(),
+            popover_registry.clone(),
         );
 
         let warning_label = gtk::Label::new(None);
@@ -527,6 +643,7 @@ impl ReducedSurface {
         root.append(&clock_label);
 
         window.set_child(Some(&root));
+        install_escape_dismiss(&window, popover_coordinator, popover_registry);
         window.present();
 
         let mut surface = Self {
@@ -631,19 +748,51 @@ fn render_workspaces(
     }
 }
 
+fn install_workspace_scroll(
+    container: &gtk::Box,
+    action_sender: Sender<ActionRequest>,
+    output_name: String,
+) {
+    let scroll = gtk::EventControllerScroll::new(
+        gtk::EventControllerScrollFlags::VERTICAL
+            | gtk::EventControllerScrollFlags::HORIZONTAL
+            | gtk::EventControllerScrollFlags::DISCRETE,
+    );
+    scroll.connect_scroll(move |_, dx, dy| {
+        let Some(direction) = scroll_direction(dx, dy) else {
+            return glib::Propagation::Proceed;
+        };
+
+        let _ = action_sender.send(ActionRequest {
+            origin: format!("workspace-scroll:{output_name}"),
+            intent: ActionIntent::CycleWorkspace {
+                output: output_name.clone(),
+                direction,
+            },
+        });
+        glib::Propagation::Stop
+    });
+    container.add_controller(scroll);
+}
+
 fn install_title_interactions(
     button: &gtk::Button,
     groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     action_sender: Sender<ActionRequest>,
     output_name: String,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
 ) {
     let popover = gtk::Popover::new();
     popover.set_has_arrow(false);
     popover.set_parent(button);
+    let popover_id = format!("title:{output_name}");
+    register_popover(&popover_id, &popover, coordinator.clone(), registry.clone());
 
     let groups_for_click = groups.clone();
     let sender_for_click = action_sender.clone();
     let popover_output = output_name.clone();
+    let popover_id_for_click = popover_id.clone();
     button.connect_clicked(move |button| {
         rebuild_window_popover(
             &popover,
@@ -652,7 +801,12 @@ fn install_title_interactions(
             &popover_output,
         );
         popover.set_parent(button);
-        popover.popup();
+        show_managed_popover(
+            &popover_id_for_click,
+            &popover,
+            coordinator.clone(),
+            registry.clone(),
+        );
     });
 
     let secondary = gtk::GestureClick::new();
@@ -718,6 +872,314 @@ fn context_transition_type() -> gtk::StackTransitionType {
         gtk::StackTransitionType::Crossfade
     } else {
         gtk::StackTransitionType::None
+    }
+}
+
+fn build_system_button(
+    button_spec: &SystemButtonSpec,
+    popover_spec: &SystemPopoverSpec,
+    action_sender: &Sender<ActionRequest>,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) -> gtk::Button {
+    let button = gtk::Button::new();
+    button.set_has_frame(false);
+    button.set_tooltip_text(Some(&button_spec.tooltip));
+
+    for class_name in &button_spec.classes {
+        button.add_css_class(class_name);
+    }
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    let icon = gtk::Image::from_icon_name(&button_spec.icon_name);
+    row.append(&icon);
+    if let Some(label_text) = button_spec.label.as_ref() {
+        let label = gtk::Label::new(Some(label_text));
+        row.append(&label);
+    }
+    button.set_child(Some(&row));
+
+    let popover = gtk::Popover::new();
+    popover.set_has_arrow(false);
+    popover.set_parent(&button);
+
+    let module_key = format!("system:{}", button_spec.id.as_str());
+    register_popover(&module_key, &popover, coordinator.clone(), registry.clone());
+    rebuild_system_popover(
+        &popover,
+        popover_spec,
+        coordinator
+            .borrow()
+            .error_for(button_spec.id.as_str())
+            .map(str::to_string),
+        action_sender,
+        coordinator.clone(),
+    );
+
+    let popover_spec = popover_spec.clone();
+    let module_key_for_click = module_key.clone();
+    let click_sender = action_sender.clone();
+    button.connect_clicked(move |button| {
+        rebuild_system_popover(
+            &popover,
+            &popover_spec,
+            coordinator
+                .borrow()
+                .error_for(popover_spec.id.as_str())
+                .map(str::to_string),
+            &click_sender,
+            coordinator.clone(),
+        );
+        popover.set_parent(button);
+        show_managed_popover(
+            &module_key_for_click,
+            &popover,
+            coordinator.clone(),
+            registry.clone(),
+        );
+    });
+
+    if let Some((previous, next)) = scroll_actions(button_spec.id) {
+        install_action_scroll(
+            &button,
+            action_sender.clone(),
+            previous,
+            next,
+            format!("scroll:{}", button_spec.id.as_str()),
+        );
+    }
+
+    button
+}
+
+fn rebuild_system_popover(
+    popover: &gtk::Popover,
+    spec: &SystemPopoverSpec,
+    error: Option<String>,
+    action_sender: &Sender<ActionRequest>,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+) {
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    column.set_margin_top(8);
+    column.set_margin_bottom(8);
+    column.set_margin_start(8);
+    column.set_margin_end(8);
+
+    let title = gtk::Label::new(Some(&spec.title));
+    title.set_xalign(0.0);
+    column.append(&title);
+
+    for line in &spec.lines {
+        let label = gtk::Label::new(Some(line));
+        label.set_xalign(0.0);
+        label.set_wrap(true);
+        column.append(&label);
+    }
+
+    if let Some(error) = error {
+        let error_label = gtk::Label::new(Some(&error));
+        error_label.set_xalign(0.0);
+        error_label.add_css_class("critical");
+        column.append(&error_label);
+    }
+
+    for action in &spec.controls {
+        let button = gtk::Button::with_label(&action.label);
+        connect_action_button(
+            &button,
+            action.clone(),
+            spec.clone(),
+            popover.clone(),
+            action_sender.clone(),
+            coordinator.clone(),
+        );
+        column.append(&button);
+    }
+
+    let footer = gtk::Button::with_label(&spec.footer.label);
+    connect_action_button(
+        &footer,
+        spec.footer.clone(),
+        spec.clone(),
+        popover.clone(),
+        action_sender.clone(),
+        coordinator,
+    );
+    column.append(&footer);
+
+    popover.set_child(Some(&column));
+}
+
+fn connect_action_button(
+    button: &gtk::Button,
+    action: SystemActionSpec,
+    base_spec: SystemPopoverSpec,
+    popover: gtk::Popover,
+    action_sender: Sender<ActionRequest>,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+) {
+    button.connect_clicked(move |_| {
+        coordinator.borrow_mut().before_action(&action.origin);
+        rebuild_system_popover(
+            &popover,
+            &base_spec,
+            None,
+            &action_sender,
+            coordinator.clone(),
+        );
+
+        let _ = action_sender.send(ActionRequest {
+            origin: action.origin.clone(),
+            intent: action.intent.clone(),
+        });
+
+        if action.closes_popover {
+            popover.popdown();
+        }
+    });
+}
+
+fn install_action_scroll(
+    widget: &impl IsA<gtk::Widget>,
+    action_sender: Sender<ActionRequest>,
+    previous: ActionIntent,
+    next: ActionIntent,
+    origin: String,
+) {
+    let scroll = gtk::EventControllerScroll::new(
+        gtk::EventControllerScrollFlags::VERTICAL
+            | gtk::EventControllerScrollFlags::HORIZONTAL
+            | gtk::EventControllerScrollFlags::DISCRETE,
+    );
+    scroll.connect_scroll(move |_, dx, dy| {
+        let Some(direction) = scroll_direction(dx, dy) else {
+            return glib::Propagation::Proceed;
+        };
+        let intent = match direction {
+            Direction::Previous => previous.clone(),
+            Direction::Next => next.clone(),
+        };
+        let _ = action_sender.send(ActionRequest {
+            origin: origin.clone(),
+            intent,
+        });
+        glib::Propagation::Stop
+    });
+    widget.add_controller(scroll);
+}
+
+fn register_popover(
+    popover_id: &str,
+    popover: &gtk::Popover,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) {
+    registry
+        .borrow_mut()
+        .insert(popover_id.to_string(), popover.clone());
+    let popover_id = popover_id.to_string();
+    popover.connect_closed(move |_| {
+        coordinator.borrow_mut().close(&popover_id);
+    });
+}
+
+fn show_managed_popover(
+    popover_id: &str,
+    popover: &gtk::Popover,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) {
+    if let Some(previous) = coordinator.borrow_mut().open(popover_id) {
+        if previous != popover_id {
+            if let Some(active) = registry.borrow().get(&previous).cloned() {
+                active.popdown();
+            }
+        }
+    }
+    popover.popup();
+}
+
+fn install_escape_dismiss(
+    window: &gtk::ApplicationWindow,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(move |_, key, _, _| {
+        if key == gdk::Key::Escape {
+            if let Some(active) = coordinator.borrow_mut().clear_active() {
+                if let Some(popover) = registry.borrow().get(&active).cloned() {
+                    popover.popdown();
+                }
+            }
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+    window.add_controller(keys);
+}
+
+fn close_system_popovers(
+    coordinator: &Rc<RefCell<PopoverCoordinator>>,
+    registry: &PopoverRegistry,
+) {
+    let system_keys = registry
+        .borrow()
+        .keys()
+        .filter(|key| key.starts_with("system:"))
+        .cloned()
+        .collect::<Vec<_>>();
+    for key in system_keys {
+        if let Some(popover) = registry.borrow_mut().remove(&key) {
+            popover.popdown();
+        }
+        coordinator.borrow_mut().close(&key);
+    }
+}
+
+fn scroll_direction(dx: f64, dy: f64) -> Option<Direction> {
+    let delta = if dy.abs() >= dx.abs() { dy } else { dx };
+    if delta < 0.0 {
+        Some(Direction::Previous)
+    } else if delta > 0.0 {
+        Some(Direction::Next)
+    } else {
+        None
+    }
+}
+
+fn scroll_actions(module_id: SystemModuleId) -> Option<(ActionIntent, ActionIntent)> {
+    match module_id {
+        SystemModuleId::Keyboard => Some((
+            ActionIntent::ToggleKeyboardLayout,
+            ActionIntent::ToggleKeyboardLayout,
+        )),
+        SystemModuleId::Audio => Some((
+            ActionIntent::ControlMedia(MediaControlAction::Previous),
+            ActionIntent::ControlMedia(MediaControlAction::Next),
+        )),
+        SystemModuleId::Power => Some((
+            ActionIntent::CyclePowerProfile {
+                direction: Direction::Previous,
+            },
+            ActionIntent::CyclePowerProfile {
+                direction: Direction::Next,
+            },
+        )),
+        SystemModuleId::Resources | SystemModuleId::Network | SystemModuleId::Clock => None,
+    }
+}
+
+fn parse_system_module_id(value: &str) -> Option<SystemModuleId> {
+    match value {
+        "keyboard" => Some(SystemModuleId::Keyboard),
+        "resources" => Some(SystemModuleId::Resources),
+        "network" => Some(SystemModuleId::Network),
+        "audio" => Some(SystemModuleId::Audio),
+        "power" => Some(SystemModuleId::Power),
+        "clock" => Some(SystemModuleId::Clock),
+        _ => None,
     }
 }
 
@@ -964,6 +1426,7 @@ mod tests {
             },
             context: None,
             warning: None,
+            system: None,
             clock_label: "12:00".to_string(),
         };
         let next = SurfaceSpec {

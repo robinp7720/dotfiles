@@ -1,5 +1,7 @@
 pub mod context_card;
+pub mod popovers;
 pub mod surface;
+pub mod system;
 pub mod wm;
 
 use std::cell::{Cell, RefCell};
@@ -185,6 +187,7 @@ fn drain_updates(runtime: &mut UiRuntime, now_epoch: i64) -> bool {
     loop {
         match runtime.completion_rx.try_recv() {
             Ok(completion) => {
+                dirty |= runtime.registry.handle_completion(&completion);
                 if let ActionResult::Failed { detail, .. } = &completion.result {
                     warn!("action {} failed: {}", completion.origin, detail);
                 }
