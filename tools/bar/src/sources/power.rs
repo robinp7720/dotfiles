@@ -243,11 +243,11 @@ fn weighted_capacity(paths: &[PathBuf]) -> Result<Option<u8>> {
         let full = read_optional_u64(path.join("energy_full"))?
             .or_else(|| read_optional_u64(path.join("charge_full")).ok().flatten());
 
-        if let (Some(current), Some(full)) = (current, full) {
-            if full > 0 {
-                current_total = current_total.saturating_add(current);
-                full_total = full_total.saturating_add(full);
-            }
+        if let (Some(current), Some(full)) = (current, full)
+            && full > 0
+        {
+            current_total = current_total.saturating_add(current);
+            full_total = full_total.saturating_add(full);
         }
     }
 

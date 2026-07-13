@@ -259,10 +259,8 @@ impl SurfaceRegistry {
                 .get(&spec.output_name)
                 .is_some_and(|surface| surface.role() != spec.role);
 
-            if recreate {
-                if let Some(surface) = self.surfaces.remove(&spec.output_name) {
-                    surface.close();
-                }
+            if recreate && let Some(surface) = self.surfaces.remove(&spec.output_name) {
+                surface.close();
             }
 
             match self.surfaces.get_mut(&spec.output_name) {
@@ -504,10 +502,10 @@ impl PrimarySurface {
             self.title_label.set_label(&spec.title.text);
             *self.title_groups.borrow_mut() = spec.title.window_groups.clone();
         }
-        if plan.system {
-            if let Some(system) = spec.system.as_ref() {
-                self.render_system_modules(system);
-            }
+        if plan.system
+            && let Some(system) = spec.system.as_ref()
+        {
+            self.render_system_modules(system);
         }
 
         if plan.context {
@@ -573,15 +571,15 @@ impl PrimarySurface {
             self.system_box.append(&button);
         }
 
-        if let Some(active_id) = refresh.preserved_active_id {
-            if let Some(popover) = self.popover_registry.borrow().get(&active_id).cloned() {
-                show_managed_popover(
-                    &active_id,
-                    &popover,
-                    self.popover_coordinator.clone(),
-                    self.popover_registry.clone(),
-                );
-            }
+        if let Some(active_id) = refresh.preserved_active_id
+            && let Some(popover) = self.popover_registry.borrow().get(&active_id).cloned()
+        {
+            show_managed_popover(
+                &active_id,
+                &popover,
+                self.popover_coordinator.clone(),
+                self.popover_registry.clone(),
+            );
         }
     }
 
@@ -1161,14 +1159,24 @@ fn show_managed_popover(
     coordinator: Rc<RefCell<PopoverCoordinator>>,
     registry: PopoverRegistry,
 ) {
-    if let Some(previous) = coordinator.borrow_mut().open(popover_id) {
-        if previous != popover_id {
-            if let Some(active) = registry.borrow().get(&previous).cloned() {
-                active.popdown();
-            }
-        }
+    if let Some(previous) = coordinator.borrow_mut().open(popover_id)
+        && previous != popover_id
+        && let Some(active) = registry.borrow().get(&previous).cloned()
+    {
+        active.popdown();
     }
     popover.popup();
+}
+
+fn popdown_active_popover(
+    coordinator: &Rc<RefCell<PopoverCoordinator>>,
+    registry: &PopoverRegistry,
+) {
+    if let Some(active) = coordinator.borrow_mut().clear_active()
+        && let Some(popover) = registry.borrow().get(&active).cloned()
+    {
+        popover.popdown();
+    }
 }
 
 fn install_escape_dismiss(
@@ -1179,11 +1187,7 @@ fn install_escape_dismiss(
     let keys = gtk::EventControllerKey::new();
     keys.connect_key_pressed(move |_, key, _, _| {
         if key == gdk::Key::Escape {
-            if let Some(active) = coordinator.borrow_mut().clear_active() {
-                if let Some(popover) = registry.borrow().get(&active).cloned() {
-                    popover.popdown();
-                }
-            }
+            popdown_active_popover(&coordinator, &registry);
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed

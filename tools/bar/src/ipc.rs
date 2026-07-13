@@ -470,7 +470,7 @@ mod tests {
         let _ = stalled_client.shutdown(std::net::Shutdown::Both);
         server.join().expect("join stalled server");
 
-        assert_eq!(result.expect("nonblocking stalled serve result"), false);
+        assert!(!result.expect("nonblocking stalled serve result"));
     }
 
     struct TempDir {

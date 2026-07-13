@@ -88,12 +88,12 @@ impl TimerStore {
                 let record = self
                     .find_timer_mut(id)
                     .ok_or_else(|| anyhow!("unknown timer id: {id}"))?;
-                if !record.completed {
-                    if let Some(target_epoch) = record.target_epoch {
-                        record.remaining_seconds = remaining_seconds(target_epoch, now_epoch);
-                        record.target_epoch = None;
-                        self.persist()?;
-                    }
+                if !record.completed
+                    && let Some(target_epoch) = record.target_epoch
+                {
+                    record.remaining_seconds = remaining_seconds(target_epoch, now_epoch);
+                    record.target_epoch = None;
+                    self.persist()?;
                 }
             }
             ControlRequest::TimerResume { id } => {

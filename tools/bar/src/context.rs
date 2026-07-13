@@ -125,7 +125,7 @@ impl Dismissals {
                 .entries
                 .get(&candidate.key)
                 .and_then(|entry| entry.until_epoch)
-                .map_or(true, |until_epoch| now_epoch < until_epoch)
+                .is_none_or(|until_epoch| now_epoch < until_epoch)
     }
 }
 
@@ -165,20 +165,20 @@ fn candidates(
         ));
     }
 
-    if source_is_healthy(snapshot, SourceId::Calendar) {
-        if let Some(calendar) = snapshot.system.calendar.as_ref() {
-            candidates.push(calendar_candidate(calendar, now_epoch, thresholds));
-        }
+    if source_is_healthy(snapshot, SourceId::Calendar)
+        && let Some(calendar) = snapshot.system.calendar.as_ref()
+    {
+        candidates.push(calendar_candidate(calendar, now_epoch, thresholds));
     }
 
     if source_is_healthy(snapshot, SourceId::Activity) {
         candidates.extend(activity_candidates(snapshot, now_epoch, thresholds));
     }
 
-    if source_is_healthy(snapshot, SourceId::Media) {
-        if let Some(media) = snapshot.system.media.as_ref() {
-            candidates.push(media_candidate(media));
-        }
+    if source_is_healthy(snapshot, SourceId::Media)
+        && let Some(media) = snapshot.system.media.as_ref()
+    {
+        candidates.push(media_candidate(media));
     }
 
     candidates

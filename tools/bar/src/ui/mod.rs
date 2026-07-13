@@ -224,38 +224,26 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
     let (state_tx, state_rx) = mpsc::channel::<StateUpdate>();
     let cancelled = Arc::new(AtomicBool::new(false));
     let timer_store = Arc::new(Mutex::new(TimerStore::load(current_epoch())?));
-    let mut joins = Vec::new();
-
-    joins.push(spawn_compositor_worker(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-    ));
-    joins.push(spawn_resource_source(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-    ));
-    joins.push(spawn_power_source(state_tx.clone(), Arc::clone(&cancelled)));
-    joins.push(spawn_network_source(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-    ));
-    joins.push(spawn_bluetooth_source(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-    ));
-    joins.push(spawn_audio_source(state_tx.clone(), Arc::clone(&cancelled)));
-    joins.push(spawn_media_source(state_tx.clone(), Arc::clone(&cancelled)));
-    joins.push(spawn_clock_source(state_tx.clone(), Arc::clone(&cancelled)));
-    joins.push(spawn_timer_tick_worker(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-        Arc::clone(&timer_store),
-    ));
-    joins.push(spawn_control_socket_server(
-        state_tx.clone(),
-        Arc::clone(&cancelled),
-        Arc::clone(&timer_store),
-    )?);
+    let mut joins = vec![
+        spawn_compositor_worker(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_resource_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_power_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_network_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_bluetooth_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_audio_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_media_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_clock_source(state_tx.clone(), Arc::clone(&cancelled)),
+        spawn_timer_tick_worker(
+            state_tx.clone(),
+            Arc::clone(&cancelled),
+            Arc::clone(&timer_store),
+        ),
+        spawn_control_socket_server(
+            state_tx.clone(),
+            Arc::clone(&cancelled),
+            Arc::clone(&timer_store),
+        )?,
+    ];
 
     if let Some(calendar_script) = resolve_calendar_script(config_path) {
         joins.push(crate::spawn_calendar_source(
@@ -567,12 +555,11 @@ fn handle_reload_request(
                     let _ = tracker.apply(ActivityUpdate::Snapshot(activities), now_epoch);
                     runtime.activity_tracker = tracker;
                 }
-                if let Some(display) = display {
-                    if let Err(error) =
+                if let Some(display) = display
+                    && let Err(error) =
                         refresh_theme_provider(display, &runtime.config_path, theme_provider)
-                    {
-                        warn!("theme reload failed: {error:#}");
-                    }
+                {
+                    warn!("theme reload failed: {error:#}");
                 }
                 true
             }

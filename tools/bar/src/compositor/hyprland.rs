@@ -85,7 +85,7 @@ impl CompositorAdapter for HyprlandAdapter {
 
     fn next_update(&mut self) -> Result<StateUpdate> {
         self.next_update_inner(None)?
-            .ok_or_else(|| reconnect_error("Hyprland event stream cancelled").into())
+            .ok_or_else(|| reconnect_error("Hyprland event stream cancelled"))
     }
 
     fn next_update_interruptibly(&mut self, cancelled: &AtomicBool) -> Result<Option<StateUpdate>> {
@@ -165,7 +165,7 @@ impl HyprlandAdapter {
             let read = self
                 .events
                 .read_line(&mut line, cancelled)
-                .map_err(|error| reconnect_error(error))?;
+                .map_err(reconnect_error)?;
             if matches!(read, EventRead::Cancelled) {
                 return Ok(None);
             }

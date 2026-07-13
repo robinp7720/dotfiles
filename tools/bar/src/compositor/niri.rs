@@ -24,6 +24,17 @@ pub struct NiriAdapter {
     keyboard_layouts: Vec<String>,
 }
 
+struct NiriSources {
+    outputs_json: String,
+    workspaces_json: String,
+    windows_json: String,
+    keyboard_layouts_json: String,
+    events: Box<dyn EventReader>,
+    event_child: Option<Child>,
+    command_env: CommandEnv,
+    command_runner: CommandRunner,
+}
+
 impl NiriAdapter {
     pub fn from_env(socket: &str) -> Result<Self> {
         let command_env = vec![("NIRI_SOCKET".to_string(), socket.to_string())];
@@ -47,16 +58,16 @@ impl NiriAdapter {
             .take()
             .context("niri event stream stdout was unavailable")?;
 
-        Self::from_sources(
-            outputs,
-            workspaces,
-            windows,
-            keyboard_layouts,
-            Box::new(PollingEventReader::new(stdout)),
-            Some(child),
+        Self::from_sources(NiriSources {
+            outputs_json: outputs,
+            workspaces_json: workspaces,
+            windows_json: windows,
+            keyboard_layouts_json: keyboard_layouts,
+            events: Box::new(PollingEventReader::new(stdout)),
+            event_child: Some(child),
             command_env,
-            Box::new(default_command_runner),
-        )
+            command_runner: Box::new(default_command_runner),
+        })
     }
 
     pub fn new_for_test<F>(
@@ -70,47 +81,38 @@ impl NiriAdapter {
     where
         F: FnMut(&str, &[String], &CommandEnv) -> Result<()> + Send + 'static,
     {
-        Self::from_sources(
-            outputs_json.to_string(),
-            workspaces_json.to_string(),
-            windows_json.to_string(),
-            keyboard_layouts_json.to_string(),
-            Box::new(BlockingEventReader::new(Box::new(Cursor::new(
+        Self::from_sources(NiriSources {
+            outputs_json: outputs_json.to_string(),
+            workspaces_json: workspaces_json.to_string(),
+            windows_json: windows_json.to_string(),
+            keyboard_layouts_json: keyboard_layouts_json.to_string(),
+            events: Box::new(BlockingEventReader::new(Box::new(Cursor::new(
                 events.as_bytes().to_vec(),
             )))),
-            None,
-            Vec::new(),
-            Box::new(command_runner),
-        )
+            event_child: None,
+            command_env: Vec::new(),
+            command_runner: Box::new(command_runner),
+        })
         .expect("build Niri fixture adapter")
     }
 
-    fn from_sources(
-        outputs_json: String,
-        workspaces_json: String,
-        windows_json: String,
-        keyboard_layouts_json: String,
-        events: Box<dyn EventReader>,
-        event_child: Option<Child>,
-        command_env: CommandEnv,
-        command_runner: CommandRunner,
-    ) -> Result<Self> {
+    fn from_sources(sources: NiriSources) -> Result<Self> {
         let mut tracker = StateTracker::default();
         let keyboard_layouts = apply_snapshot(
             &mut tracker.state,
-            &outputs_json,
-            &workspaces_json,
-            &windows_json,
-            &keyboard_layouts_json,
+            &sources.outputs_json,
+            &sources.workspaces_json,
+            &sources.windows_json,
+            &sources.keyboard_layouts_json,
         )?;
 
         Ok(Self {
             tracker,
-            events,
-            event_child,
+            events: sources.events,
+            event_child: sources.event_child,
             pending: VecDeque::new(),
-            command_runner,
-            command_env,
+            command_runner: sources.command_runner,
+            command_env: sources.command_env,
             keyboard_layouts,
         })
     }
@@ -128,7 +130,7 @@ impl CompositorAdapter for NiriAdapter {
 
     fn next_update(&mut self) -> Result<StateUpdate> {
         self.next_update_inner(None)?
-            .ok_or_else(|| reconnect_error("Niri event stream cancelled").into())
+            .ok_or_else(|| reconnect_error("Niri event stream cancelled"))
     }
 
     fn next_update_interruptibly(&mut self, cancelled: &AtomicBool) -> Result<Option<StateUpdate>> {
@@ -222,7 +224,7 @@ impl NiriAdapter {
             let read = self
                 .events
                 .read_line(&mut line, cancelled)
-                .map_err(|error| reconnect_error(error))?;
+                .map_err(reconnect_error)?;
             if matches!(read, EventRead::Cancelled) {
                 if let Some(child) = self.event_child.as_mut() {
                     kill_child(child);
@@ -328,10 +330,10 @@ fn apply_snapshot(
         if workspace.is_focused {
             state.focused_output = Some(output_name.clone());
         }
-        if workspace.is_active {
-            if let Some(output) = state.outputs.get_mut(&output_name) {
-                output.last_window_id = workspace.active_window_id.map(|id| id.to_string());
-            }
+        if workspace.is_active
+            && let Some(output) = state.outputs.get_mut(&output_name)
+        {
+            output.last_window_id = workspace.active_window_id.map(|id| id.to_string());
         }
     }
 
@@ -346,14 +348,13 @@ fn apply_snapshot(
                 urgent: window.is_urgent,
             },
         );
-        if window.is_focused {
-            if let Some(workspace_id) = window.workspace_id.map(|id| id.to_string()) {
-                if let Some(workspace) = state.workspaces.get(&workspace_id) {
-                    state.focused_output = Some(workspace.output.clone());
-                    if let Some(output) = state.outputs.get_mut(&workspace.output) {
-                        output.last_window_id = Some(window.id.to_string());
-                    }
-                }
+        if window.is_focused
+            && let Some(workspace_id) = window.workspace_id.map(|id| id.to_string())
+            && let Some(workspace) = state.workspaces.get(&workspace_id)
+        {
+            state.focused_output = Some(workspace.output.clone());
+            if let Some(output) = state.outputs.get_mut(&workspace.output) {
+                output.last_window_id = Some(window.id.to_string());
             }
         }
     }
@@ -409,7 +410,7 @@ fn apply_event(
                 .cloned()
                 .ok_or_else(|| reconnect_error("WindowOpenedOrChanged missing window"))?,
         )
-        .map_err(|error| reconnect_error(error))?;
+        .map_err(reconnect_error)?;
         apply_window_event(tracker, pending, window);
         return Ok(());
     }
@@ -451,7 +452,7 @@ fn apply_event(
             serde_json::from_value(payload.get("keyboard_layouts").cloned().ok_or_else(|| {
                 reconnect_error("KeyboardLayoutsChanged missing keyboard_layouts")
             })?)
-            .map_err(|error| reconnect_error(error))?;
+            .map_err(reconnect_error)?;
         *keyboard_layouts = parsed.names.clone();
         if parsed.current_idx < keyboard_layouts.len() {
             tracker.state.keyboard_layout = Some(keyboard_layouts[parsed.current_idx].clone());
