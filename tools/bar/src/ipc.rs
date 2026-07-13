@@ -3,11 +3,14 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::TimerState;
+
+const TRY_SERVE_READ_TIMEOUT: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -171,13 +174,19 @@ impl ControlSocket {
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
             Err(error) => return Err(error).context("failed to accept control connection"),
         };
+        stream
+            .set_read_timeout(Some(TRY_SERVE_READ_TIMEOUT))
+            .context("failed to set accepted control stream read timeout")?;
         let request = {
             let mut reader = BufReader::new(
                 stream
                     .try_clone()
                     .context("failed to clone accepted control stream")?,
             );
-            read_json_line(&mut reader).context("failed to read control request")?
+            match try_read_json_line(&mut reader).context("failed to read control request")? {
+                Some(request) => request,
+                None => return Ok(false),
+            }
         };
         let response = match handler(request) {
             Ok(response) => response,
@@ -253,6 +262,34 @@ fn read_json_line<T: for<'de> Deserialize<'de>>(reader: &mut impl BufRead) -> Re
     serde_json::from_str(line.trim_end()).context("parse control payload")
 }
 
+fn try_read_json_line<T: for<'de> Deserialize<'de>>(
+    reader: &mut impl BufRead,
+) -> Result<Option<T>> {
+    let mut line = String::new();
+    let read = match reader.read_line(&mut line) {
+        Ok(read) => read,
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            ) =>
+        {
+            return Ok(None);
+        }
+        Err(error) => return Err(error).context("read control payload line"),
+    };
+
+    if read == 0 {
+        bail!("control socket closed before sending a newline-delimited JSON payload");
+    }
+    if !line.ends_with('\n') {
+        return Ok(None);
+    }
+    serde_json::from_str(line.trim_end())
+        .map(Some)
+        .context("parse control payload")
+}
+
 fn current_uid() -> u32 {
     unsafe { libc::geteuid() }
 }
@@ -261,10 +298,11 @@ fn current_uid() -> u32 {
 mod tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::net::UnixStream;
     use std::path::{Path, PathBuf};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::{Mutex, OnceLock, mpsc};
     use std::thread;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use crate::TimerState;
 
@@ -400,6 +438,39 @@ mod tests {
             existing_path_action(ExistingPathKind::NonSocket, 1_000, 1_000),
             ExistingPathAction::RejectNonSocket
         );
+    }
+
+    #[test]
+    fn try_serve_once_does_not_block_on_stalled_client_without_newline() {
+        let runtime_dir = TempDir::new("ipc-stalled-client");
+        let socket_path = runtime_dir.path().join("cockpit-bar.sock");
+        let socket = ControlSocket::bind_at(&socket_path).expect("bind socket");
+        socket.set_nonblocking(true).expect("set nonblocking");
+
+        let stalled_client = UnixStream::connect(&socket_path).expect("connect stalled client");
+        let (result_tx, result_rx) = mpsc::channel();
+
+        let server = thread::spawn(move || {
+            let result = socket.try_serve_once(|_| Ok(ControlResponse::Accepted));
+            result_tx.send(result).expect("send result");
+        });
+
+        let result = match result_rx.recv_timeout(Duration::from_millis(200)) {
+            Ok(result) => result,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let _ = stalled_client.shutdown(std::net::Shutdown::Both);
+                server.join().expect("join stalled server");
+                panic!("try_serve_once blocked on a connected client without a newline");
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("stalled server disconnected before reporting a result");
+            }
+        };
+
+        let _ = stalled_client.shutdown(std::net::Shutdown::Both);
+        server.join().expect("join stalled server");
+
+        assert_eq!(result.expect("nonblocking stalled serve result"), false);
     }
 
     struct TempDir {
