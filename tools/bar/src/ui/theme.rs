@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 use anyhow::{Context, Result, anyhow};
 use gtk::gdk;
@@ -39,12 +40,21 @@ pub fn theme_paths_for_config(config_path: &Path) -> ThemePaths {
 }
 
 pub fn compose_css(paths: &ThemePaths) -> Result<String> {
-    let style = std::fs::read_to_string(&paths.style)
+    let style = fs::read_to_string(&paths.style)
         .with_context(|| format!("failed to read {}", paths.style.display()))?;
-    let colors = std::fs::read_to_string(&paths.colors)
-        .with_context(|| format!("failed to read {}", paths.colors.display()))?;
+    let colors = match fs::read_to_string(&paths.colors) {
+        Ok(colors) => Some(colors),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to read {}", paths.colors.display()));
+        }
+    };
 
-    Ok(format!("{style}\n{colors}"))
+    Ok(match colors {
+        Some(colors) => format!("{style}\n{colors}"),
+        None => style,
+    })
 }
 
 pub fn load_css(display: &gdk::Display, config_path: &Path) -> Result<gtk::CssProvider> {
@@ -116,6 +126,20 @@ mod tests {
                 .zip(css.find("@define-color primary #123456;"))
                 .is_some_and(|(style, colors)| style < colors)
         );
+    }
+
+    #[test]
+    fn theme_css_loads_stable_style_without_generated_colors() {
+        let root = temp_dir("theme-css-style-only");
+        fs::write(root.join("style.css"), "window { min-height: 44px; }\n").expect("style css");
+
+        let css = compose_css(&super::ThemePaths {
+            style: root.join("style.css"),
+            colors: root.join("colors.css"),
+        })
+        .expect("composed css");
+
+        assert_eq!(css, "window { min-height: 44px; }\n");
     }
 
     fn temp_dir(label: &str) -> PathBuf {
