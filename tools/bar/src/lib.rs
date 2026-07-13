@@ -16,8 +16,8 @@ use std::path::Path;
 use anyhow::Result;
 
 pub use actions::{
-    ActionBackend, ActionCompletion, ActionResult, ActionRouter, ProcessSpec, SystemActionBackend,
-    spawn_action_worker,
+    ActionBackend, ActionCompletion, ActionRequest, ActionResult, ActionRouter, ProcessSpec,
+    SystemActionBackend, spawn_action_worker,
 };
 pub use activity::ActivityTracker;
 pub use compositor::{

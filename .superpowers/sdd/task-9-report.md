@@ -100,3 +100,42 @@ git diff --check
 
 - The async completion hook is ready, but Task 10/11 still needs to connect it to the UI channel and popover error presentation.
 - When UI wiring lands, power-profile actions need to seed `ActionRouter::with_power_profile_state(snapshot.system.power.profile.clone())` from the latest snapshot so scroll behavior stays aligned with live state.
+
+## Review fix follow-up
+
+### Findings addressed
+
+- Replaced the single-intent `spawn_action_worker` API with a persistent worker thread that owns one `ActionRouter` and processes typed `ActionRequest` values over a channel, so router-local power-profile state survives across requests on the public threaded path.
+- Added an explicit caller-supplied `origin` token to both `ActionRequest` and `ActionCompletion`, so later UI wiring can route completions and failures back to the originating popover deterministically.
+
+### RED
+
+Command:
+
+```bash
+cargo test --manifest-path tools/bar/Cargo.toml actions
+```
+
+Result:
+
+- Failed before implementation.
+- Errors matched the old worker API shape:
+  - missing `origin` field in `ActionCompletion`
+  - `spawn_action_worker` still required a single `ActionIntent`
+  - the new tests expected a persistent request sender plus join handle
+
+### GREEN
+
+Command:
+
+```bash
+cargo test --manifest-path tools/bar/Cargo.toml actions
+```
+
+Result:
+
+- Passed after implementation.
+- `9 passed; 0 failed`.
+- New coverage added:
+  - threaded worker preserves seeded power-profile state across two cycle requests
+  - threaded completion carries the caller-supplied origin token unchanged

@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 
 use anyhow::{Context, Result, bail};
@@ -51,8 +51,15 @@ pub enum ActionResult {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionCompletion {
+    pub origin: String,
     pub intent: ActionIntent,
     pub result: ActionResult,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActionRequest {
+    pub origin: String,
+    pub intent: ActionIntent,
 }
 
 pub struct ActionRouter<B> {
@@ -137,16 +144,28 @@ impl<B: ActionBackend> ActionRouter<B> {
 
 pub fn spawn_action_worker<B>(
     mut router: ActionRouter<B>,
-    intent: ActionIntent,
     sender: Sender<ActionCompletion>,
-) -> JoinHandle<()>
+) -> (Sender<ActionRequest>, JoinHandle<()>)
 where
     B: ActionBackend + 'static,
 {
-    thread::spawn(move || {
-        let result = router.execute(intent.clone());
-        let _ = sender.send(ActionCompletion { intent, result });
-    })
+    let (request_sender, request_receiver) = mpsc::channel::<ActionRequest>();
+    let handle = thread::spawn(move || {
+        for request in request_receiver {
+            let result = router.execute(request.intent.clone());
+            if sender
+                .send(ActionCompletion {
+                    origin: request.origin,
+                    intent: request.intent,
+                    result,
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    (request_sender, handle)
 }
 
 pub struct SystemActionBackend {
@@ -271,13 +290,15 @@ fn cycle_power_profile(current: &PowerProfile, direction: Direction) -> PowerPro
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
     use anyhow::{Result, anyhow};
 
     use crate::{
-        ActionBackend, ActionIntent, ActionResult, ActionRouter, CompositorAction, ControlRequest,
-        Direction, MediaControlAction, PowerProfile, ProcessSpec,
+        ActionBackend, ActionCompletion, ActionIntent, ActionRequest, ActionResult, ActionRouter,
+        CompositorAction, ControlRequest, Direction, MediaControlAction, PowerProfile, ProcessSpec,
+        spawn_action_worker,
     };
 
     #[test]
@@ -445,6 +466,79 @@ mod tests {
             ActionResult::Failed {
                 summary: "Action failed".to_string(),
                 detail: "launcher missing".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn threaded_worker_preserves_power_profile_state_across_requests() {
+        let state = SpyState::default_shared();
+        let router = ActionRouter::new(SpyBackend::new(state.clone()))
+            .with_power_profile_state(PowerProfile::Balanced);
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let (request_tx, handle) = spawn_action_worker(router, completion_tx);
+
+        request_tx
+            .send(ActionRequest {
+                origin: "power-popover-1".to_string(),
+                intent: ActionIntent::CyclePowerProfile {
+                    direction: Direction::Next,
+                },
+            })
+            .unwrap();
+        request_tx
+            .send(ActionRequest {
+                origin: "power-popover-2".to_string(),
+                intent: ActionIntent::CyclePowerProfile {
+                    direction: Direction::Next,
+                },
+            })
+            .unwrap();
+
+        let first = completion_rx.recv().unwrap();
+        let second = completion_rx.recv().unwrap();
+        drop(request_tx);
+        handle.join().unwrap();
+
+        assert_eq!(first.result, ActionResult::Completed);
+        assert_eq!(second.result, ActionResult::Completed);
+        assert_eq!(
+            state.lock().unwrap().service_commands,
+            vec![
+                ProcessSpec::new("powerprofilesctl", ["set", "performance"]),
+                ProcessSpec::new("powerprofilesctl", ["set", "power-saver"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn threaded_worker_completion_carries_caller_supplied_origin() {
+        let state = SpyState::default_shared();
+        let router = ActionRouter::new(SpyBackend::new(state));
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let (request_tx, handle) = spawn_action_worker(router, completion_tx);
+
+        request_tx
+            .send(ActionRequest {
+                origin: "context-popover:42".to_string(),
+                intent: ActionIntent::OpenContextQuery {
+                    query: "power".to_string(),
+                },
+            })
+            .unwrap();
+
+        let completion = completion_rx.recv().unwrap();
+        drop(request_tx);
+        handle.join().unwrap();
+
+        assert_eq!(
+            completion,
+            ActionCompletion {
+                origin: "context-popover:42".to_string(),
+                intent: ActionIntent::OpenContextQuery {
+                    query: "power".to_string(),
+                },
+                result: ActionResult::Completed,
             }
         );
     }
