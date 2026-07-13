@@ -186,6 +186,10 @@ require_fixed 'systemctl --user restart cockpit-bar.service' "niri/config.kdl"
 require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart cockpit-bar.service' "niri/config.kdl"
 require_fixed 'match namespace="^cockpit-bar$"' "niri/config.kdl"
 
+require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
+require_fixed 'root.set_center_widget(Some(&center_slot_frame));' "tools/bar/src/ui/surface.rs"
+require_fixed 'while let Some(child) = self.system_items.first_child()' "tools/bar/src/ui/surface.rs"
+
 require_path "waybar/launch.sh"
 require_path "waybar/config"
 require_fixed 'git checkout 2187ecb^ -- setup.sh hypr/hyprland-config/startup.conf hypr/hyprland-config/base.conf niri/config.kdl tools/bar/README.md' "tools/bar/README.md"

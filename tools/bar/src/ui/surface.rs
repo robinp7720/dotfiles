@@ -371,7 +371,7 @@ pub struct PrimarySurface {
     title_groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     context_stack: gtk::Stack,
     context_label: gtk::Label,
-    system_box: gtk::Box,
+    system_items: gtk::Box,
     control_center: Rc<ControlCenterView>,
     popover_coordinator: Rc<RefCell<PopoverCoordinator>>,
     popover_registry: PopoverRegistry,
@@ -392,12 +392,11 @@ impl PrimarySurface {
         let popover_coordinator = Rc::new(RefCell::new(PopoverCoordinator::default()));
         let popover_registry = Rc::new(RefCell::new(BTreeMap::new()));
 
-        let grid = gtk::Grid::new();
-        grid.add_css_class("bar-root");
-        grid.set_column_spacing(12);
-        grid.set_margin_start(12);
-        grid.set_margin_end(12);
-        grid.set_size_request(-1, BAR_HEIGHT);
+        let root = gtk::CenterBox::new();
+        root.add_css_class("bar-root");
+        root.set_margin_start(12);
+        root.set_margin_end(12);
+        root.set_size_request(-1, BAR_HEIGHT);
 
         let left = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         left.add_css_class("bar-island");
@@ -409,9 +408,7 @@ impl PrimarySurface {
         let right = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
         left.set_halign(gtk::Align::Start);
-        center_slot.set_hexpand(true);
         center_slot.set_halign(gtk::Align::Center);
-        center_slot_frame.set_hexpand(true);
         center_slot_frame.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
         center_slot_frame.set_max_content_width(CENTER_SLOT_MAX_WIDTH);
         center_slot_frame.set_propagate_natural_width(true);
@@ -469,6 +466,9 @@ impl PrimarySurface {
         system_box.add_css_class("bar-island");
         system_box.add_css_class("system-cluster");
         right.append(&system_box);
+        let system_items = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+        system_items.add_css_class("system-items");
+        system_box.append(&system_items);
 
         let initial_system = spec.system.as_ref().expect("primary system spec");
         let control_center = Rc::new(ControlCenterView::new(
@@ -483,11 +483,11 @@ impl PrimarySurface {
             popover_registry.clone(),
         );
 
-        grid.attach(&left, 0, 0, 1, 1);
-        grid.attach(&center_slot_frame, 1, 0, 1, 1);
-        grid.attach(&right, 2, 0, 1, 1);
+        root.set_start_widget(Some(&left));
+        root.set_center_widget(Some(&center_slot_frame));
+        root.set_end_widget(Some(&right));
 
-        window.set_child(Some(&grid));
+        window.set_child(Some(&root));
         install_escape_dismiss(
             &window,
             popover_coordinator.clone(),
@@ -503,7 +503,7 @@ impl PrimarySurface {
             title_groups,
             context_stack,
             context_label,
-            system_box,
+            system_items,
             control_center,
             popover_coordinator,
             popover_registry,
@@ -561,8 +561,8 @@ impl PrimarySurface {
     fn render_system_modules(&self, system: &SystemCluster) {
         self.control_center.update(system.control_center());
 
-        while let Some(child) = self.system_box.first_child() {
-            self.system_box.remove(&child);
+        while let Some(child) = self.system_items.first_child() {
+            self.system_items.remove(&child);
         }
 
         for module in system.modules() {
@@ -573,7 +573,7 @@ impl PrimarySurface {
                 self.popover_coordinator.clone(),
                 self.popover_registry.clone(),
             );
-            self.system_box.append(&button);
+            self.system_items.append(&button);
         }
     }
 }
