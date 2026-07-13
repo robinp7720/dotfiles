@@ -1,10 +1,15 @@
+@define-color cockpit_shell rgba(15, 20, 28, 0.84);
+@define-color cockpit_panel rgba(15, 20, 28, 0.96);
+@define-color cockpit_item rgba(238, 245, 248, 0.06);
+@define-color cockpit_item_hover rgba(238, 245, 248, 0.11);
+@define-color cockpit_border rgba(206, 220, 227, 0.18);
+@define-color cockpit_text #eef5f8;
+@define-color cockpit_muted #9eacb4;
+
 window.bar-window {
   min-height: 44px;
-  color: @on_surface;
-  background: alpha(@surface, 0.58);
-  border: 1px solid alpha(@outline_variant, 0.92);
-  border-radius: 18px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.36);
+  color: @cockpit_text;
+  background: transparent;
   font-family: Cantarell, "Symbols Nerd Font", sans-serif;
   font-size: 14px;
 }
@@ -18,39 +23,66 @@ window.bar-window image {
   padding: 0;
 }
 
+.bar-island {
+  min-height: 36px;
+  padding: 0 8px;
+  color: @cockpit_text;
+  background: @cockpit_shell;
+  border: 1px solid @cockpit_border;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
+}
+
+.workspace-island {
+  border-spacing: 4px;
+}
+
+.app-label {
+  margin: 0 4px 0 2px;
+  color: @cockpit_muted;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .workspace-strip,
 .system-cluster {
-  border-spacing: 4px;
+  border-spacing: 2px;
 }
 
 .workspace-button,
 .title-button,
-.context-chip,
-.warning-chip,
-.clock-chip,
-button.system-module,
-popover contents button {
-  color: @on_surface;
-  border: 1px solid alpha(@outline_variant, 0.88);
+button.system-module {
+  min-height: 28px;
+  padding: 0 8px;
+  color: @cockpit_text;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .workspace-button {
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 10px;
-  background: alpha(@surface_container_high, 0.48);
+  min-width: 18px;
+  padding: 0 6px;
+  color: @cockpit_muted;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.title-button,
-.context-chip,
-.warning-chip,
-.clock-chip,
-button.system-module,
-popover contents button {
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 14px;
-  background: alpha(@surface_container_highest, 0.56);
+.workspace-button:hover,
+.title-button:hover,
+button.system-module:hover {
+  color: @cockpit_text;
+  background: @cockpit_item_hover;
+}
+
+.workspace-button.active {
+  color: @on_primary;
+  background: @primary;
+}
+
+.title-button {
+  padding: 0 10px;
 }
 
 .title-label,
@@ -59,68 +91,193 @@ popover contents button {
   font-size: 14px;
 }
 
-.clock-chip,
-button.system-module label {
-  font-size: 13px;
+.title-label {
+  font-weight: 600;
 }
 
 .context-chip,
 .warning-chip,
 .clock-chip {
-  padding-left: 12px;
-  padding-right: 12px;
+  padding: 0 12px;
+}
+
+.context-chip {
+  color: @cockpit_text;
+}
+
+.context-chip.active {
+  color: @primary;
+}
+
+.clock-chip,
+button.system-module label {
+  font-size: 13px;
 }
 
 button.system-module.inactive,
 button.system-module.stale,
 button.system-module.disconnected {
-  background: alpha(@surface_container_low, 0.52);
-  color: @on_surface_variant;
+  color: @cockpit_muted;
 }
 
-.active,
-button.system-module.active {
-  background: alpha(@primary_container, 0.70);
-  border-color: alpha(@primary, 0.92);
-  color: @on_primary_container;
-}
-
-.warning,
+.warning-chip.warning,
 button.system-module.warning,
 button.system-module.charging {
-  background: alpha(@tertiary_container, 0.76);
-  border-color: alpha(@tertiary, 0.90);
-  color: @on_tertiary_container;
+  color: @tertiary;
 }
 
-.critical,
-.urgent,
-.failed,
-button.system-module.critical {
-  background: alpha(@error_container, 0.82);
-  border-color: alpha(@error, 0.92);
-  color: @on_error_container;
+.warning-chip.critical,
+.context-chip.critical,
+button.system-module.critical,
+button.system-module.disconnected {
+  color: @error;
 }
 
 popover {
-  color: @on_surface;
+  color: @cockpit_text;
+}
+
+popover contents,
+popover.control-center contents {
+  color: @cockpit_text;
+  background: @cockpit_panel;
+  border: 1px solid @cockpit_border;
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.44);
 }
 
 popover contents {
-  background: alpha(@surface_container, 0.58);
-  border: 1px solid alpha(@outline_variant, 0.92);
-  border-radius: 18px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.36);
   padding: 8px;
 }
 
-popover contents label {
-  color: @on_surface;
+popover.control-center contents {
+  min-width: 390px;
+  padding: 0;
 }
 
-popover contents button:hover,
-.workspace-button:hover,
-.title-button:hover,
-button.system-module:hover {
-  background: alpha(@surface_container_highest, 0.64);
+popover contents label,
+popover contents image {
+  color: inherit;
+}
+
+popover contents button {
+  min-height: 30px;
+  color: @cockpit_text;
+  background: @cockpit_item;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+popover contents button:hover {
+  background: @cockpit_item_hover;
+}
+
+.control-center-root {
+  min-width: 390px;
+  padding: 16px;
+  border-spacing: 12px;
+}
+
+.control-center-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.control-center-clock {
+  color: @cockpit_muted;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.supporting-text {
+  color: @cockpit_muted;
+  font-size: 12px;
+}
+
+.control-grid,
+.summary-grid {
+  border-spacing: 8px;
+}
+
+.quick-tile {
+  min-height: 56px;
+  padding: 8px 10px;
+  background: @cockpit_item;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+
+.quick-tile.enabled {
+  color: @on_primary;
+  background: @primary;
+}
+
+.quick-tile:disabled {
+  color: alpha(@cockpit_muted, 0.62);
+  background: alpha(@cockpit_item, 0.58);
+}
+
+.quick-tile.focused,
+.control-slider-row.focused,
+.media-card.focused,
+.summary-tile.focused {
+  border-color: @primary;
+}
+
+.control-slider-row {
+  min-height: 34px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.control-slider-row scale trough {
+  min-height: 5px;
+  background: @cockpit_item_hover;
+  border-radius: 999px;
+}
+
+.control-slider-row scale highlight {
+  min-height: 5px;
+  background: @primary;
+  border-radius: 999px;
+}
+
+.control-slider-row scale slider {
+  min-width: 14px;
+  min-height: 14px;
+  background: @cockpit_text;
+  border: 2px solid @primary;
+  border-radius: 999px;
+}
+
+.media-card {
+  min-height: 48px;
+  padding: 8px;
+  background: @cockpit_item;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+
+.summary-tile {
+  min-height: 44px;
+  padding: 7px 9px;
+  background: transparent;
+  border: 1px solid @cockpit_border;
+  border-radius: 10px;
+}
+
+.control-error {
+  padding: 7px 9px;
+  color: @error;
+  background: alpha(@error, 0.12);
+  border-radius: 8px;
+}
+
+.control-footer {
+  min-height: 32px;
+  color: @cockpit_text;
+  background: transparent;
+  border: 1px solid @cockpit_border;
 }

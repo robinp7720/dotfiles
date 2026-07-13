@@ -81,4 +81,24 @@ assert_not_contains matugen/templates/dunstrc 'JetBrainsMono Nerd Font'
 assert_not_contains hypr/hyprlock.conf 'JetBrains Mono'
 assert_not_contains matugen/templates/greetd.css 'JetBrains Mono'
 
-printf 'Balanced Glass UI contract verified.\n'
+assert_contains bar/style.css \
+  '@define-color cockpit_shell rgba(15, 20, 28, 0.84);'
+assert_contains bar/style.css \
+  '@define-color cockpit_panel rgba(15, 20, 28, 0.96);'
+assert_contains bar/style.css \
+  '@define-color cockpit_text #eef5f8;'
+assert_contains bar/style.css \
+  '@define-color cockpit_muted #9eacb4;'
+assert_contains bar/style.css \
+  'background: transparent;'
+assert_contains bar/style.css \
+  '.bar-island {'
+assert_contains bar/style.css \
+  'popover.control-center contents {'
+assert_contains bar/style.css \
+  '.quick-tile {'
+assert_contains bar/style.css \
+  'button.system-module {'
+assert_not_contains bar/style.css '@surface'
+
+printf 'Desktop UI contracts verified.\n'
