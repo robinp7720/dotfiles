@@ -151,6 +151,7 @@ if [[ -x "$DIR/tools/bar/target/release/cockpit-bar" ]]; then
   link_path "$DIR/tools/bar/target/release/cockpit-bar" "$HOME/.local/bin/cockpit-bar"
   echo "Linked $HOME/.local/bin/cockpit-bar -> $DIR/tools/bar/target/release/cockpit-bar"
 else
+  remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"
   warn "skipping cockpit-bar binary link because tools/bar/target/release/cockpit-bar is missing"
 fi
 

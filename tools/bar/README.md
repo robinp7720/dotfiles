@@ -39,5 +39,6 @@ systemctl --user daemon-reload
 Tracked config rollback in this repository:
 
 ```bash
-git checkout -- setup.sh hypr/hyprland-config/startup.conf hypr/hyprland-config/base.conf niri/config.kdl systemd/user/cockpit-bar.service tools/bar/README.md
+git checkout 2187ecb^ -- setup.sh hypr/hyprland-config/startup.conf hypr/hyprland-config/base.conf niri/config.kdl tools/bar/README.md
+rm -f systemd/user/cockpit-bar.service tools/bar/tests/desktop_contract.sh
 ```
