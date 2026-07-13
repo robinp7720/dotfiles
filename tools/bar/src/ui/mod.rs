@@ -1,4 +1,5 @@
 pub mod context_card;
+pub mod control_center;
 pub mod popovers;
 pub mod surface;
 pub mod system;

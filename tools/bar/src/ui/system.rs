@@ -1,7 +1,9 @@
 use crate::{
-    ActionIntent, ActionResult, AppConfig, AudioState, BarSnapshot, ConnectivityState, Direction,
-    MediaControlAction, PlaybackStatus, PowerProfile, SourceHealth, SourceId, TimerState,
+    AppConfig, AudioState, BarSnapshot, ConnectivityState, PlaybackStatus, PowerProfile,
+    SourceHealth, SourceId,
 };
+
+use super::control_center::{ControlCenterSpec, build_control_center_spec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SystemModuleId {
@@ -24,28 +26,6 @@ impl SystemModuleId {
             Self::Clock => "clock",
         }
     }
-
-    fn title(self) -> &'static str {
-        match self {
-            Self::Keyboard => "Keyboard",
-            Self::Resources => "Resources",
-            Self::Network => "Network",
-            Self::Audio => "Audio",
-            Self::Power => "Power",
-            Self::Clock => "Clock",
-        }
-    }
-
-    fn luma_query(self) -> &'static str {
-        match self {
-            Self::Keyboard => "keyboard",
-            Self::Resources => "system",
-            Self::Network => "network",
-            Self::Audio => "audio",
-            Self::Power => "power",
-            Self::Clock => "calendar",
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,32 +38,14 @@ pub struct SystemButtonSpec {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SystemActionSpec {
-    pub label: String,
-    pub origin: String,
-    pub intent: ActionIntent,
-    pub closes_popover: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SystemPopoverSpec {
-    pub id: SystemModuleId,
-    pub title: String,
-    pub lines: Vec<String>,
-    pub controls: Vec<SystemActionSpec>,
-    pub footer: SystemActionSpec,
-    pub error: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SystemModuleSpec {
     pub button: SystemButtonSpec,
-    pub popover: SystemPopoverSpec,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SystemCluster {
     modules: Vec<SystemModuleSpec>,
+    control_center: ControlCenterSpec,
 }
 
 impl SystemCluster {
@@ -100,13 +62,8 @@ impl SystemCluster {
             .button
     }
 
-    pub fn popover(&self, id: SystemModuleId) -> &SystemPopoverSpec {
-        &self
-            .modules
-            .iter()
-            .find(|module| module.button.id == id)
-            .expect("system popover")
-            .popover
+    pub fn control_center(&self) -> &ControlCenterSpec {
+        &self.control_center
     }
 }
 
@@ -124,76 +81,12 @@ pub fn build_system_cluster(snapshot: &BarSnapshot, config: &AppConfig) -> Syste
         .into_iter()
         .map(|id| SystemModuleSpec {
             button: build_button_spec(id, snapshot, config),
-            popover: build_popover_spec(id, snapshot, config, None),
         })
         .collect();
 
-    SystemCluster { modules }
-}
-
-pub fn build_popover_spec(
-    id: SystemModuleId,
-    snapshot: &BarSnapshot,
-    config: &AppConfig,
-    result: Option<&ActionResult>,
-) -> SystemPopoverSpec {
-    let lines = match id {
-        SystemModuleId::Keyboard => keyboard_lines(snapshot),
-        SystemModuleId::Resources => resource_lines(snapshot),
-        SystemModuleId::Network => network_lines(snapshot),
-        SystemModuleId::Audio => audio_lines(snapshot),
-        SystemModuleId::Power => power_lines(snapshot, config),
-        SystemModuleId::Clock => clock_lines(snapshot),
-    };
-
-    let controls = match id {
-        SystemModuleId::Keyboard => vec![action_spec(
-            id,
-            "cycle-layout",
-            "Next layout",
-            ActionIntent::ToggleKeyboardLayout,
-            false,
-        )],
-        SystemModuleId::Audio => audio_controls(snapshot),
-        SystemModuleId::Power => vec![
-            action_spec(
-                id,
-                "profile-prev",
-                "Previous profile",
-                ActionIntent::CyclePowerProfile {
-                    direction: Direction::Previous,
-                },
-                false,
-            ),
-            action_spec(
-                id,
-                "profile-next",
-                "Next profile",
-                ActionIntent::CyclePowerProfile {
-                    direction: Direction::Next,
-                },
-                false,
-            ),
-        ],
-        SystemModuleId::Clock => clock_controls(snapshot),
-        SystemModuleId::Resources | SystemModuleId::Network => Vec::new(),
-    };
-
-    SystemPopoverSpec {
-        id,
-        title: id.title().to_string(),
-        lines,
-        controls,
-        footer: action_spec(
-            id,
-            "open-luma",
-            "Open in Luma",
-            ActionIntent::OpenContextQuery {
-                query: id.luma_query().to_string(),
-            },
-            true,
-        ),
-        error: result.and_then(action_error),
+    SystemCluster {
+        modules,
+        control_center: build_control_center_spec(snapshot),
     }
 }
 
@@ -350,199 +243,6 @@ fn clock_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
     }
 }
 
-fn keyboard_lines(snapshot: &BarSnapshot) -> Vec<String> {
-    vec![format!(
-        "Layout: {}",
-        snapshot
-            .system
-            .keyboard_layout
-            .as_deref()
-            .unwrap_or("Unknown layout")
-    )]
-}
-
-fn resource_lines(snapshot: &BarSnapshot) -> Vec<String> {
-    vec![
-        format!(
-            "CPU {}",
-            percent_or_unavailable(snapshot.system.resources.cpu_percent)
-        ),
-        format!(
-            "Memory {}",
-            percent_or_unavailable(snapshot.system.resources.memory_percent)
-        ),
-    ]
-}
-
-fn network_lines(snapshot: &BarSnapshot) -> Vec<String> {
-    let mut lines = vec![network_tooltip(snapshot)];
-    if let Some(SourceHealth::Disconnected { message }) =
-        snapshot.system.source_health.get(&SourceId::Network)
-    {
-        lines.push(format!("Dependency: {message}"));
-    }
-    lines
-}
-
-fn audio_lines(snapshot: &BarSnapshot) -> Vec<String> {
-    let mut lines = vec![format!(
-        "Volume {}",
-        percent_or_unavailable(snapshot.system.audio.volume_percent)
-    )];
-
-    if snapshot.system.audio.muted {
-        lines.push("Muted".to_string());
-    }
-
-    if snapshot.system.bluetooth.powered {
-        lines.push(
-            match snapshot.system.bluetooth.connected_device.as_deref() {
-                Some(device) => format!("Bluetooth: {device}"),
-                None => "Bluetooth on".to_string(),
-            },
-        );
-    } else {
-        lines.push("Bluetooth off".to_string());
-    }
-
-    if let Some(media) = snapshot.system.media.as_ref() {
-        lines.push(media_summary(media));
-    }
-
-    lines
-}
-
-fn power_lines(snapshot: &BarSnapshot, _config: &AppConfig) -> Vec<String> {
-    vec![
-        match snapshot.system.power.battery_percent {
-            Some(percent) if snapshot.system.power.charging => {
-                format!("Battery {percent}% (charging)")
-            }
-            Some(percent) => format!("Battery {percent}%"),
-            None => "Battery unavailable".to_string(),
-        },
-        format!(
-            "Profile: {}",
-            power_profile_label(snapshot.system.power.profile.clone())
-        ),
-    ]
-}
-
-fn clock_lines(snapshot: &BarSnapshot) -> Vec<String> {
-    let mut lines = vec![format!("Time: {}", snapshot.system.clock.label)];
-
-    if let Some(calendar) = snapshot.system.calendar.as_ref() {
-        lines.push(format!("Next: {}", calendar.title));
-    }
-
-    if let Some(timer) = snapshot.system.timers.first() {
-        lines.push(timer_line(timer));
-    }
-
-    lines
-}
-
-fn audio_controls(snapshot: &BarSnapshot) -> Vec<SystemActionSpec> {
-    if snapshot.system.media.is_none() {
-        return Vec::new();
-    }
-
-    vec![
-        action_spec(
-            SystemModuleId::Audio,
-            "previous",
-            "Previous",
-            ActionIntent::ControlMedia(MediaControlAction::Previous),
-            false,
-        ),
-        action_spec(
-            SystemModuleId::Audio,
-            "play-pause",
-            "Play/Pause",
-            ActionIntent::ControlMedia(MediaControlAction::PlayPause),
-            false,
-        ),
-        action_spec(
-            SystemModuleId::Audio,
-            "next",
-            "Next",
-            ActionIntent::ControlMedia(MediaControlAction::Next),
-            false,
-        ),
-    ]
-}
-
-fn clock_controls(snapshot: &BarSnapshot) -> Vec<SystemActionSpec> {
-    let mut controls = vec![action_spec(
-        SystemModuleId::Clock,
-        "start-5m",
-        "Start 5m timer",
-        ActionIntent::StartTimer {
-            label: "Quick timer".to_string(),
-            duration_seconds: 5 * 60,
-        },
-        false,
-    )];
-
-    if let Some(timer) = snapshot.system.timers.first() {
-        if timer.completed {
-            controls.push(action_spec(
-                SystemModuleId::Clock,
-                "cancel-timer",
-                "Clear timer",
-                ActionIntent::CancelTimer {
-                    id: timer.id.clone(),
-                },
-                false,
-            ));
-        } else if timer.target_epoch.is_some() {
-            controls.push(action_spec(
-                SystemModuleId::Clock,
-                "pause-timer",
-                "Pause timer",
-                ActionIntent::PauseTimer {
-                    id: timer.id.clone(),
-                },
-                false,
-            ));
-        } else {
-            controls.push(action_spec(
-                SystemModuleId::Clock,
-                "resume-timer",
-                "Resume timer",
-                ActionIntent::ResumeTimer {
-                    id: timer.id.clone(),
-                },
-                false,
-            ));
-        }
-    }
-
-    controls
-}
-
-fn action_spec(
-    module_id: SystemModuleId,
-    suffix: &str,
-    label: &str,
-    intent: ActionIntent,
-    closes_popover: bool,
-) -> SystemActionSpec {
-    SystemActionSpec {
-        label: label.to_string(),
-        origin: format!("system-popover:{}:{suffix}", module_id.as_str()),
-        intent,
-        closes_popover,
-    }
-}
-
-fn action_error(result: &ActionResult) -> Option<String> {
-    match result {
-        ActionResult::Failed { detail, .. } => Some(detail.clone()),
-        ActionResult::Completed => None,
-    }
-}
-
 fn short_layout_label(layout: &str) -> String {
     let lower = layout.to_ascii_lowercase();
     if lower.contains("dvorak") {
@@ -660,18 +360,6 @@ fn power_tooltip(snapshot: &BarSnapshot) -> String {
     )
 }
 
-fn timer_line(timer: &TimerState) -> String {
-    if timer.completed {
-        format!("Timer {} completed", timer.label)
-    } else {
-        format!(
-            "Timer {} {} remaining",
-            timer.label,
-            format_duration(timer.remaining_seconds)
-        )
-    }
-}
-
 fn media_summary(media: &crate::MediaState) -> String {
     let status = match media.status {
         PlaybackStatus::Playing => "Playing",
@@ -742,27 +430,16 @@ fn percent_or_unavailable(value: Option<u8>) -> String {
         .unwrap_or_else(|| "unavailable".to_string())
 }
 
-fn format_duration(seconds: u64) -> String {
-    let minutes = seconds / 60;
-    let seconds = seconds % 60;
-    if minutes == 0 {
-        format!("{seconds}s")
-    } else {
-        format!("{minutes}m {seconds:02}s")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use crate::{
-        ActionResult, AppConfig, AudioState, BarSnapshot, BluetoothState, ClockState,
-        ConnectivityState, MediaState, NetworkState, PlaybackStatus, PowerProfile, PowerState,
-        ResourceState, SourceHealth, SourceId,
+        AppConfig, AudioState, BarSnapshot, BluetoothState, ClockState, ConnectivityState,
+        NetworkState, PowerProfile, PowerState, ResourceState, SourceHealth, SourceId,
     };
 
-    use super::{SystemModuleId, build_popover_spec, build_system_cluster};
+    use super::{SystemModuleId, build_system_cluster};
 
     #[test]
     fn keyboard_button_compacts_us_and_dvorak_layout_labels() {
@@ -887,31 +564,6 @@ mod tests {
 
         assert!(resources.classes.iter().any(|class| class == "stale"));
         assert!(resources.tooltip.contains("Stale"));
-    }
-
-    #[test]
-    fn audio_popover_surfaces_media_and_last_action_failure() {
-        let mut snapshot = snapshot();
-        snapshot.system.media = Some(MediaState {
-            player: "spotify".to_string(),
-            status: PlaybackStatus::Playing,
-            title: Some("Says".to_string()),
-            artist: Some("Nils Frahm".to_string()),
-            changed_at: 0,
-        });
-
-        let popover = build_popover_spec(
-            SystemModuleId::Audio,
-            &snapshot,
-            &AppConfig::default(),
-            Some(&ActionResult::Failed {
-                summary: "Action failed".to_string(),
-                detail: "playerctl missing".to_string(),
-            }),
-        );
-
-        assert!(popover.lines.iter().any(|line| line.contains("Nils Frahm")));
-        assert_eq!(popover.error.as_deref(), Some("playerctl missing"));
     }
 
     fn snapshot() -> BarSnapshot {
