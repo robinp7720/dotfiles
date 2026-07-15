@@ -39,11 +39,18 @@ new_repo() {
 run_wrapper() {
   local workdir="$1"
   local codex_bin="$2"
+  local force_arg="${3:---force}"
+  local cooldown_hours="${4:-0}"
   local repo="$workdir/repo"
   local state_home="$workdir/state"
   local runtime_dir="$workdir/runtime"
   local prompt_file="$workdir/prompt.md"
   local output_file="$workdir/output.log"
+  local -a wrapper_args=(--no-commit)
+
+  if [[ -n "$force_arg" ]]; then
+    wrapper_args=("$force_arg" "${wrapper_args[@]}")
+  fi
 
   mkdir -p "$state_home" "$runtime_dir"
   printf 'test prompt\n' >"$prompt_file"
@@ -55,9 +62,9 @@ run_wrapper() {
   CODEX_SELF_IMPROVE_REPO_DIR="$repo" \
   CODEX_SELF_IMPROVE_PROMPT_FILE="$prompt_file" \
   CODEX_SELF_IMPROVE_CODEX_BIN="$codex_bin" \
-  CODEX_SELF_IMPROVE_COOLDOWN_HOURS=0 \
+  CODEX_SELF_IMPROVE_COOLDOWN_HOURS="$cooldown_hours" \
   CODEX_SELF_IMPROVE_NOTIFY_FAILURES=0 \
-    "$SCRIPT_UNDER_TEST" --force --no-commit >"$output_file" 2>&1
+    "$SCRIPT_UNDER_TEST" "${wrapper_args[@]}" >"$output_file" 2>&1
   local exit_code=$?
   set -e
 
@@ -123,6 +130,45 @@ FAKE_CODEX
   }
 }
 
+test_invalid_last_run_epoch_is_ignored() {
+  local workdir="$1"
+  local repo="$workdir/repo"
+  local fake_codex="$workdir/fake-codex"
+  local state_dir="$workdir/state/codex-self-improve"
+
+  new_repo "$repo"
+  mkdir -p "$state_dir"
+  printf 'not-a-timestamp\n' >"$state_dir/last-run-epoch"
+
+  cat >"$fake_codex" <<'FAKE_CODEX'
+#!/usr/bin/env bash
+report_file=""
+while (($# > 0)); do
+  if [[ "$1" == "-o" || "$1" == "--output-last-message" ]]; then
+    shift
+    report_file="$1"
+  fi
+  shift || true
+done
+cat >"$report_file" <<'REPORT'
+STATUS: no_change
+TITLE: No change
+SUMMARY: Nothing worth changing.
+FILES: none
+VALIDATION: none
+REPORT
+FAKE_CODEX
+  chmod +x "$fake_codex"
+
+  exit_code="$(run_wrapper "$workdir" "$fake_codex" "" 24)"
+
+  [[ "$exit_code" == "0" ]] || fail "invalid last-run timestamp should not abort wrapper"
+  assert_file_contains "$state_dir/last-summary.txt" "status=no_change"
+  grep -Eq '^[0-9]+$' "$state_dir/last-run-epoch" || {
+    fail "successful run should replace invalid cooldown timestamp"
+  }
+}
+
 main() {
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -130,6 +176,7 @@ main() {
 
   test_failed_codex_marks_run_failed "$tmpdir/failed"
   test_successful_no_change_updates_cooldown "$tmpdir/no-change"
+  test_invalid_last_run_epoch_is_ignored "$tmpdir/invalid-last-run"
 
   printf 'ok - codex self-improve wrapper tests passed\n'
 }

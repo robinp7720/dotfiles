@@ -241,6 +241,11 @@ if [[ -f "$LAST_RUN_FILE" ]]; then
   last_run_epoch="$(cat "$LAST_RUN_FILE")"
 fi
 
+if [[ ! "$last_run_epoch" =~ ^[0-9]+$ ]]; then
+  log "ignoring invalid last-run timestamp: $last_run_epoch"
+  last_run_epoch=0
+fi
+
 now_epoch="$(date +%s)"
 cooldown_seconds=$((COOLDOWN_HOURS * 3600))
 
