@@ -114,9 +114,9 @@ impl<B: ActionBackend> ActionRouter<B> {
             ActionIntent::OpenContextQuery { query } => {
                 self.backend.launch_process(luma_query_process(&query))
             }
-            ActionIntent::ControlMedia(action) => {
-                self.backend.execute_service_command(media_process(action))
-            }
+            ActionIntent::ControlMedia { player, action } => self
+                .backend
+                .execute_service_command(media_process(&player, action)),
             ActionIntent::SetVolumePercent { percent } => self
                 .backend
                 .execute_service_command(volume_process(percent)),
@@ -275,13 +275,16 @@ fn luma_query_process(query: &str) -> ProcessSpec {
     ProcessSpec::new("Luma", ["--query", query])
 }
 
-fn media_process(action: MediaControlAction) -> ProcessSpec {
+fn media_process(player: &str, action: MediaControlAction) -> ProcessSpec {
     let verb = match action {
         MediaControlAction::Previous => "previous",
         MediaControlAction::Next => "next",
         MediaControlAction::PlayPause => "play-pause",
     };
-    ProcessSpec::new("playerctl", [verb])
+    ProcessSpec::new(
+        "playerctl",
+        [format!("--player={player}"), verb.to_string()],
+    )
 }
 
 fn volume_process(percent: u8) -> ProcessSpec {
@@ -389,21 +392,33 @@ mod tests {
     }
 
     #[test]
-    fn media_scroll_routes_to_playerctl_without_shell_expansion() {
+    fn media_controls_target_the_selected_player_without_shell_expansion() {
         let state = SpyState::default_shared();
         let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
 
-        let previous = router.execute(ActionIntent::ControlMedia(MediaControlAction::Previous));
-        let next = router.execute(ActionIntent::ControlMedia(MediaControlAction::Next));
+        let previous = router.execute(ActionIntent::ControlMedia {
+            player: "spotify".to_string(),
+            action: MediaControlAction::Previous,
+        });
+        let next = router.execute(ActionIntent::ControlMedia {
+            player: "spotify".to_string(),
+            action: MediaControlAction::Next,
+        });
+        let play_pause = router.execute(ActionIntent::ControlMedia {
+            player: "spotify".to_string(),
+            action: MediaControlAction::PlayPause,
+        });
 
         assert_eq!(previous, ActionResult::Completed);
         assert_eq!(next, ActionResult::Completed);
+        assert_eq!(play_pause, ActionResult::Completed);
         let commands = state.lock().unwrap().service_commands.clone();
         assert_eq!(
             commands,
             vec![
-                ProcessSpec::new("playerctl", ["previous"]),
-                ProcessSpec::new("playerctl", ["next"]),
+                ProcessSpec::new("playerctl", ["--player=spotify", "previous"]),
+                ProcessSpec::new("playerctl", ["--player=spotify", "next"]),
+                ProcessSpec::new("playerctl", ["--player=spotify", "play-pause"]),
             ]
         );
         assert_no_shell_expansion(&commands);

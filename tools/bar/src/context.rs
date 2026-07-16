@@ -81,12 +81,28 @@ struct Candidate {
     changed_at: i64,
 }
 
-fn priority_key(candidate: &Candidate) -> (u8, Reverse<i64>, i64) {
+fn priority_key(candidate: &Candidate) -> (u8, u8, Reverse<i64>, i64) {
     (
         candidate.tier as u8,
+        ambient_priority(candidate),
         Reverse(candidate.action_deadline.unwrap_or(i64::MAX)),
         candidate.changed_at,
     )
+}
+
+fn ambient_priority(candidate: &Candidate) -> u8 {
+    if candidate.tier != ContextTier::Ambient {
+        return 0;
+    }
+
+    match candidate.card {
+        ContextCard::Media {
+            status: PlaybackStatus::Playing,
+            ..
+        } => 2,
+        ContextCard::Calendar { .. } => 1,
+        _ => 0,
+    }
 }
 
 pub fn select_context(
@@ -176,7 +192,11 @@ fn candidates(
     }
 
     if source_is_healthy(snapshot, SourceId::Media)
-        && let Some(media) = snapshot.system.media.as_ref()
+        && let Some(media) = snapshot
+            .system
+            .media
+            .as_ref()
+            .filter(|media| media.status == PlaybackStatus::Playing)
     {
         candidates.push(media_candidate(media));
     }
@@ -369,6 +389,11 @@ fn calendar_candidate(
     } else {
         "ambient"
     };
+    let action_deadline = if calendar.start_epoch <= now_epoch {
+        calendar.end_epoch.unwrap_or(now_epoch)
+    } else {
+        calendar.start_epoch
+    };
 
     Candidate {
         card: ContextCard::Calendar {
@@ -381,7 +406,7 @@ fn calendar_candidate(
         key: format!("calendar:{}", calendar.id),
         generation: generation.to_string(),
         tier,
-        action_deadline: Some(calendar.start_epoch),
+        action_deadline: Some(action_deadline),
         changed_at: calendar.changed_at,
     }
 }
@@ -406,7 +431,7 @@ fn activity_candidates(
             )),
             ActivityStatus::Succeeded | ActivityStatus::Failed => {
                 let finished_at = activity.finished_at?;
-                if finished_at + visible_for < now_epoch {
+                if finished_at + visible_for <= now_epoch {
                     return None;
                 }
 
@@ -560,8 +585,8 @@ mod tests {
 
     use crate::{
         ActivityState, ActivityStatus, BarSnapshot, CalendarEvent, CommandActivity, MediaState,
-        OutputState, PlaybackStatus, PowerProfile, PowerState, ThresholdConfig, TimerState,
-        WindowState,
+        OutputState, PlaybackStatus, PowerProfile, PowerState, SourceHealth, SourceId,
+        ThresholdConfig, TimerState, WindowState,
     };
 
     use super::{ContextCard, Dismissals, select_context};
@@ -613,6 +638,123 @@ mod tests {
             select_context(&snapshot, now, &ThresholdConfig::default(), &Dismissals::default()),
             Some(ContextCard::Timer { ref id, completed: true, .. }) if id == "tea"
         ));
+    }
+
+    #[test]
+    fn playing_media_beats_a_non_imminent_calendar_event() {
+        let now = 1_800_000_000;
+        let snapshot = fixture_snapshot()
+            .with_event("review", now + 2 * 60 * 60)
+            .with_media("Track", PlaybackStatus::Playing)
+            .build();
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Media { ref title, .. }) if title.as_deref() == Some("Track")
+        ));
+    }
+
+    #[test]
+    fn imminent_calendar_still_beats_playing_media() {
+        let now = 1_800_000_000;
+        let snapshot = fixture_snapshot()
+            .with_event("review", now + 10 * 60)
+            .with_media("Track", PlaybackStatus::Playing)
+            .build();
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Calendar { ref id, .. }) if id == "review"
+        ));
+    }
+
+    #[test]
+    fn sooner_timer_beats_an_ongoing_calendar_event() {
+        let now = 1_800_000_000;
+        let snapshot = fixture_snapshot()
+            .with_event("review", now - 10 * 60)
+            .with_timer("tea", 60, Some(now + 60), false)
+            .build();
+
+        assert!(matches!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            Some(ContextCard::Timer { ref id, .. }) if id == "tea"
+        ));
+    }
+
+    #[test]
+    fn paused_media_is_not_center_context() {
+        let now = 1_800_000_000;
+        let snapshot = fixture_snapshot()
+            .with_media("Track", PlaybackStatus::Paused)
+            .build();
+
+        assert_eq!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn disconnected_media_is_not_center_context() {
+        let now = 1_800_000_000;
+        let mut snapshot = fixture_snapshot()
+            .with_media("Track", PlaybackStatus::Playing)
+            .build();
+        snapshot.system.source_health.insert(
+            SourceId::Media,
+            SourceHealth::Disconnected {
+                message: "playerctl exited".to_string(),
+            },
+        );
+
+        assert_eq!(
+            select_context(
+                &snapshot,
+                now,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn completed_activity_expires_at_the_configured_boundary() {
+        let now = 1_800_000_000;
+        let snapshot = fixture_snapshot()
+            .with_build("cargo test", ActivityStatus::Succeeded)
+            .build();
+
+        assert_eq!(
+            select_context(
+                &snapshot,
+                now + ThresholdConfig::default().work_completed_seconds as i64,
+                &ThresholdConfig::default(),
+                &Dismissals::default()
+            ),
+            None
+        );
     }
 
     #[test]
@@ -888,6 +1030,7 @@ mod tests {
 
         fn with_battery(mut self, percent: u8, charging: bool) -> Self {
             self.snapshot.system.power = PowerState {
+                battery_present: true,
                 battery_percent: Some(percent),
                 charging,
                 profile: PowerProfile::Balanced,
@@ -943,13 +1086,13 @@ mod tests {
             self
         }
 
-        #[allow(dead_code)]
-        fn with_media(mut self, title: &str) -> Self {
+        fn with_media(mut self, title: &str, status: PlaybackStatus) -> Self {
             self.snapshot.system.media = Some(MediaState {
                 player: "player".to_string(),
-                status: PlaybackStatus::Playing,
+                status,
                 title: Some(title.to_string()),
                 artist: Some("Artist".to_string()),
+                art_url: None,
                 changed_at: 1_799_999_950,
             });
             self

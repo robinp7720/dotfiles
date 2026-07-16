@@ -236,6 +236,32 @@ mod tests {
     }
 
     #[test]
+    fn completed_activity_is_pruned_at_the_retention_boundary() {
+        let mut tracker = ActivityTracker::new(30);
+        assert!(tracker.apply(
+            ActivityUpdate::Started(started(
+                "shell-1",
+                "Cargo test",
+                "/tmp/project",
+                1_800_000_000,
+            )),
+            1_800_000_000,
+        ));
+        assert!(tracker.apply(
+            ActivityUpdate::Finished {
+                id: "shell-1".to_string(),
+                finished_at: 1_800_000_005,
+                exit_code: 0,
+            },
+            1_800_000_005,
+        ));
+
+        assert!(!tracker.prune(1_800_000_034));
+        assert!(tracker.prune(1_800_000_035));
+        assert!(tracker.snapshot().items.is_empty());
+    }
+
+    #[test]
     fn activity_tracker_logs_unknown_finish_only_once() {
         let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let subscriber = tracing_subscriber::fmt()

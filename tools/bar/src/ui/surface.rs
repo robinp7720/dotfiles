@@ -17,7 +17,7 @@ use crate::{
     select_context,
 };
 
-use super::context_card::{context_text, context_tier, warning_text};
+use super::context_card::{context_presentation, context_tier, warning_text};
 use super::control_center::{ControlCenterFocus, ControlCenterView};
 use super::popovers::PopoverCoordinator;
 use super::system::{SystemButtonSpec, SystemCluster, SystemModuleId, build_system_cluster};
@@ -27,7 +27,8 @@ const BAR_HEIGHT: i32 = 44;
 const SURFACE_MARGIN: i32 = 5;
 const WORKSPACE_BUTTON_MIN_WIDTH: i32 = 32;
 const WORKSPACE_BUTTON_MIN_HEIGHT: i32 = 28;
-const CENTER_SLOT_MAX_WIDTH: i32 = 560;
+const CENTER_SLOT_MIN_WIDTH: i32 = 360;
+const CENTER_TEXT_MAX_CHARS: i32 = 56;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceSpec {
@@ -59,6 +60,7 @@ pub struct TitleSpec {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContextSpec {
     pub card: ContextCard,
+    pub icon_name: String,
     pub text: String,
     pub tier: ContextTier,
 }
@@ -115,10 +117,14 @@ pub fn surface_specs(snapshot: &BarSnapshot, config: &AppConfig) -> Vec<SurfaceS
         &config.thresholds,
         &Dismissals::default(),
     );
-    let primary_context = selected_context.as_ref().map(|card| ContextSpec {
-        card: card.clone(),
-        text: context_text(card),
-        tier: context_tier(card),
+    let primary_context = selected_context.as_ref().map(|card| {
+        let presentation = context_presentation(card, now_epoch);
+        ContextSpec {
+            card: card.clone(),
+            icon_name: presentation.icon_name,
+            text: presentation.text,
+            tier: presentation.tier,
+        }
     });
     let reduced_warning = selected_context
         .as_ref()
@@ -204,11 +210,37 @@ fn workspace_button_spec(workspace: &WorkspaceState) -> WorkspaceButtonSpec {
     }
 }
 
-type PopoverRegistry = Rc<RefCell<BTreeMap<String, gtk::Popover>>>;
+#[derive(Clone)]
+enum ManagedOverlay {
+    Popover(gtk::Popover),
+    ControlCenter(Rc<ControlCenterView>),
+}
+
+impl ManagedOverlay {
+    fn hide(&self) {
+        match self {
+            Self::Popover(popover) => popover.popdown(),
+            Self::ControlCenter(control_center) => control_center.dismiss(),
+        }
+    }
+
+    fn destroy(self) {
+        match self {
+            Self::Popover(popover) => {
+                popover.popdown();
+                if popover.parent().is_some() {
+                    popover.unparent();
+                }
+            }
+            Self::ControlCenter(control_center) => control_center.destroy(),
+        }
+    }
+}
+
+type PopoverRegistry = Rc<RefCell<BTreeMap<String, ManagedOverlay>>>;
 
 pub struct SurfaceRegistry {
     surfaces: BTreeMap<String, SurfaceHandle>,
-    connectors: BTreeSet<String>,
 }
 
 impl Default for SurfaceRegistry {
@@ -221,7 +253,6 @@ impl SurfaceRegistry {
     pub fn new() -> Self {
         Self {
             surfaces: BTreeMap::new(),
-            connectors: BTreeSet::new(),
         }
     }
 
@@ -243,13 +274,6 @@ impl SurfaceRegistry {
             .filter(|spec| monitors.contains_key(&spec.output_name))
             .map(|spec| spec.output_name.clone())
             .collect::<BTreeSet<_>>();
-
-        if topology_changed(&self.connectors, &desired_connectors) {
-            for surface in self.surfaces.values() {
-                surface.dismiss_popovers();
-            }
-        }
-        self.connectors = desired_connectors.clone();
 
         let stale = self
             .surfaces
@@ -292,7 +316,6 @@ impl SurfaceRegistry {
         for (_, surface) in std::mem::take(&mut self.surfaces) {
             surface.close();
         }
-        self.connectors.clear();
     }
 
     pub fn handle_completion(&mut self, completion: &ActionCompletion) -> bool {
@@ -367,14 +390,8 @@ impl SurfaceHandle {
 
     fn close(self) {
         match self {
-            Self::Primary(surface) => surface.window.close(),
-            Self::Reduced(surface) => surface.window.close(),
-        }
-    }
-
-    fn dismiss_popovers(&self) {
-        if let Self::Primary(surface) = self {
-            surface.dismiss_popovers();
+            Self::Primary(surface) => surface.close(),
+            Self::Reduced(surface) => surface.close(),
         }
     }
 }
@@ -386,10 +403,11 @@ pub struct PrimarySurface {
     title_label: gtk::Label,
     title_groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     context_stack: gtk::Stack,
+    context_row: gtk::Box,
+    context_icon: gtk::Image,
     context_label: gtk::Label,
     status_buttons: BTreeMap<SystemModuleId, StatusButtonView>,
     control_center: Rc<ControlCenterView>,
-    popover_coordinator: Rc<RefCell<PopoverCoordinator>>,
     popover_registry: PopoverRegistry,
     action_sender: Sender<ActionRequest>,
     current_spec: Option<SurfaceSpec>,
@@ -417,18 +435,15 @@ impl PrimarySurface {
         let left = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         left.add_css_class("bar-island");
         left.add_css_class("workspace-island");
-        let center_slot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let center_slot_frame = gtk::ScrolledWindow::new();
-        center_slot_frame.add_css_class("bar-island");
-        center_slot_frame.add_css_class("context-island");
+        let center_slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        center_slot.add_css_class("bar-island");
+        center_slot.add_css_class("context-island");
         let right = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
         left.set_halign(gtk::Align::Start);
         center_slot.set_halign(gtk::Align::Center);
-        center_slot_frame.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
-        center_slot_frame.set_max_content_width(CENTER_SLOT_MAX_WIDTH);
-        center_slot_frame.set_propagate_natural_width(true);
-        center_slot_frame.set_child(Some(&center_slot));
+        center_slot.set_hexpand(false);
+        center_slot.set_size_request(CENTER_SLOT_MIN_WIDTH, -1);
         right.set_halign(gtk::Align::End);
 
         let workspaces = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -448,11 +463,20 @@ impl PrimarySurface {
         title_button.set_halign(gtk::Align::Fill);
         let title_label = gtk::Label::new(None);
         title_label.add_css_class("title-label");
-        title_label.set_hexpand(true);
+        title_label.set_hexpand(false);
         title_label.set_max_width_chars(48);
         title_label.set_ellipsize(EllipsizeMode::End);
-        title_label.set_xalign(0.0);
-        title_button.set_child(Some(&title_label));
+        title_label.set_xalign(0.5);
+        let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        title_row.set_hexpand(false);
+        title_row.set_halign(gtk::Align::Center);
+        let title_icon = gtk::Image::from_icon_name("focus-windows-symbolic");
+        title_icon.add_css_class("context-icon");
+        title_icon.set_pixel_size(16);
+        title_icon.set_size_request(16, 16);
+        title_row.append(&title_icon);
+        title_row.append(&title_label);
+        title_button.set_child(Some(&title_row));
 
         let title_groups = Rc::new(RefCell::new(Vec::new()));
         install_title_interactions(
@@ -465,15 +489,29 @@ impl PrimarySurface {
         );
 
         let context_stack = gtk::Stack::new();
-        context_stack.set_halign(gtk::Align::Start);
+        context_stack.set_halign(gtk::Align::Fill);
+        context_stack.set_hexpand(true);
+        context_stack.set_hhomogeneous(false);
+        context_stack.set_vhomogeneous(true);
         context_stack.set_transition_duration(180);
         context_stack.set_transition_type(context_transition_type());
+        let context_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        context_row.add_css_class("context-chip");
+        context_row.set_hexpand(false);
+        context_row.set_halign(gtk::Align::Center);
+        let context_icon = gtk::Image::new();
+        context_icon.add_css_class("context-icon");
+        context_icon.set_pixel_size(16);
+        context_icon.set_size_request(16, 16);
         let context_label = gtk::Label::new(None);
-        context_label.add_css_class("context-chip");
-        context_label.set_xalign(0.0);
+        context_label.set_hexpand(false);
+        context_label.set_xalign(0.5);
+        context_label.set_max_width_chars(CENTER_TEXT_MAX_CHARS);
         context_label.set_ellipsize(EllipsizeMode::End);
+        context_row.append(&context_icon);
+        context_row.append(&context_label);
         context_stack.add_named(&title_button, Some("title"));
-        context_stack.add_named(&context_label, Some("context"));
+        context_stack.add_named(&context_row, Some("context"));
         context_stack.set_visible_child_name("title");
 
         center_slot.append(&context_stack);
@@ -488,13 +526,16 @@ impl PrimarySurface {
 
         let initial_system = spec.system.as_ref().expect("primary system spec");
         let control_center = Rc::new(ControlCenterView::new(
-            &system_box,
+            application,
+            monitor,
+            SURFACE_MARGIN,
+            SURFACE_MARGIN,
             initial_system.control_center(),
             action_sender.clone(),
         ));
-        register_popover(
+        register_control_window(
             "control-center",
-            control_center.popover(),
+            control_center.clone(),
             popover_coordinator.clone(),
             popover_registry.clone(),
         );
@@ -512,7 +553,7 @@ impl PrimarySurface {
         }
 
         root.set_start_widget(Some(&left));
-        root.set_center_widget(Some(&center_slot_frame));
+        root.set_center_widget(Some(&center_slot));
         root.set_end_widget(Some(&right));
 
         window.set_child(Some(&root));
@@ -530,10 +571,11 @@ impl PrimarySurface {
             title_label,
             title_groups,
             context_stack,
+            context_row,
+            context_icon,
             context_label,
             status_buttons,
             control_center,
-            popover_coordinator,
             popover_registry,
             action_sender,
             current_spec: None,
@@ -569,12 +611,14 @@ impl PrimarySurface {
 
         if plan.context {
             if let Some(context) = spec.context.as_ref() {
+                self.context_icon.set_icon_name(Some(&context.icon_name));
                 self.context_label.set_label(&context.text);
-                apply_tier_classes(&self.context_label, context.tier);
+                apply_tier_classes(&self.context_row, context.tier);
                 self.context_stack.set_visible_child_name("context");
             } else {
+                self.context_icon.set_icon_name(None);
                 self.context_label.set_label("");
-                clear_tier_classes(&self.context_label);
+                clear_tier_classes(&self.context_row);
                 self.context_stack.set_visible_child_name("title");
             }
         }
@@ -586,8 +630,9 @@ impl PrimarySurface {
         self.control_center.handle_completion(completion)
     }
 
-    fn dismiss_popovers(&self) {
-        popdown_active_popover(&self.popover_coordinator, &self.popover_registry);
+    fn close(self) {
+        destroy_popovers(&self.popover_registry);
+        self.window.close();
     }
 
     fn render_system_modules(&mut self, system: &SystemCluster) {
@@ -610,6 +655,7 @@ pub struct ReducedSurface {
     title_groups: Rc<RefCell<Vec<WindowGroupSpec>>>,
     warning_label: gtk::Label,
     clock_label: gtk::Label,
+    popover_registry: PopoverRegistry,
     action_sender: Sender<ActionRequest>,
     current_spec: Option<SurfaceSpec>,
 }
@@ -691,7 +737,7 @@ impl ReducedSurface {
         root.attach(&right, 1, 0, 1, 1);
 
         window.set_child(Some(&root));
-        install_escape_dismiss(&window, popover_coordinator, popover_registry);
+        install_escape_dismiss(&window, popover_coordinator, popover_registry.clone());
         window.present();
 
         let mut surface = Self {
@@ -702,6 +748,7 @@ impl ReducedSurface {
             title_groups,
             warning_label,
             clock_label,
+            popover_registry,
             action_sender,
             current_spec: None,
         };
@@ -746,6 +793,11 @@ impl ReducedSurface {
 
         self.current_spec = Some(spec.clone());
     }
+
+    fn close(self) {
+        destroy_popovers(&self.popover_registry);
+        self.window.close();
+    }
 }
 
 fn base_window(application: &gtk::Application, monitor: &gdk::Monitor) -> gtk::ApplicationWindow {
@@ -773,10 +825,6 @@ fn base_window(application: &gtk::Application, monitor: &gdk::Monitor) -> gtk::A
 
 fn bar_window_width_for_monitor_width(monitor_width: i32) -> i32 {
     monitor_width.saturating_sub(SURFACE_MARGIN * 2).max(1)
-}
-
-fn topology_changed(previous: &BTreeSet<String>, next: &BTreeSet<String>) -> bool {
-    !previous.is_empty() && previous != next
 }
 
 fn render_workspaces(
@@ -1010,16 +1058,27 @@ fn build_status_button(
     let focus = control_focus(button_spec.id);
     let center_for_click = control_center.clone();
     button.connect_clicked(move |_| {
-        center_for_click.focus(focus);
-        show_managed_popover(
+        if center_for_click.is_visible() && center_for_click.current_page() == focus {
+            center_for_click.dismiss();
+            return;
+        }
+        center_for_click.show_page(focus);
+        show_managed_window(
             "control-center",
-            center_for_click.popover(),
+            center_for_click.clone(),
             coordinator.clone(),
             registry.clone(),
         );
     });
 
-    if let Some((previous, next)) = scroll_actions(button_spec.id) {
+    if button_spec.id == SystemModuleId::Audio {
+        install_media_scroll(
+            &button,
+            action_sender.clone(),
+            control_center,
+            format!("scroll:{}", button_spec.id.as_str()),
+        );
+    } else if let Some((previous, next)) = scroll_actions(button_spec.id) {
         install_action_scroll(
             &button,
             action_sender.clone(),
@@ -1057,6 +1116,41 @@ fn install_action_scroll(
     next: ActionIntent,
     origin: String,
 ) {
+    install_direction_scroll(widget, action_sender, origin, move |direction| {
+        Some(match direction {
+            Direction::Previous => previous.clone(),
+            Direction::Next => next.clone(),
+        })
+    });
+}
+
+fn install_media_scroll(
+    widget: &impl IsA<gtk::Widget>,
+    action_sender: Sender<ActionRequest>,
+    control_center: Rc<ControlCenterView>,
+    origin: String,
+) {
+    install_direction_scroll(widget, action_sender, origin, move |direction| {
+        control_center
+            .media_player()
+            .map(|player| ActionIntent::ControlMedia {
+                player,
+                action: match direction {
+                    Direction::Previous => MediaControlAction::Previous,
+                    Direction::Next => MediaControlAction::Next,
+                },
+            })
+    });
+}
+
+fn install_direction_scroll<F>(
+    widget: &impl IsA<gtk::Widget>,
+    action_sender: Sender<ActionRequest>,
+    origin: String,
+    intent_for_direction: F,
+) where
+    F: Fn(Direction) -> Option<ActionIntent> + 'static,
+{
     let scroll = gtk::EventControllerScroll::new(
         gtk::EventControllerScrollFlags::VERTICAL
             | gtk::EventControllerScrollFlags::HORIZONTAL
@@ -1066,9 +1160,8 @@ fn install_action_scroll(
         let Some(direction) = scroll_direction(dx, dy) else {
             return glib::Propagation::Proceed;
         };
-        let intent = match direction {
-            Direction::Previous => previous.clone(),
-            Direction::Next => next.clone(),
+        let Some(intent) = intent_for_direction(direction) else {
+            return glib::Propagation::Proceed;
         };
         let _ = action_sender.send(ActionRequest {
             origin: origin.clone(),
@@ -1085,13 +1178,34 @@ fn register_popover(
     coordinator: Rc<RefCell<PopoverCoordinator>>,
     registry: PopoverRegistry,
 ) {
-    registry
-        .borrow_mut()
-        .insert(popover_id.to_string(), popover.clone());
+    registry.borrow_mut().insert(
+        popover_id.to_string(),
+        ManagedOverlay::Popover(popover.clone()),
+    );
     let popover_id = popover_id.to_string();
     popover.connect_closed(move |_| {
         coordinator.borrow_mut().close(&popover_id);
     });
+}
+
+fn register_control_window(
+    overlay_id: &str,
+    control_center: Rc<ControlCenterView>,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) {
+    registry.borrow_mut().insert(
+        overlay_id.to_string(),
+        ManagedOverlay::ControlCenter(control_center.clone()),
+    );
+    let overlay_id = overlay_id.to_string();
+    control_center
+        .window()
+        .connect_visible_notify(move |window| {
+            if !window.is_visible() {
+                coordinator.borrow_mut().close(&overlay_id);
+            }
+        });
 }
 
 fn show_managed_popover(
@@ -1104,9 +1218,26 @@ fn show_managed_popover(
         && previous != popover_id
         && let Some(active) = registry.borrow().get(&previous).cloned()
     {
-        active.popdown();
+        active.hide();
     }
-    popover.popup();
+    if !popover.is_visible() {
+        popover.popup();
+    }
+}
+
+fn show_managed_window(
+    overlay_id: &str,
+    control_center: Rc<ControlCenterView>,
+    coordinator: Rc<RefCell<PopoverCoordinator>>,
+    registry: PopoverRegistry,
+) {
+    if let Some(previous) = coordinator.borrow_mut().open(overlay_id)
+        && previous != overlay_id
+        && let Some(active) = registry.borrow().get(&previous).cloned()
+    {
+        active.hide();
+    }
+    control_center.present();
 }
 
 fn popdown_active_popover(
@@ -1114,9 +1245,9 @@ fn popdown_active_popover(
     registry: &PopoverRegistry,
 ) {
     if let Some(active) = coordinator.borrow_mut().clear_active()
-        && let Some(popover) = registry.borrow().get(&active).cloned()
+        && let Some(overlay) = registry.borrow().get(&active).cloned()
     {
-        popover.popdown();
+        overlay.hide();
     }
 }
 
@@ -1137,6 +1268,13 @@ fn install_escape_dismiss(
     window.add_controller(keys);
 }
 
+fn destroy_popovers(registry: &PopoverRegistry) {
+    let overlays = std::mem::take(&mut *registry.borrow_mut());
+    for (_, overlay) in overlays {
+        overlay.destroy();
+    }
+}
+
 fn scroll_direction(dx: f64, dy: f64) -> Option<Direction> {
     let delta = if dy.abs() >= dx.abs() { dy } else { dx };
     if delta < 0.0 {
@@ -1154,10 +1292,7 @@ fn scroll_actions(module_id: SystemModuleId) -> Option<(ActionIntent, ActionInte
             ActionIntent::ToggleKeyboardLayout,
             ActionIntent::ToggleKeyboardLayout,
         )),
-        SystemModuleId::Audio => Some((
-            ActionIntent::ControlMedia(MediaControlAction::Previous),
-            ActionIntent::ControlMedia(MediaControlAction::Next),
-        )),
+        SystemModuleId::Audio => None,
         SystemModuleId::Power => Some((
             ActionIntent::CyclePowerProfile {
                 direction: Direction::Previous,
@@ -1172,30 +1307,14 @@ fn scroll_actions(module_id: SystemModuleId) -> Option<(ActionIntent, ActionInte
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
 
     use crate::{
         AppConfig, BarSnapshot, ClockState, OutputRole, OutputState, PowerProfile, PowerState,
         WindowState, WorkspaceState, reload_runtime_config,
     };
 
-    use super::{RenderPlan, SurfaceSpec, surface_specs, topology_changed};
-
-    #[test]
-    fn output_topology_changes_after_initialization_dismiss_open_panels() {
-        let empty = BTreeSet::new();
-        let two = BTreeSet::from(["DP-4".to_string(), "DP-5".to_string()]);
-        let three = BTreeSet::from([
-            "DP-4".to_string(),
-            "DP-5".to_string(),
-            "HDMI-A-2".to_string(),
-        ]);
-
-        assert!(!topology_changed(&empty, &two));
-        assert!(!topology_changed(&two, &two));
-        assert!(topology_changed(&two, &three));
-        assert!(topology_changed(&three, &two));
-    }
+    use super::{RenderPlan, SurfaceSpec, surface_specs};
 
     #[test]
     fn surface_specs_choose_configured_primary_and_reduce_other_outputs() {
@@ -1446,6 +1565,7 @@ mod tests {
             ),
         ]);
         snapshot.system.power = PowerState {
+            battery_present: true,
             battery_percent: Some(6),
             charging: false,
             profile: PowerProfile::Balanced,

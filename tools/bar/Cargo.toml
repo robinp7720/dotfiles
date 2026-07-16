@@ -16,4 +16,5 @@ thiserror = "2.0.18"
 toml = "0.9.11"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+ureq = "3.3.0"
 zbus = { version = "5.17.0", features = ["blocking"] }

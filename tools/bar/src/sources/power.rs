@@ -31,6 +31,7 @@ const POWER_PROFILES_INTERFACE: &str = "net.hadess.PowerProfiles";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatterySnapshot {
+    present: bool,
     battery_percent: Option<u8>,
     charging: bool,
 }
@@ -78,6 +79,7 @@ fn publish_power_snapshot(sender: &Sender<StateUpdate>, cancelled: &Arc<AtomicBo
     let battery = read_power_battery()?;
     let profile = read_power_profile().unwrap_or_default();
     let update = StateUpdate::System(SystemUpdate::Power(PowerState {
+        battery_present: battery.present,
         battery_percent: battery.battery_percent,
         charging: battery.charging,
         profile,
@@ -125,6 +127,7 @@ fn read_upower_battery() -> Result<BatterySnapshot> {
         .context("failed to read UPower IsPresent")?;
     if !is_present {
         return Ok(BatterySnapshot {
+            present: false,
             battery_percent: None,
             charging: false,
         });
@@ -138,6 +141,7 @@ fn read_upower_battery() -> Result<BatterySnapshot> {
         .context("failed to read UPower State")?;
 
     Ok(BatterySnapshot {
+        present: true,
         battery_percent: Some(clamp_percent_f64(percentage)),
         charging: matches!(state, 1 | 4 | 5),
     })
@@ -147,6 +151,7 @@ fn read_sysfs_battery(root: &Path) -> Result<BatterySnapshot> {
     let paths = battery_paths(root)?;
     if paths.is_empty() {
         return Ok(BatterySnapshot {
+            present: false,
             battery_percent: None,
             charging: false,
         });
@@ -162,6 +167,7 @@ fn read_sysfs_battery(root: &Path) -> Result<BatterySnapshot> {
         .any(|status| matches!(status.as_str(), "Charging" | "Full"));
 
     Ok(BatterySnapshot {
+        present: true,
         battery_percent,
         charging,
     })
@@ -311,9 +317,12 @@ fn clamp_percent_u64(value: u64) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use crate::{PowerProfile, ThresholdConfig};
 
-    use super::{battery_severity, map_power_profile};
+    use super::{battery_severity, map_power_profile, read_sysfs_battery};
 
     #[test]
     fn charging_battery_suppresses_warning_severity() {
@@ -347,5 +356,31 @@ mod tests {
         assert_eq!(map_power_profile("performance"), PowerProfile::Performance);
         assert_eq!(map_power_profile("balanced"), PowerProfile::Balanced);
         assert_eq!(map_power_profile("power-saver"), PowerProfile::PowerSaver);
+    }
+
+    #[test]
+    fn sysfs_battery_presence_distinguishes_desktops_and_laptops() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cockpit-power-{unique}"));
+        fs::create_dir_all(&root).unwrap();
+
+        let desktop = read_sysfs_battery(&root).unwrap();
+        assert!(!desktop.present);
+        assert_eq!(desktop.battery_percent, None);
+
+        let battery = root.join("BAT0");
+        fs::create_dir(&battery).unwrap();
+        fs::write(battery.join("type"), "Battery\n").unwrap();
+        fs::write(battery.join("capacity"), "73\n").unwrap();
+        fs::write(battery.join("status"), "Discharging\n").unwrap();
+        let laptop = read_sysfs_battery(&root).unwrap();
+        assert!(laptop.present);
+        assert_eq!(laptop.battery_percent, Some(73));
+        assert!(!laptop.charging);
+
+        fs::remove_dir_all(root).unwrap();
     }
 }

@@ -1,3 +1,4 @@
+mod artwork;
 pub mod context_card;
 pub mod control_center;
 pub mod popovers;
@@ -154,6 +155,7 @@ fn install_ui_loop(
                 &mut theme_provider.borrow_mut(),
                 now_epoch,
             );
+            dirty |= prune_completed_activities(&mut runtime, now_epoch);
             dirty |= runtime.store.expire(now_epoch);
 
             if dirty || monitor_dirty.replace(false) {
@@ -247,12 +249,25 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
         )?,
     ];
 
-    if let Some(calendar_script) = resolve_calendar_script(config_path) {
-        joins.push(crate::spawn_calendar_source(
-            calendar_script,
-            state_tx.clone(),
-            Arc::clone(&cancelled),
-        ));
+    match resolve_calendar_script(config_path) {
+        Some(calendar_script) => {
+            joins.push(crate::spawn_calendar_source(
+                calendar_script,
+                state_tx.clone(),
+                Arc::clone(&cancelled),
+            ));
+        }
+        None => {
+            let message = format!(
+                "calendar helper unavailable for config {}",
+                config_path.display()
+            );
+            warn!("{message}");
+            let _ = state_tx.send(StateUpdate::Health {
+                source: SourceId::Calendar,
+                health: SourceHealth::Disconnected { message },
+            });
+        }
     }
 
     let mut store = StateStore::new(config.freshness.clone());
@@ -313,6 +328,23 @@ fn seed_initial_state(
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
         }
     }
+}
+
+fn prune_completed_activities(runtime: &mut UiRuntime, now_epoch: i64) -> bool {
+    if !runtime.activity_tracker.prune(now_epoch) {
+        return false;
+    }
+
+    let activities = runtime
+        .activity_tracker
+        .snapshot()
+        .items
+        .into_values()
+        .collect::<Vec<_>>();
+    runtime.store.apply(
+        StateUpdate::Activity(ActivityUpdate::Snapshot(activities)),
+        now_epoch,
+    )
 }
 
 fn spawn_compositor_worker(
@@ -500,7 +532,17 @@ fn spawn_timer_tick_worker(
 }
 
 fn resolve_calendar_script(config_path: &Path) -> Option<PathBuf> {
+    let canonical_config = config_path.canonicalize().ok();
     let candidates = [
+        canonical_config
+            .as_deref()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .map(|root| root.join("scripts").join("next_event.sh")),
+        canonical_config
+            .as_deref()
+            .and_then(Path::parent)
+            .map(|parent| parent.join("scripts").join("next_event.sh")),
         config_path
             .parent()
             .map(|parent| parent.join("scripts").join("next_event.sh")),
@@ -512,7 +554,7 @@ fn resolve_calendar_script(config_path: &Path) -> Option<PathBuf> {
     candidates
         .into_iter()
         .flatten()
-        .find(|candidate| candidate.exists())
+        .find(|candidate| candidate.is_file())
 }
 
 fn current_epoch() -> i64 {
@@ -622,14 +664,40 @@ fn wait_for_cancellation(cancelled: &AtomicBool, duration: Duration) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use super::RuntimeHandles;
+    use super::{RuntimeHandles, resolve_calendar_script};
+
+    #[test]
+    fn calendar_helper_resolves_through_installed_config_symlink() {
+        let root = temp_dir("calendar-config-symlink");
+        let repo = root.join("dotfiles");
+        let bar = repo.join("bar");
+        let scripts = repo.join("scripts");
+        let config_home = root.join("config");
+        fs::create_dir_all(&bar).unwrap();
+        fs::create_dir_all(&scripts).unwrap();
+        fs::create_dir_all(&config_home).unwrap();
+        fs::write(bar.join("config.toml"), "").unwrap();
+        fs::write(scripts.join("next_event.sh"), "#!/usr/bin/env bash\n").unwrap();
+        std::os::unix::fs::symlink(&bar, config_home.join("cockpit-bar")).unwrap();
+
+        let resolved = resolve_calendar_script(&config_home.join("cockpit-bar/config.toml"))
+            .expect("calendar helper");
+
+        assert_eq!(
+            resolved.canonicalize().unwrap(),
+            scripts.join("next_event.sh").canonicalize().unwrap()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn shutdown_joins_workers_that_finish_after_cancellation() {
@@ -651,5 +719,13 @@ mod tests {
         .shutdown();
 
         assert!(worker_finished.load(Ordering::Relaxed));
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        std::env::temp_dir().join(format!("cockpit-bar-{label}-{unique}"))
     }
 }

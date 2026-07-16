@@ -424,7 +424,8 @@ fn window_semantically_equal(left: &WindowState, right: &WindowState) -> bool {
 }
 
 fn power_semantically_equal(left: &PowerState, right: &PowerState) -> bool {
-    left.battery_percent == right.battery_percent
+    left.battery_present == right.battery_present
+        && left.battery_percent == right.battery_percent
         && left.charging == right.charging
         && left.profile == right.profile
 }
@@ -434,6 +435,7 @@ fn media_semantically_equal(left: &MediaState, right: &MediaState) -> bool {
         && left.status == right.status
         && left.title == right.title
         && left.artist == right.artist
+        && left.art_url == right.art_url
 }
 
 fn calendar_semantically_equal(left: &CalendarEvent, right: &CalendarEvent) -> bool {
@@ -508,16 +510,20 @@ fn source_for_update(update: &StateUpdate) -> SourceId {
 
 fn freshness_seconds(freshness: &FreshnessConfig, source: SourceId) -> Option<u64> {
     match source {
-        SourceId::Compositor => Some(freshness.compositor_seconds),
+        // Connected event streams own their health lifecycle and explicitly publish
+        // disconnects. A quiet stream is not stale: a song can keep playing, an
+        // urgent window can remain urgent, and a connection can remain unchanged.
+        SourceId::Compositor
+        | SourceId::Network
+        | SourceId::Bluetooth
+        | SourceId::Audio
+        | SourceId::Media
+        | SourceId::Activity => None,
         SourceId::Power => Some(freshness.power_seconds),
         SourceId::Resources => Some(freshness.resources_seconds),
-        SourceId::Network => Some(freshness.network_seconds),
-        SourceId::Bluetooth | SourceId::Audio => Some(freshness.bluetooth_seconds),
         SourceId::Brightness => Some(freshness.brightness_seconds),
-        SourceId::Media => Some(freshness.media_seconds),
         SourceId::Calendar => Some(freshness.calendar_seconds),
         SourceId::Timers => Some(freshness.timers_seconds),
-        SourceId::Activity => Some(freshness.activity_seconds),
         SourceId::Clock => None,
     }
 }
@@ -615,24 +621,67 @@ mod tests {
     }
 
     #[test]
-    fn expire_keeps_compositor_state_visible_while_marking_it_stale() {
+    fn quiet_event_streams_remain_healthy_without_periodic_state_changes() {
         let mut store = StateStore::new(FreshnessConfig::default());
 
         assert!(store.apply(
             StateUpdate::FocusedOutput(Some("DP-5".to_string())),
             1_800_000_000
         ));
-        assert!(store.expire(1_800_000_011));
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Media(Some(MediaState {
+                player: "player".to_string(),
+                status: PlaybackStatus::Playing,
+                title: Some("Track".to_string()),
+                artist: Some("Artist".to_string()),
+                art_url: None,
+                changed_at: 0,
+            }))),
+            1_800_000_000,
+        ));
+
+        assert!(!store.expire(1_800_001_000));
         assert_eq!(store.snapshot().focused_output.as_deref(), Some("DP-5"));
+        assert!(store.snapshot().system.media.is_some());
         assert_eq!(
             store
                 .snapshot()
                 .system
                 .source_health
                 .get(&SourceId::Compositor),
-            Some(&SourceHealth::Stale {
-                since_epoch: 1_800_000_010,
-            })
+            Some(&SourceHealth::Healthy)
+        );
+        assert_eq!(
+            store.snapshot().system.source_health.get(&SourceId::Media),
+            Some(&SourceHealth::Healthy)
+        );
+    }
+
+    #[test]
+    fn artwork_uri_changes_refresh_media_state() {
+        let mut store = StateStore::new(FreshnessConfig::default());
+        let media = MediaState {
+            player: "player".to_string(),
+            status: PlaybackStatus::Playing,
+            title: Some("Track".to_string()),
+            artist: Some("Artist".to_string()),
+            art_url: Some("https://example.test/first.jpg".to_string()),
+            changed_at: 0,
+        };
+
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Media(Some(media.clone()))),
+            1_800_000_000,
+        ));
+        let mut changed = media;
+        changed.art_url = Some("https://example.test/second.jpg".to_string());
+        assert!(store.apply(
+            StateUpdate::System(SystemUpdate::Media(Some(changed))),
+            1_800_000_010,
+        ));
+        assert_eq!(
+            store.snapshot().system.media.as_ref().unwrap().changed_at,
+            1_800_000_010
         );
     }
 
@@ -742,6 +791,7 @@ mod tests {
 
         assert!(store.apply(
             StateUpdate::System(SystemUpdate::Power(PowerState {
+                battery_present: true,
                 battery_percent: Some(6),
                 charging: false,
                 profile: PowerProfile::Balanced,
@@ -757,6 +807,7 @@ mod tests {
                 status: PlaybackStatus::Playing,
                 title: Some("Track".to_string()),
                 artist: Some("Artist".to_string()),
+                art_url: None,
                 changed_at: 0,
             }))),
             1_800_000_030,

@@ -7,7 +7,7 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use zbus::fdo::ManagedObjects;
 use zbus::{
     MatchRule,
@@ -48,12 +48,14 @@ const HEADPHONES: FocusedHeadphones = FocusedHeadphones {
 };
 
 fn build_bluetooth_state(
+    available: bool,
     powered: bool,
     devices: &[BluetoothDevice],
     focused: &FocusedHeadphones,
 ) -> BluetoothState {
-    if !powered {
+    if !available || !powered {
         return BluetoothState {
+            available,
             powered,
             connected_device: None,
             audio_device: None,
@@ -85,6 +87,7 @@ fn build_bluetooth_state(
         });
 
     BluetoothState {
+        available,
         powered,
         connected_device,
         audio_device,
@@ -115,11 +118,16 @@ fn read_bluetooth_state(connection: &Connection) -> Result<BluetoothState> {
         .get_managed_objects()
         .context("failed to read BlueZ managed objects")?;
 
-    let (powered, devices) = parse_managed_objects(managed)?;
-    Ok(build_bluetooth_state(powered, &devices, &HEADPHONES))
+    let (available, powered, devices) = parse_managed_objects(managed)?;
+    Ok(build_bluetooth_state(
+        available,
+        powered,
+        &devices,
+        &HEADPHONES,
+    ))
 }
 
-fn parse_managed_objects(managed: ManagedObjects) -> Result<(bool, Vec<BluetoothDevice>)> {
+fn parse_managed_objects(managed: ManagedObjects) -> Result<(bool, bool, Vec<BluetoothDevice>)> {
     let mut powered = None;
     let mut devices = Vec::new();
 
@@ -142,12 +150,8 @@ fn parse_managed_objects(managed: ManagedObjects) -> Result<(bool, Vec<Bluetooth
         }
     }
 
-    let Some(powered) = powered else {
-        bail!("BlueZ did not expose an adapter");
-    };
-
     devices.sort_by(|left, right| left.alias.cmp(&right.alias));
-    Ok((powered, devices))
+    Ok((powered.is_some(), powered.unwrap_or(false), devices))
 }
 
 fn string_property(properties: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
@@ -242,8 +246,9 @@ mod tests {
     #[test]
     fn powered_off_adapter_clears_connected_devices() {
         assert_eq!(
-            build_bluetooth_state(false, &[], &FOCUSED),
+            build_bluetooth_state(true, false, &[], &FOCUSED),
             BluetoothState {
+                available: true,
                 powered: false,
                 connected_device: None,
                 audio_device: None,
@@ -254,6 +259,7 @@ mod tests {
     #[test]
     fn connected_devices_keep_generic_and_focused_audio_labels() {
         let state = build_bluetooth_state(
+            true,
             true,
             &[
                 BluetoothDevice {
@@ -275,10 +281,19 @@ mod tests {
         assert_eq!(
             state,
             BluetoothState {
+                available: true,
                 powered: true,
                 connected_device: Some("2 devices".to_string()),
                 audio_device: Some("Headphones".to_string()),
             }
+        );
+    }
+
+    #[test]
+    fn missing_adapter_is_a_healthy_unavailable_state() {
+        assert_eq!(
+            build_bluetooth_state(false, false, &[], &FOCUSED),
+            BluetoothState::default()
         );
     }
 }

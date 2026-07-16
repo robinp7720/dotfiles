@@ -26,6 +26,12 @@ struct ActiveConnection {
     signal_percent: Option<u8>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct NetworkCapabilities {
+    wifi: bool,
+    ethernet: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ConnectionKind {
     Ethernet,
@@ -38,6 +44,7 @@ const NETWORK_MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const NETWORK_MANAGER_INTERFACE: &str = "org.freedesktop.NetworkManager";
 const ACTIVE_CONNECTION_INTERFACE: &str = "org.freedesktop.NetworkManager.Connection.Active";
 const ACCESS_POINT_INTERFACE: &str = "org.freedesktop.NetworkManager.AccessPoint";
+const DEVICE_INTERFACE: &str = "org.freedesktop.NetworkManager.Device";
 
 const NETWORK_SIGNAL_QUEUE: usize = 32;
 const NETWORK_RESTART_DELAY: Duration = Duration::from_secs(1);
@@ -54,6 +61,7 @@ fn map_connectivity_state(value: u32) -> ConnectivityState {
 fn build_network_state(
     connectivity: u32,
     wifi_enabled: Option<bool>,
+    capabilities: NetworkCapabilities,
     active: Option<&ActiveConnection>,
 ) -> NetworkState {
     let connectivity = map_connectivity_state(connectivity);
@@ -64,6 +72,8 @@ fn build_network_state(
                 connectivity,
                 icon_hint: Some(wifi_signal_icon(active.signal_percent).to_string()),
                 label: active.label.clone(),
+                wifi_available: capabilities.wifi,
+                ethernet_available: capabilities.ethernet,
                 wifi_enabled,
             },
             ConnectionKind::Ethernet => NetworkState {
@@ -74,12 +84,16 @@ fn build_network_state(
                     .clone()
                     .filter(|label| !label.trim().is_empty())
                     .or_else(|| Some("Ethernet".to_string())),
+                wifi_available: capabilities.wifi,
+                ethernet_available: capabilities.ethernet,
                 wifi_enabled,
             },
             ConnectionKind::Other => NetworkState {
                 connectivity,
                 icon_hint: Some("network-idle-symbolic".to_string()),
                 label: active.label.clone(),
+                wifi_available: capabilities.wifi,
+                ethernet_available: capabilities.ethernet,
                 wifi_enabled,
             },
         },
@@ -95,6 +109,8 @@ fn build_network_state(
                 .to_string(),
             ),
             label: None,
+            wifi_available: capabilities.wifi,
+            ethernet_available: capabilities.ethernet,
             wifi_enabled,
         },
     }
@@ -137,7 +153,12 @@ fn read_network_state(connection: &Connection) -> Result<NetworkState> {
     let connectivity: u32 = manager
         .get_property("Connectivity")
         .context("failed to read NetworkManager Connectivity")?;
-    let wifi_enabled = manager.get_property::<bool>("WirelessEnabled").ok();
+    let capabilities = read_network_capabilities(connection, &manager)
+        .or_else(|_| read_network_capabilities_nmcli())?;
+    let wifi_enabled = capabilities
+        .wifi
+        .then(|| manager.get_property::<bool>("WirelessEnabled").ok())
+        .flatten();
     let primary: OwnedObjectPath = manager
         .get_property("PrimaryConnection")
         .context("failed to read NetworkManager PrimaryConnection")?;
@@ -148,8 +169,61 @@ fn read_network_state(connection: &Connection) -> Result<NetworkState> {
     Ok(build_network_state(
         connectivity,
         wifi_enabled,
+        capabilities,
         active.as_ref(),
     ))
+}
+
+fn read_network_capabilities(
+    connection: &Connection,
+    manager: &Proxy<'_>,
+) -> Result<NetworkCapabilities> {
+    let devices: Vec<OwnedObjectPath> = manager
+        .call("GetDevices", &())
+        .context("failed to query NetworkManager devices")?;
+    let mut device_types = Vec::with_capacity(devices.len());
+    for path in devices {
+        let device = Proxy::new(
+            connection,
+            NETWORK_MANAGER_DESTINATION,
+            path.as_str(),
+            DEVICE_INTERFACE,
+        )
+        .with_context(|| format!("failed to build NetworkManager device proxy for {path}"))?;
+        device_types.push(
+            device
+                .get_property::<u32>("DeviceType")
+                .with_context(|| format!("failed to read NetworkManager device type for {path}"))?,
+        );
+    }
+    Ok(capabilities_from_device_types(&device_types))
+}
+
+fn capabilities_from_device_types(device_types: &[u32]) -> NetworkCapabilities {
+    NetworkCapabilities {
+        ethernet: device_types.contains(&1),
+        wifi: device_types.contains(&2),
+    }
+}
+
+fn read_network_capabilities_nmcli() -> Result<NetworkCapabilities> {
+    let output = Command::new("nmcli")
+        .args(["-t", "-f", "TYPE", "device", "status"])
+        .output()
+        .context("failed to execute nmcli for device capabilities")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        bail!("nmcli device capability query failed: {stderr}");
+    }
+    let stdout = String::from_utf8(output.stdout).context("nmcli output was not UTF-8")?;
+    Ok(parse_nmcli_capabilities(&stdout))
+}
+
+fn parse_nmcli_capabilities(text: &str) -> NetworkCapabilities {
+    NetworkCapabilities {
+        ethernet: text.lines().any(|line| line == "ethernet"),
+        wifi: text.lines().any(|line| line == "wifi"),
+    }
 }
 
 fn read_active_connection(connection: &Connection, path: &str) -> Result<ActiveConnection> {
@@ -341,7 +415,10 @@ fn run_network_worker(sender: &Sender<StateUpdate>, cancelled: &Arc<AtomicBool>)
 
 #[cfg(test)]
 mod tests {
-    use super::{ActiveConnection, ConnectionKind, build_network_state, map_connectivity_state};
+    use super::{
+        ActiveConnection, ConnectionKind, NetworkCapabilities, build_network_state,
+        capabilities_from_device_types, map_connectivity_state, parse_nmcli_capabilities,
+    };
     use crate::{ConnectivityState, NetworkState};
 
     #[test]
@@ -359,6 +436,10 @@ mod tests {
         let state = build_network_state(
             4,
             Some(true),
+            NetworkCapabilities {
+                wifi: true,
+                ethernet: true,
+            },
             Some(&ActiveConnection {
                 kind: ConnectionKind::Wifi,
                 label: Some("Cafe | Wi-Fi".to_string()),
@@ -372,6 +453,8 @@ mod tests {
                 connectivity: ConnectivityState::Connected,
                 icon_hint: Some("network-wireless-signal-good-symbolic".to_string()),
                 label: Some("Cafe | Wi-Fi".to_string()),
+                wifi_available: true,
+                ethernet_available: true,
                 wifi_enabled: Some(true),
             }
         );
@@ -379,9 +462,50 @@ mod tests {
 
     #[test]
     fn wifi_radio_state_is_preserved_without_an_active_connection() {
-        let state = build_network_state(1, Some(false), None);
+        let state = build_network_state(
+            1,
+            Some(false),
+            NetworkCapabilities {
+                wifi: true,
+                ethernet: false,
+            },
+            None,
+        );
 
         assert_eq!(state.wifi_enabled, Some(false));
         assert_eq!(state.connectivity, ConnectivityState::Disconnected);
+    }
+
+    #[test]
+    fn device_types_distinguish_desktop_and_laptop_network_hardware() {
+        assert_eq!(
+            capabilities_from_device_types(&[1, 32]),
+            NetworkCapabilities {
+                wifi: false,
+                ethernet: true,
+            }
+        );
+        assert_eq!(
+            capabilities_from_device_types(&[1, 2]),
+            NetworkCapabilities {
+                wifi: true,
+                ethernet: true,
+            }
+        );
+        assert_eq!(
+            capabilities_from_device_types(&[]),
+            NetworkCapabilities::default()
+        );
+    }
+
+    #[test]
+    fn nmcli_capability_fallback_reads_all_devices_not_only_active_ones() {
+        assert_eq!(
+            parse_nmcli_capabilities("ethernet\nwifi\nloopback\n"),
+            NetworkCapabilities {
+                wifi: true,
+                ethernet: true,
+            }
+        );
     }
 }

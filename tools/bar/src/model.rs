@@ -167,11 +167,17 @@ pub struct NetworkState {
     pub icon_hint: Option<String>,
     pub label: Option<String>,
     #[serde(default)]
+    pub wifi_available: bool,
+    #[serde(default)]
+    pub ethernet_available: bool,
+    #[serde(default)]
     pub wifi_enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BluetoothState {
+    #[serde(default)]
+    pub available: bool,
     pub powered: bool,
     pub connected_device: Option<String>,
     pub audio_device: Option<String>,
@@ -199,6 +205,8 @@ pub enum PowerProfile {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PowerState {
+    #[serde(default)]
+    pub battery_present: bool,
     pub battery_percent: Option<u8>,
     pub charging: bool,
     pub profile: PowerProfile,
@@ -226,6 +234,8 @@ pub struct MediaState {
     pub status: PlaybackStatus,
     pub title: Option<String>,
     pub artist: Option<String>,
+    #[serde(default)]
+    pub art_url: Option<String>,
     #[serde(default)]
     pub changed_at: i64,
 }
@@ -340,7 +350,10 @@ pub enum ActionIntent {
     OpenContextQuery {
         query: String,
     },
-    ControlMedia(MediaControlAction),
+    ControlMedia {
+        player: String,
+        action: MediaControlAction,
+    },
     SetVolumePercent {
         percent: u8,
     },
@@ -375,7 +388,7 @@ pub enum ActionIntent {
 
 #[cfg(test)]
 mod tests {
-    use super::NetworkState;
+    use super::{BluetoothState, MediaState, NetworkState, PowerState};
 
     #[test]
     fn network_state_deserializes_without_new_wifi_radio_field() {
@@ -385,5 +398,32 @@ mod tests {
         .unwrap();
 
         assert_eq!(state.wifi_enabled, None);
+        assert!(!state.wifi_available);
+        assert!(!state.ethernet_available);
+    }
+
+    #[test]
+    fn hardware_capabilities_default_to_absent_for_older_payloads() {
+        let bluetooth: BluetoothState = serde_json::from_str(
+            r#"{"powered":false,"connected_device":null,"audio_device":null}"#,
+        )
+        .unwrap();
+        let power: PowerState = serde_json::from_str(
+            r#"{"battery_percent":null,"charging":false,"profile":"Balanced","changed_at":0}"#,
+        )
+        .unwrap();
+
+        assert!(!bluetooth.available);
+        assert!(!power.battery_present);
+    }
+
+    #[test]
+    fn media_state_deserializes_without_artwork_uri() {
+        let state: MediaState = serde_json::from_str(
+            r#"{"player":"firefox","status":"Playing","title":"Track","artist":"Artist"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(state.art_url, None);
     }
 }

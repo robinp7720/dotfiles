@@ -185,23 +185,22 @@ fn network_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
 
 fn audio_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
     let mut classes = base_classes(SystemModuleId::Audio);
-    if !snapshot.system.bluetooth.powered {
+    if snapshot.system.bluetooth.available && !snapshot.system.bluetooth.powered {
         classes.push("inactive".to_string());
     }
-    apply_health(
-        &mut classes,
-        module_health(snapshot, &[SourceId::Audio, SourceId::Bluetooth]),
-    );
+    let health = if snapshot.system.bluetooth.available {
+        module_health(snapshot, &[SourceId::Audio, SourceId::Bluetooth])
+    } else {
+        snapshot.system.source_health.get(&SourceId::Audio)
+    };
+    apply_health(&mut classes, health);
 
     SystemButtonSpec {
         id: SystemModuleId::Audio,
         icon_name: audio_icon(&snapshot.system.audio, snapshot.system.bluetooth.powered)
             .to_string(),
         label: None,
-        tooltip: with_health_note(
-            audio_tooltip(snapshot),
-            module_health(snapshot, &[SourceId::Audio, SourceId::Bluetooth]),
-        ),
+        tooltip: with_health_note(audio_tooltip(snapshot), health),
         classes,
     }
 }
@@ -209,18 +208,28 @@ fn audio_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
 fn power_button(snapshot: &BarSnapshot, config: &AppConfig) -> SystemButtonSpec {
     let health = snapshot.system.source_health.get(&SourceId::Power);
     let mut classes = base_classes(SystemModuleId::Power);
-    if snapshot.system.power.charging {
-        classes.push("charging".to_string());
-    } else if let Some(severity) = battery_severity_class(snapshot, config) {
-        classes.push(severity.to_string());
+    if snapshot.system.power.battery_present {
+        if snapshot.system.power.charging {
+            classes.push("charging".to_string());
+        } else if let Some(severity) = battery_severity_class(snapshot, config) {
+            classes.push(severity.to_string());
+        }
     }
     apply_health(&mut classes, health);
 
     let percent = snapshot.system.power.battery_percent;
+    let (icon_name, label) = if snapshot.system.power.battery_present {
+        (
+            power_icon(percent, snapshot.system.power.charging),
+            percent.map(|value| format!("{value}%")),
+        )
+    } else {
+        (power_profile_icon(&snapshot.system.power.profile), None)
+    };
     SystemButtonSpec {
         id: SystemModuleId::Power,
-        icon_name: power_icon(percent, snapshot.system.power.charging).to_string(),
-        label: percent.map(|value| format!("{value}%")),
+        icon_name: icon_name.to_string(),
+        label,
         tooltip: with_health_note(power_tooltip(snapshot), health),
         classes,
     }
@@ -337,7 +346,7 @@ fn audio_tooltip(snapshot: &BarSnapshot) -> String {
                 .map(|device| format!("Bluetooth: {device}"))
                 .unwrap_or_else(|| "Bluetooth on".to_string()),
         );
-    } else {
+    } else if snapshot.system.bluetooth.available {
         parts.push("Bluetooth off".to_string());
     }
 
@@ -349,6 +358,12 @@ fn audio_tooltip(snapshot: &BarSnapshot) -> String {
 }
 
 fn power_tooltip(snapshot: &BarSnapshot) -> String {
+    if !snapshot.system.power.battery_present {
+        return format!(
+            "Power profile: {}",
+            power_profile_label(snapshot.system.power.profile.clone())
+        );
+    }
     let battery = match snapshot.system.power.battery_percent {
         Some(percent) if snapshot.system.power.charging => format!("Battery {percent}% (charging)"),
         Some(percent) => format!("Battery {percent}%"),
@@ -379,6 +394,14 @@ fn power_profile_label(profile: PowerProfile) -> &'static str {
         PowerProfile::Performance => "Performance",
         PowerProfile::Balanced => "Balanced",
         PowerProfile::PowerSaver => "Power Saver",
+    }
+}
+
+fn power_profile_icon(profile: &PowerProfile) -> &'static str {
+    match profile {
+        PowerProfile::Performance => "power-profile-performance-symbolic",
+        PowerProfile::Balanced => "power-profile-balanced-symbolic",
+        PowerProfile::PowerSaver => "power-profile-power-saver-symbolic",
     }
 }
 
@@ -482,6 +505,8 @@ mod tests {
             connectivity: ConnectivityState::Connected,
             icon_hint: Some("network-wireless-signal-good-symbolic".to_string()),
             label: Some("Office Wi-Fi".to_string()),
+            wifi_available: true,
+            ethernet_available: true,
             wifi_enabled: Some(true),
         };
 
@@ -506,6 +531,7 @@ mod tests {
     fn bluetooth_button_shows_powered_off_state_without_source_failure() {
         let mut snapshot = snapshot();
         snapshot.system.bluetooth = BluetoothState {
+            available: true,
             powered: false,
             connected_device: None,
             audio_device: None,
@@ -525,9 +551,25 @@ mod tests {
     }
 
     #[test]
+    fn audio_button_ignores_bluetooth_when_no_adapter_exists() {
+        let mut snapshot = snapshot();
+        snapshot.system.audio = AudioState {
+            volume_percent: Some(42),
+            muted: false,
+        };
+
+        let cluster = build_system_cluster(&snapshot, &AppConfig::default());
+        let audio = cluster.module(SystemModuleId::Audio);
+
+        assert!(!audio.classes.iter().any(|class| class == "inactive"));
+        assert!(!audio.tooltip.contains("Bluetooth"));
+    }
+
+    #[test]
     fn power_button_marks_charging_low_and_critical_battery_states() {
         let mut snapshot = snapshot();
         snapshot.system.power = PowerState {
+            battery_present: true,
             battery_percent: Some(88),
             charging: true,
             profile: PowerProfile::Balanced,
@@ -549,6 +591,20 @@ mod tests {
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
         let power = cluster.module(SystemModuleId::Power);
         assert!(power.classes.iter().any(|class| class == "critical"));
+    }
+
+    #[test]
+    fn desktop_power_button_uses_profile_instead_of_fake_battery() {
+        let mut snapshot = snapshot();
+        snapshot.system.power.profile = PowerProfile::Performance;
+
+        let cluster = build_system_cluster(&snapshot, &AppConfig::default());
+        let power = cluster.module(SystemModuleId::Power);
+
+        assert_eq!(power.icon_name, "power-profile-performance-symbolic");
+        assert_eq!(power.label, None);
+        assert_eq!(power.tooltip, "Power profile: Performance");
+        assert!(!power.classes.iter().any(|class| class == "charging"));
     }
 
     #[test]
@@ -579,6 +635,8 @@ mod tests {
                     connectivity: ConnectivityState::Disconnected,
                     icon_hint: Some("network-offline-symbolic".to_string()),
                     label: None,
+                    wifi_available: true,
+                    ethernet_available: true,
                     wifi_enabled: Some(false),
                 },
                 ..crate::SystemState::default()
