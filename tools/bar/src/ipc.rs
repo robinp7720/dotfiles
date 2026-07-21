@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::TimerState;
+use crate::{ContextAction, ContextSnapshot, DesktopContext, TimerState};
 
 const TRY_SERVE_READ_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -40,14 +40,35 @@ pub enum ControlRequest {
         exit_code: i32,
         finished_at: i64,
     },
+    ContextGet {
+        context: Option<DesktopContext>,
+    },
+    ContextExecute {
+        action: ContextAction,
+    },
+    ControlCenterOpen {
+        context: DesktopContext,
+        output: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ControlResponse {
     Accepted,
-    Timers { timers: Vec<TimerState> },
-    Error { message: String },
+    Timers {
+        timers: Vec<TimerState>,
+    },
+    Contexts {
+        contexts: Vec<ContextSnapshot>,
+    },
+    ActionResult {
+        success: bool,
+        message: Option<String>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug)]
@@ -304,7 +325,7 @@ mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use crate::TimerState;
+    use crate::{ContextAction, DesktopContext, TimerState};
 
     use super::{
         ControlClient, ControlRequest, ControlResponse, ControlSocket, ExistingPathAction,
@@ -362,6 +383,28 @@ mod tests {
 
         assert_eq!(response, ControlResponse::Timers { timers: Vec::new() });
         assert_eq!(socket_path, runtime_dir.path().join("cockpit-bar.sock"));
+    }
+
+    #[test]
+    fn context_protocol_uses_stable_tagged_json() {
+        let request = ControlRequest::ContextExecute {
+            action: ContextAction::SetVolumePercent { percent: 42 },
+        };
+        let json = serde_json::to_string(&request).expect("serialize context action");
+        assert_eq!(
+            json,
+            r#"{"type":"context_execute","action":{"type":"set_volume_percent","percent":42}}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<ControlRequest>(
+                r#"{"type":"control_center_open","context":"bluetooth","output":"DP-5"}"#,
+            )
+            .expect("deserialize page request"),
+            ControlRequest::ControlCenterOpen {
+                context: DesktopContext::Bluetooth,
+                output: Some("DP-5".to_string()),
+            }
+        );
     }
 
     #[test]

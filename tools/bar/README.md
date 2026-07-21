@@ -22,6 +22,10 @@ Hyprland and Niri restart `cockpit-bar.service` at session startup after their
 environment import steps. The previous Waybar startup lines stay in the tracked
 configs as commented fallback entries.
 
+The user-only `${XDG_RUNTIME_DIR}/cockpit-bar.sock` also provides live desktop-context snapshots
+and validated actions to Luma. Quick-settings footers launch Luma with the current page and output;
+Luma can open the corresponding detailed quick-settings page through the same socket.
+
 ## Rollback
 
 Immediate session rollback back to Waybar:

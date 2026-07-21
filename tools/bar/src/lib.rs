@@ -3,6 +3,7 @@ pub mod activity;
 pub mod compositor;
 pub mod config;
 pub mod context;
+pub mod integration;
 pub mod ipc;
 pub mod model;
 pub mod sources;
@@ -29,19 +30,23 @@ pub use config::{
     ReloadStatus, RuntimeConfigReload, ThresholdConfig, reload_runtime_config,
 };
 pub use context::{ContextCard, ContextTier, Dismissals, select_context};
+pub use integration::{context_snapshot, context_snapshots, intent_for_context_action};
 pub use ipc::{ControlClient, ControlRequest, ControlResponse, ControlSocket, control_socket_path};
 pub use model::{
-    ActionIntent, ActivityState, ActivityStatus, ActivityUpdate, AudioState, BarSnapshot,
-    BluetoothState, BrightnessState, CalendarEvent, ClockState, CommandActivity, ConnectivityState,
-    Direction, MediaControlAction, MediaState, NetworkState, OutputRole, OutputState,
-    PlaybackStatus, PowerProfile, PowerState, ResourceState, SourceHealth, SourceId, StateUpdate,
-    SystemState, SystemUpdate, TimerState, WindowState, WorkspaceState,
+    ActionIntent, ActivityState, ActivityStatus, ActivityUpdate, AudioOutputState, AudioState,
+    BarSnapshot, BluetoothDeviceOperation, BluetoothDeviceState, BluetoothPairingPrompt,
+    BluetoothPairingPromptKind, BluetoothPairingResponse, BluetoothState, BrightnessState,
+    CalendarEvent, ClockState, CommandActivity, ConnectivityState, ContextAction,
+    ContextActionSpec, ContextHealth, ContextSnapshot, DesktopContext, Direction,
+    KeyboardLayoutOption, KeyboardLayoutState, MediaControlAction, MediaState, NetworkState,
+    OutputRole, OutputState, PlaybackStatus, PowerProfile, PowerState, ResourceState, SourceHealth,
+    SourceId, StateUpdate, SystemState, SystemUpdate, TimerState, WindowState, WorkspaceState,
 };
 pub use sources::{
-    CalendarRecord, SourceSupervisor, battery_severity, parse_calendar_json, read_proc_sample,
-    spawn_audio_source, spawn_bluetooth_source, spawn_brightness_source, spawn_calendar_source,
-    spawn_clock_source, spawn_media_source, spawn_network_source, spawn_power_source,
-    spawn_resource_source,
+    BluetoothCommand, BluetoothControlClient, CalendarRecord, SourceSupervisor, battery_severity,
+    parse_calendar_json, read_proc_sample, spawn_audio_source, spawn_bluetooth_source,
+    spawn_brightness_source, spawn_calendar_source, spawn_clock_source, spawn_media_source,
+    spawn_network_source, spawn_power_source, spawn_resource_source,
 };
 pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};
@@ -67,6 +72,11 @@ pub fn run_test_control_server(requests: usize) -> Result<()> {
             ControlRequest::ActivityStart { .. } | ControlRequest::ActivityFinish { .. } => {
                 Ok(ControlResponse::Accepted)
             }
+            ControlRequest::ContextGet { .. }
+            | ControlRequest::ContextExecute { .. }
+            | ControlRequest::ControlCenterOpen { .. } => Ok(ControlResponse::Error {
+                message: "desktop integration requires the running bar UI".to_string(),
+            }),
         })?;
     }
 

@@ -8,6 +8,7 @@ pub mod theme;
 pub mod wm;
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{
@@ -28,9 +29,10 @@ use crate::{
     ActionCompletion, ActionRequest, ActionResult, ActionRouter, ActivityStatus, ActivityTracker,
     ActivityUpdate, AppConfig, CommandActivity, ControlRequest, ControlResponse, ControlSocket,
     ReloadStatus, SourceHealth, SourceId, StateStore, StateUpdate, SystemActionBackend,
-    SystemUpdate, TimerStore, detect_compositor, reload_runtime_config, spawn_action_worker,
-    spawn_audio_source, spawn_bluetooth_source, spawn_brightness_source, spawn_clock_source,
-    spawn_media_source, spawn_network_source, spawn_power_source, spawn_resource_source,
+    SystemUpdate, TimerStore, context_snapshots, detect_compositor, intent_for_context_action,
+    reload_runtime_config, spawn_action_worker, spawn_audio_source, spawn_bluetooth_source,
+    spawn_brightness_source, spawn_clock_source, spawn_media_source, spawn_network_source,
+    spawn_power_source, spawn_resource_source,
 };
 
 pub use surface::{PrimarySurface, ReducedSurface, SurfaceRegistry, surface_specs};
@@ -39,6 +41,7 @@ const UI_TICK_INTERVAL: Duration = Duration::from_millis(50);
 const CONTROL_SOCKET_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const TIMER_TICK_INTERVAL: Duration = Duration::from_secs(1);
 const COMPOSITOR_RECONNECT_INTERVAL: Duration = Duration::from_secs(2);
+const CONTROL_UI_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const INITIAL_DRAIN_WINDOW: Duration = Duration::from_millis(150);
 static RELOAD_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -61,6 +64,14 @@ struct UiRuntime {
     state_rx: Receiver<StateUpdate>,
     completion_rx: Receiver<ActionCompletion>,
     action_tx: Sender<ActionRequest>,
+    control_rx: Receiver<UiControlRequest>,
+    pending_control_actions: BTreeMap<String, Sender<ControlResponse>>,
+    next_control_action_id: u64,
+}
+
+struct UiControlRequest {
+    request: ControlRequest,
+    response_tx: Sender<ControlResponse>,
 }
 
 impl BarApplication {
@@ -157,6 +168,7 @@ fn install_ui_loop(
             );
             dirty |= prune_completed_activities(&mut runtime, now_epoch);
             dirty |= runtime.store.expire(now_epoch);
+            drain_control_requests(&mut runtime);
 
             if dirty || monitor_dirty.replace(false) {
                 let snapshot = runtime.store.snapshot().clone();
@@ -210,6 +222,21 @@ fn drain_updates(runtime: &mut UiRuntime, now_epoch: i64) -> bool {
     loop {
         match runtime.completion_rx.try_recv() {
             Ok(completion) => {
+                if let Some(response_tx) =
+                    runtime.pending_control_actions.remove(&completion.origin)
+                {
+                    let response = match &completion.result {
+                        ActionResult::Completed => ControlResponse::ActionResult {
+                            success: true,
+                            message: None,
+                        },
+                        ActionResult::Failed { detail, .. } => ControlResponse::ActionResult {
+                            success: false,
+                            message: Some(detail.clone()),
+                        },
+                    };
+                    let _ = response_tx.send(response);
+                }
                 dirty |= runtime.registry.handle_completion(&completion);
                 if let ActionResult::Failed { detail, .. } = &completion.result {
                     warn!("action {} failed: {}", completion.origin, detail);
@@ -227,12 +254,15 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
     let (state_tx, state_rx) = mpsc::channel::<StateUpdate>();
     let cancelled = Arc::new(AtomicBool::new(false));
     let timer_store = Arc::new(Mutex::new(TimerStore::load(current_epoch())?));
+    let (control_tx, control_rx) = mpsc::channel::<UiControlRequest>();
+    let (bluetooth, bluetooth_join) =
+        spawn_bluetooth_source(state_tx.clone(), Arc::clone(&cancelled));
     let mut joins = vec![
         spawn_compositor_worker(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_resource_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_power_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_network_source(state_tx.clone(), Arc::clone(&cancelled)),
-        spawn_bluetooth_source(state_tx.clone(), Arc::clone(&cancelled)),
+        bluetooth_join,
         spawn_audio_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_brightness_source(state_tx.clone(), Arc::clone(&cancelled)),
         spawn_media_source(state_tx.clone(), Arc::clone(&cancelled)),
@@ -246,6 +276,7 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
             state_tx.clone(),
             Arc::clone(&cancelled),
             Arc::clone(&timer_store),
+            control_tx,
         )?,
     ];
 
@@ -274,7 +305,7 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
     let mut activity_tracker = ActivityTracker::new(config.thresholds.work_completed_seconds);
     seed_initial_state(&state_rx, &mut store, &mut activity_tracker);
 
-    let router = ActionRouter::new(SystemActionBackend::from_env()?)
+    let router = ActionRouter::new(SystemActionBackend::from_env(bluetooth)?)
         .with_power_profile_state(store.snapshot().system.power.profile.clone());
     let (completion_tx, completion_rx) = mpsc::channel();
     let (action_tx, action_handle) =
@@ -291,6 +322,9 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
             state_rx,
             completion_rx,
             action_tx,
+            control_rx,
+            pending_control_actions: BTreeMap::new(),
+            next_control_action_id: 0,
         },
         RuntimeHandles { cancelled, joins },
     ))
@@ -421,15 +455,16 @@ fn spawn_control_socket_server(
     sender: Sender<StateUpdate>,
     cancelled: Arc<AtomicBool>,
     timer_store: Arc<Mutex<TimerStore>>,
+    control_tx: Sender<UiControlRequest>,
 ) -> Result<JoinHandle<()>> {
     let socket = ControlSocket::bind()?;
     socket.set_nonblocking(true)?;
 
     Ok(thread::spawn(move || {
         while !cancelled.load(Ordering::Relaxed) {
-            match socket
-                .try_serve_once(|request| handle_control_request(request, &sender, &timer_store))
-            {
+            match socket.try_serve_once(|request| {
+                handle_control_request(request, &sender, &timer_store, &control_tx)
+            }) {
                 Ok(true) => {}
                 Ok(false) => {
                     if !wait_for_cancellation(&cancelled, CONTROL_SOCKET_POLL_INTERVAL) {
@@ -451,6 +486,7 @@ fn handle_control_request(
     request: ControlRequest,
     sender: &Sender<StateUpdate>,
     timer_store: &Arc<Mutex<TimerStore>>,
+    control_tx: &Sender<UiControlRequest>,
 ) -> Result<ControlResponse> {
     match request {
         ControlRequest::TimerStart { .. }
@@ -495,6 +531,85 @@ fn handle_control_request(
                 exit_code,
             }));
             Ok(ControlResponse::Accepted)
+        }
+        request @ (ControlRequest::ContextGet { .. }
+        | ControlRequest::ContextExecute { .. }
+        | ControlRequest::ControlCenterOpen { .. }) => {
+            let (response_tx, response_rx) = mpsc::channel();
+            control_tx
+                .send(UiControlRequest {
+                    request,
+                    response_tx,
+                })
+                .map_err(|_| anyhow!("bar UI is unavailable"))?;
+            response_rx
+                .recv_timeout(CONTROL_UI_RESPONSE_TIMEOUT)
+                .map_err(|_| anyhow!("bar UI did not answer the integration request"))
+        }
+    }
+}
+
+fn drain_control_requests(runtime: &mut UiRuntime) {
+    loop {
+        let request = match runtime.control_rx.try_recv() {
+            Ok(request) => request,
+            Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+        };
+        match request.request {
+            ControlRequest::ContextGet { context } => {
+                let contexts = context_snapshots(runtime.store.snapshot(), context);
+                let _ = request
+                    .response_tx
+                    .send(ControlResponse::Contexts { contexts });
+            }
+            ControlRequest::ContextExecute { action } => {
+                let intent = match intent_for_context_action(runtime.store.snapshot(), action) {
+                    Ok(intent) => intent,
+                    Err(error) => {
+                        let _ = request.response_tx.send(ControlResponse::ActionResult {
+                            success: false,
+                            message: Some(error.to_string()),
+                        });
+                        continue;
+                    }
+                };
+                runtime.next_control_action_id = runtime.next_control_action_id.wrapping_add(1);
+                let origin = format!("luma-context:{}", runtime.next_control_action_id);
+                runtime
+                    .pending_control_actions
+                    .insert(origin.clone(), request.response_tx.clone());
+                if runtime
+                    .action_tx
+                    .send(ActionRequest {
+                        origin: origin.clone(),
+                        intent,
+                    })
+                    .is_err()
+                {
+                    runtime.pending_control_actions.remove(&origin);
+                    let _ = request.response_tx.send(ControlResponse::ActionResult {
+                        success: false,
+                        message: Some("bar action worker is unavailable".to_string()),
+                    });
+                }
+            }
+            ControlRequest::ControlCenterOpen { context, output } => {
+                let opened = runtime
+                    .registry
+                    .open_control_center(context, output.as_deref());
+                let _ = request.response_tx.send(if opened {
+                    ControlResponse::Accepted
+                } else {
+                    ControlResponse::Error {
+                        message: "the primary quick-settings surface is unavailable".to_string(),
+                    }
+                });
+            }
+            _ => {
+                let _ = request.response_tx.send(ControlResponse::Error {
+                    message: "request does not require the bar UI".to_string(),
+                });
+            }
         }
     }
 }

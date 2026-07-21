@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-use crate::StateUpdate;
+use crate::{KeyboardLayoutOption, KeyboardLayoutState, StateUpdate};
 
 use super::{
     BlockingEventReader, CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, EventRead,
@@ -148,6 +148,18 @@ impl CompositorAdapter for HyprlandAdapter {
                     &self.command_env,
                 )?;
             }
+            CompositorAction::SelectKeyboardLayout { index } => {
+                let Some(keyboard) = self.active_keyboard.clone() else {
+                    bail!(
+                        "cannot select a Hyprland keyboard layout without a known keyboard device"
+                    );
+                };
+                (self.command_runner)(
+                    "hyprctl",
+                    &["switchxkblayout".to_string(), keyboard, index.to_string()],
+                    &self.command_env,
+                )?;
+            }
         }
 
         Ok(())
@@ -247,7 +259,15 @@ struct HyprDevices {
 #[derive(Deserialize)]
 struct HyprKeyboard {
     name: String,
+    #[serde(default)]
+    layout: Option<String>,
+    #[serde(default)]
+    variant: Option<String>,
+    #[serde(default)]
+    active_layout_index: usize,
     active_keymap: Option<String>,
+    #[serde(default)]
+    main: bool,
 }
 
 fn default_true() -> bool {
@@ -308,11 +328,89 @@ fn apply_snapshot(
         );
     }
 
-    let keyboard = snapshot.devices.keyboards.into_iter().next();
+    let mut keyboards = snapshot.devices.keyboards;
+    let keyboard = keyboards
+        .iter()
+        .position(|keyboard| keyboard.main)
+        .map(|index| keyboards.remove(index))
+        .or_else(|| keyboards.into_iter().next());
     if let Some(keyboard) = keyboard.as_ref() {
-        state.keyboard_layout = keyboard.active_keymap.clone();
+        state.keyboard_layout = keyboard_layout_state(keyboard);
     }
     Ok(keyboard.map(|keyboard| keyboard.name))
+}
+
+fn keyboard_layout_state(keyboard: &HyprKeyboard) -> KeyboardLayoutState {
+    let layouts = split_layout_slots(keyboard.layout.as_deref());
+    let variants = split_layout_slots(keyboard.variant.as_deref());
+    let options = layouts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, layout)| {
+            let index = u8::try_from(index).ok()?;
+            let variant = variants
+                .get(index as usize)
+                .filter(|value| !value.is_empty());
+            Some(KeyboardLayoutOption {
+                index,
+                name: friendly_layout_name(layout, variant.map(String::as_str)),
+                layout: (!layout.is_empty()).then(|| layout.clone()),
+                variant: variant.cloned(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let current_index = u8::try_from(keyboard.active_layout_index)
+        .ok()
+        .filter(|index| options.iter().any(|option| option.index == *index));
+
+    KeyboardLayoutState {
+        current_index,
+        current_name: keyboard.active_keymap.clone(),
+        layouts: options,
+    }
+}
+
+fn split_layout_slots(value: Option<&str>) -> Vec<String> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(|part| part.trim().to_string())
+        .collect()
+}
+
+fn friendly_layout_name(layout: &str, variant: Option<&str>) -> String {
+    match (
+        layout.to_ascii_lowercase().as_str(),
+        variant.map(str::to_ascii_lowercase),
+    ) {
+        ("us", None) => "English (US)".to_string(),
+        ("us", Some(variant)) if variant == "dvorak" => "English (Dvorak)".to_string(),
+        ("de", Some(variant)) if variant == "koy" => "German (KOY)".to_string(),
+        (_, Some(variant)) => format!("{} ({})", layout.to_ascii_uppercase(), variant),
+        _ => layout.to_ascii_uppercase(),
+    }
+}
+
+fn layout_index_for_name(state: &KeyboardLayoutState, name: &str) -> Option<u8> {
+    let normalized = name.to_ascii_lowercase();
+    state.layouts.iter().find_map(|option| {
+        if option.name.eq_ignore_ascii_case(name) {
+            return Some(option.index);
+        }
+        let variant_matches = option
+            .variant
+            .as_deref()
+            .is_some_and(|variant| normalized.contains(&variant.to_ascii_lowercase()));
+        let standard_us = option.layout.as_deref() == Some("us")
+            && option.variant.is_none()
+            && (normalized.contains("english (us)") || normalized == "us");
+        let layout_matches = option.variant.is_none()
+            && option
+                .layout
+                .as_deref()
+                .is_some_and(|layout| normalized == layout.to_ascii_lowercase());
+        (variant_matches || standard_us || layout_matches).then_some(option.index)
+    })
 }
 
 fn apply_event(
@@ -411,8 +509,18 @@ fn apply_event(
                 .next()
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| reconnect_error("activelayout missing layout name"))?;
-            *active_keyboard = Some(keyboard.to_string());
-            state.keyboard_layout = Some(layout.to_string());
+            if active_keyboard
+                .as_deref()
+                .is_some_and(|active| active != keyboard)
+            {
+                return Ok(());
+            }
+            if active_keyboard.is_none() {
+                *active_keyboard = Some(keyboard.to_string());
+            }
+            state.keyboard_layout.current_index =
+                layout_index_for_name(&state.keyboard_layout, layout);
+            state.keyboard_layout.current_name = Some(layout.to_string());
         }
         "workspacev2" => {
             let mut parts = payload.splitn(2, ',');

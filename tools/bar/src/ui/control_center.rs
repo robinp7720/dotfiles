@@ -11,8 +11,11 @@ use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use tracing::warn;
 
 use crate::{
-    ActionCompletion, ActionIntent, ActionRequest, ActionResult, BarSnapshot, ConnectivityState,
-    Direction, MediaControlAction, PlaybackStatus, PowerProfile,
+    ActionCompletion, ActionIntent, ActionRequest, ActionResult, AudioOutputState, BarSnapshot,
+    BluetoothDeviceOperation, BluetoothDeviceState, BluetoothPairingPrompt,
+    BluetoothPairingPromptKind, BluetoothPairingResponse, ConnectivityState, DesktopContext,
+    Direction, KeyboardLayoutOption, KeyboardLayoutState, MediaControlAction, PlaybackStatus,
+    PowerProfile,
 };
 
 use super::artwork::{
@@ -75,7 +78,7 @@ impl ControlCenterFocus {
             Self::Keyboard => "Input layout",
             Self::Resources => "CPU and memory",
             Self::Network => "Connectivity",
-            Self::Bluetooth => "Connected devices",
+            Self::Bluetooth => "Devices and discovery",
             Self::Audio => "Volume and playback",
             Self::Power => "Performance and energy",
             Self::Clock => "Calendar and timers",
@@ -96,6 +99,36 @@ impl ControlCenterFocus {
     }
 }
 
+impl From<DesktopContext> for ControlCenterFocus {
+    fn from(context: DesktopContext) -> Self {
+        match context {
+            DesktopContext::Overview => Self::Overview,
+            DesktopContext::Keyboard => Self::Keyboard,
+            DesktopContext::Resources => Self::Resources,
+            DesktopContext::Network => Self::Network,
+            DesktopContext::Bluetooth => Self::Bluetooth,
+            DesktopContext::Audio => Self::Audio,
+            DesktopContext::Power => Self::Power,
+            DesktopContext::Clock => Self::Clock,
+        }
+    }
+}
+
+impl From<ControlCenterFocus> for DesktopContext {
+    fn from(focus: ControlCenterFocus) -> Self {
+        match focus {
+            ControlCenterFocus::Overview => Self::Overview,
+            ControlCenterFocus::Keyboard => Self::Keyboard,
+            ControlCenterFocus::Resources => Self::Resources,
+            ControlCenterFocus::Network => Self::Network,
+            ControlCenterFocus::Bluetooth => Self::Bluetooth,
+            ControlCenterFocus::Audio => Self::Audio,
+            ControlCenterFocus::Power => Self::Power,
+            ControlCenterFocus::Clock => Self::Clock,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QuickControlSpec {
     pub icon_name: String,
@@ -106,11 +139,70 @@ pub struct QuickControlSpec {
     pub toggle_available: bool,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NetworkTrafficSpec {
+    pub interface: Option<String>,
+    pub download_bytes_per_second: Option<u64>,
+    pub upload_bytes_per_second: Option<u64>,
+    pub download_history: Vec<u64>,
+    pub upload_history: Vec<u64>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AudioControlSpec {
     pub percent: Option<u8>,
     pub muted: bool,
     pub detail: String,
+    pub outputs: Vec<AudioOutputControlSpec>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AudioOutputControlSpec {
+    pub name: String,
+    pub label: String,
+    pub detail: String,
+    pub icon_name: String,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BluetoothDeviceControlSpec {
+    pub address: String,
+    pub name: String,
+    pub icon_name: String,
+    pub detail: String,
+    pub paired: bool,
+    pub connected: bool,
+    pub operation: Option<BluetoothDeviceOperation>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BluetoothManagerSpec {
+    pub available: bool,
+    pub powered: bool,
+    pub discovering: bool,
+    pub connected_count: usize,
+    pub devices: Vec<BluetoothDeviceControlSpec>,
+    pub prompt: Option<BluetoothPairingPrompt>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyboardLayoutControlSpec {
+    pub index: u8,
+    pub title: String,
+    pub detail: String,
+    pub raw_name: String,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyboardControlSpec {
+    pub summary: String,
+    pub current: String,
+    pub detail: String,
+    pub layouts: Vec<KeyboardLayoutControlSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -146,11 +238,13 @@ pub struct CalendarControlSpec {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ControlCenterSpec {
     pub network: QuickControlSpec,
+    pub network_traffic: NetworkTrafficSpec,
     pub bluetooth: QuickControlSpec,
+    pub bluetooth_manager: BluetoothManagerSpec,
     pub audio: AudioControlSpec,
     pub power: QuickControlSpec,
     pub brightness: Option<BrightnessControlSpec>,
-    pub keyboard: String,
+    pub keyboard: KeyboardControlSpec,
     pub cpu_percent: Option<u8>,
     pub memory_percent: Option<u8>,
     pub battery_present: bool,
@@ -226,11 +320,23 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
             }
             .to_string()
         });
-    let audio_detail = system
-        .bluetooth
-        .audio_device
-        .clone()
-        .unwrap_or_else(|| "Default output".to_string());
+    let mut audio_outputs = system
+        .audio
+        .outputs
+        .iter()
+        .map(audio_output_control_spec)
+        .collect::<Vec<_>>();
+    audio_outputs.sort_by(|left, right| {
+        left.label
+            .to_lowercase()
+            .cmp(&right.label.to_lowercase())
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    let audio_detail = audio_outputs
+        .iter()
+        .find(|output| output.selected)
+        .map(|output| output.label.clone())
+        .unwrap_or_else(|| "No audio output".to_string());
     let media = system.media.as_ref().map(|media| MediaControlSpec {
         player: media.player.clone(),
         title: media.title.clone().unwrap_or_else(|| media.player.clone()),
@@ -241,6 +347,13 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
 
     ControlCenterSpec {
         network,
+        network_traffic: NetworkTrafficSpec {
+            interface: system.network.interface.clone(),
+            download_bytes_per_second: system.network.download_bytes_per_second,
+            upload_bytes_per_second: system.network.upload_bytes_per_second,
+            download_history: system.network.download_history.clone(),
+            upload_history: system.network.upload_history.clone(),
+        },
         bluetooth: QuickControlSpec {
             icon_name: "bluetooth-symbolic".to_string(),
             label: "Bluetooth".to_string(),
@@ -249,10 +362,39 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
             available: system.bluetooth.available,
             toggle_available: system.bluetooth.available,
         },
+        bluetooth_manager: BluetoothManagerSpec {
+            available: system.bluetooth.available,
+            powered: system.bluetooth.powered,
+            discovering: system.bluetooth.discovering,
+            connected_count: system
+                .bluetooth
+                .devices
+                .iter()
+                .filter(|device| device.connected)
+                .count(),
+            devices: system
+                .bluetooth
+                .devices
+                .iter()
+                .map(|device| BluetoothDeviceControlSpec {
+                    address: device.address.clone(),
+                    name: device.name.clone(),
+                    icon_name: device.icon_name.clone(),
+                    detail: bluetooth_device_detail(device),
+                    paired: device.paired,
+                    connected: device.connected,
+                    operation: device.operation,
+                    error: device.error.clone(),
+                })
+                .collect(),
+            prompt: system.bluetooth.pairing_prompt.clone(),
+            error: system.bluetooth.error.clone(),
+        },
         audio: AudioControlSpec {
             percent: system.audio.volume_percent.map(|value| value.min(100)),
             muted: system.audio.muted,
             detail: audio_detail,
+            outputs: audio_outputs,
         },
         power: QuickControlSpec {
             icon_name: power_profile_icon(&system.power.profile).to_string(),
@@ -271,7 +413,7 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
                 device: device.clone(),
                 percent: percent.min(100),
             }),
-        keyboard: short_layout_label(system.keyboard_layout.as_deref()),
+        keyboard: keyboard_control_spec(&system.keyboard_layout),
         cpu_percent: system.resources.cpu_percent,
         memory_percent: system.resources.memory_percent,
         battery_present: system.power.battery_present,
@@ -294,6 +436,77 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
             })
             .collect(),
         media,
+    }
+}
+
+fn audio_output_control_spec(output: &AudioOutputState) -> AudioOutputControlSpec {
+    let alias = output
+        .alias
+        .as_deref()
+        .filter(|value| !value.trim().is_empty());
+    let port = output
+        .port_description
+        .as_deref()
+        .filter(|value| !value.trim().is_empty());
+    let label = alias.or(port).unwrap_or(&output.description).to_string();
+    let detail = if output.description != label {
+        output.description.clone()
+    } else if let Some(port) = port.filter(|port| *port != label) {
+        port.to_string()
+    } else {
+        match output.bus.as_deref() {
+            Some("bluetooth") => "Bluetooth audio".to_string(),
+            Some("usb") => "USB audio".to_string(),
+            Some("pci") => "Built-in audio".to_string(),
+            _ => "Audio output".to_string(),
+        }
+    };
+    let kind = output
+        .port_type
+        .as_deref()
+        .unwrap_or_default()
+        .to_lowercase();
+    let name = output.name.to_lowercase();
+    let icon_name = if kind.contains("headphone")
+        || kind.contains("headset")
+        || output.bus.as_deref() == Some("bluetooth")
+        || name.contains("bluez")
+    {
+        "audio-headphones-symbolic"
+    } else if kind.contains("hdmi") || kind.contains("display") || name.contains("hdmi") {
+        "video-display-symbolic"
+    } else if kind.contains("speaker") || kind.contains("line") {
+        "audio-speakers-symbolic"
+    } else {
+        "audio-card-symbolic"
+    };
+    AudioOutputControlSpec {
+        name: output.name.clone(),
+        label,
+        detail,
+        icon_name: icon_name.to_string(),
+        selected: output.is_default,
+    }
+}
+
+fn bluetooth_device_detail(device: &BluetoothDeviceState) -> String {
+    let state = match device.operation {
+        Some(BluetoothDeviceOperation::Connecting) => "Connecting…".to_string(),
+        Some(BluetoothDeviceOperation::Disconnecting) => "Disconnecting…".to_string(),
+        Some(BluetoothDeviceOperation::Pairing) => "Pairing…".to_string(),
+        Some(BluetoothDeviceOperation::Forgetting) => "Forgetting…".to_string(),
+        None if device.connected => "Connected".to_string(),
+        None if device.paired => "Saved".to_string(),
+        None => match device.rssi {
+            Some(rssi) if rssi >= -55 => "Nearby · Strong signal".to_string(),
+            Some(rssi) if rssi >= -72 => "Nearby · Good signal".to_string(),
+            Some(_) => "Nearby · Weak signal".to_string(),
+            None => "Nearby".to_string(),
+        },
+    };
+    match device.battery_percent {
+        Some(percent) if device.connected => format!("{state} · {percent}% battery"),
+        _ => state,
     }
 }
 
@@ -362,18 +575,95 @@ fn network_control_spec(network: &crate::NetworkState) -> QuickControlSpec {
     }
 }
 
-fn short_layout_label(layout: Option<&str>) -> String {
-    let Some(layout) = layout else {
-        return "--".to_string();
-    };
-    let lower = layout.to_ascii_lowercase();
-    if lower.contains("dvorak") {
-        "DV".to_string()
-    } else if lower.contains("us") {
-        "US".to_string()
+fn keyboard_control_spec(state: &KeyboardLayoutState) -> KeyboardControlSpec {
+    let layouts = state
+        .layouts
+        .iter()
+        .map(|option| {
+            let (title, detail, _) = keyboard_labels(option);
+            KeyboardLayoutControlSpec {
+                index: option.index,
+                title,
+                detail,
+                raw_name: option.name.clone(),
+                selected: state.current_index == Some(option.index),
+            }
+        })
+        .collect::<Vec<_>>();
+    let current = state
+        .current_index
+        .and_then(|index| state.layouts.iter().find(|option| option.index == index));
+    let (summary, current_label, detail) = if let Some(option) = current {
+        let (title, variant, compact) = keyboard_labels(option);
+        (
+            compact,
+            format!("{title} — {variant}"),
+            state
+                .current_name
+                .clone()
+                .unwrap_or_else(|| option.name.clone()),
+        )
+    } else if let Some(name) = state.current_name.as_deref() {
+        let fallback = KeyboardLayoutOption {
+            name: name.to_string(),
+            ..KeyboardLayoutOption::default()
+        };
+        let (title, variant, compact) = keyboard_labels(&fallback);
+        (compact, format!("{title} — {variant}"), name.to_string())
     } else {
-        layout.chars().take(2).collect::<String>().to_uppercase()
+        (
+            "--".to_string(),
+            "Unavailable".to_string(),
+            "No active layout".to_string(),
+        )
+    };
+
+    KeyboardControlSpec {
+        summary,
+        current: current_label,
+        detail,
+        layouts,
     }
+}
+
+fn keyboard_labels(option: &KeyboardLayoutOption) -> (String, String, String) {
+    let raw = option.name.to_ascii_lowercase();
+    let layout = option.layout.as_deref().map(str::to_ascii_lowercase);
+    let variant = option.variant.as_deref().map(str::to_ascii_lowercase);
+    let title = match layout.as_deref() {
+        Some("us") => "US".to_string(),
+        Some("de") => "DE".to_string(),
+        Some(value) if !value.is_empty() => value.to_ascii_uppercase(),
+        _ if raw.contains("english") || raw == "us" => "US".to_string(),
+        _ if raw.contains("german") || raw == "de" => "DE".to_string(),
+        _ => option
+            .name
+            .chars()
+            .take(2)
+            .collect::<String>()
+            .to_uppercase(),
+    };
+    let detail = match variant.as_deref() {
+        Some("dvorak") => "Dvorak".to_string(),
+        Some("koy") => "KOY".to_string(),
+        Some(value) if !value.is_empty() => value.to_string(),
+        _ if raw.contains("dvorak") => "Dvorak".to_string(),
+        _ if raw.contains("koy") => "KOY".to_string(),
+        _ => "Standard".to_string(),
+    };
+    let suffix = match detail.as_str() {
+        "Standard" => None,
+        "Dvorak" => Some("DV"),
+        "KOY" => Some("KOY"),
+        value => Some(value),
+    };
+    let compact = suffix.map_or_else(|| title.clone(), |suffix| format!("{title}-{suffix}"));
+    (title, detail, compact)
+}
+
+pub(super) fn keyboard_bar_labels(state: &KeyboardLayoutState) -> (String, String) {
+    let spec = keyboard_control_spec(state);
+    (spec.summary, format!("{} · {}", spec.current, spec.detail))
 }
 
 fn power_profile_label(profile: &PowerProfile) -> &'static str {
@@ -399,11 +689,12 @@ struct NavigationUi {
     back_button: gtk::Button,
     title: gtk::Label,
     subtitle: gtk::Label,
-    footer: gtk::Button,
+    footer_label: gtk::Label,
     error_slot: gtk::Box,
     error_label: gtk::Label,
     errors: Rc<RefCell<ControlCenterErrors>>,
     pending: Rc<RefCell<BTreeMap<ControlCenterFocus, usize>>>,
+    page_changed: Rc<RefCell<Option<Rc<dyn Fn(ControlCenterFocus)>>>>,
 }
 
 impl NavigationUi {
@@ -419,14 +710,18 @@ impl NavigationUi {
             .set_visible(page != ControlCenterFocus::Overview);
         self.title.set_label(page.title());
         self.subtitle.set_label(page.subtitle());
-        self.footer
+        self.footer_label
             .set_label(&format!("Open {} in Luma", page.title()));
         self.render_error();
+        if let Some(callback) = self.page_changed.borrow().as_ref() {
+            callback(page);
+        }
     }
 
     fn render_error(&self) {
         if let Some(message) = self.errors.borrow().message(self.page.get()) {
             self.error_label.set_label(message);
+            self.error_slot.set_visible(true);
             self.error_slot.remove_css_class("is-pending");
             self.error_slot.add_css_class("has-error");
         } else if self
@@ -436,10 +731,12 @@ impl NavigationUi {
             .is_some_and(|count| *count > 0)
         {
             self.error_label.set_label("Applying change…");
+            self.error_slot.set_visible(true);
             self.error_slot.remove_css_class("has-error");
             self.error_slot.add_css_class("is-pending");
         } else {
             self.error_label.set_label("");
+            self.error_slot.set_visible(false);
             self.error_slot.remove_css_class("has-error");
             self.error_slot.remove_css_class("is-pending");
         }
@@ -520,6 +817,31 @@ struct ConnectivityPage {
     toggle_row: gtk::Box,
     toggle_label: gtk::Label,
     toggle: gtk::Switch,
+}
+
+struct BluetoothPage {
+    root: gtk::Box,
+    icon: gtk::Image,
+    state: gtk::Label,
+    detail: gtk::Label,
+    toggle: gtk::Switch,
+    list: gtk::Box,
+    previous: RefCell<Option<BluetoothManagerSpec>>,
+}
+
+struct NetworkPage {
+    connectivity: ConnectivityPage,
+    traffic_root: gtk::Box,
+    interface: gtk::Label,
+    download: TrafficGraph,
+    upload: TrafficGraph,
+}
+
+struct TrafficGraph {
+    root: gtk::Box,
+    value: gtk::Label,
+    area: gtk::DrawingArea,
+    history: Rc<RefCell<Vec<u64>>>,
 }
 
 #[derive(Clone)]
@@ -684,6 +1006,7 @@ struct TimerRowWidgets {
 type TimerWidgets = BTreeMap<String, TimerRowWidgets>;
 
 const METRIC_SEGMENTS: usize = 10;
+const NETWORK_GRAPH_SAMPLES: usize = 60;
 const CONTROL_CENTER_ENTER_MS: u64 = 320;
 const CONTROL_CENTER_EXIT_MS: u64 = 180;
 
@@ -901,6 +1224,8 @@ pub struct ControlCenterView {
     volume_scales: Vec<gtk::Scale>,
     volume_values: Vec<gtk::Label>,
     volume_buttons: Vec<gtk::Button>,
+    audio_output_list: gtk::Box,
+    audio_output_specs: RefCell<Vec<AudioOutputControlSpec>>,
     brightness_rows: Vec<gtk::Box>,
     brightness_scales: Vec<gtk::Scale>,
     brightness_values: Vec<gtk::Label>,
@@ -912,8 +1237,8 @@ pub struct ControlCenterView {
     battery_summary_button: gtk::Button,
     battery_summary: gtk::Label,
     time_summary: gtk::Label,
-    network_page: ConnectivityPage,
-    bluetooth_page: ConnectivityPage,
+    network_page: NetworkPage,
+    bluetooth_page: BluetoothPage,
     audio_state: gtk::Label,
     audio_detail: gtk::Label,
     battery_hero: gtk::Box,
@@ -921,6 +1246,9 @@ pub struct ControlCenterView {
     battery_detail: gtk::Label,
     power_profile: gtk::Label,
     keyboard_state: gtk::Label,
+    keyboard_detail: gtk::Label,
+    keyboard_layout_list: gtk::Box,
+    keyboard_layout_specs: RefCell<Vec<KeyboardLayoutControlSpec>>,
     cpu_gauge: MetricGauge,
     memory_gauge: MetricGauge,
     calendar_title: gtk::Label,
@@ -931,6 +1259,7 @@ pub struct ControlCenterView {
     clock_label: gtk::Label,
     errors: Rc<RefCell<ControlCenterErrors>>,
     suppress_controls: Rc<Cell<bool>>,
+    bluetooth_discovery_active: Rc<Cell<bool>>,
     timer_sender: Sender<ActionRequest>,
 }
 
@@ -938,6 +1267,7 @@ impl ControlCenterView {
     pub fn new(
         application: &gtk::Application,
         monitor: &gtk::gdk::Monitor,
+        output_name: &str,
         top_margin: i32,
         right_margin: i32,
         spec: &ControlCenterSpec,
@@ -949,7 +1279,7 @@ impl ControlCenterView {
             .build();
         window.set_decorated(false);
         window.set_resizable(false);
-        window.set_default_size(512, 680);
+        window.set_default_size(512, -1);
         window.add_css_class("control-center-window");
         window.init_layer_shell();
         window.set_namespace(Some("cockpit-control-center"));
@@ -964,7 +1294,7 @@ impl ControlCenterView {
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
         root.add_css_class("control-center-root");
-        root.set_size_request(480, 648);
+        root.set_size_request(480, -1);
 
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         header.add_css_class("control-header");
@@ -994,15 +1324,15 @@ impl ControlCenterView {
 
         let stack = gtk::Stack::new();
         stack.add_css_class("control-stack");
-        stack.set_size_request(-1, 488);
         stack.set_transition_duration(180);
         stack.set_hhomogeneous(true);
-        stack.set_vhomogeneous(true);
+        stack.set_vhomogeneous(false);
 
         let errors = Rc::new(RefCell::new(ControlCenterErrors::default()));
         let error_slot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         error_slot.add_css_class("control-error-slot");
         error_slot.set_size_request(-1, 32);
+        error_slot.set_visible(false);
         let error_icon = gtk::Image::from_icon_name("dialog-warning-symbolic");
         let error_label = gtk::Label::new(None);
         error_label.set_xalign(0.0);
@@ -1011,9 +1341,22 @@ impl ControlCenterView {
         error_slot.append(&error_icon);
         error_slot.append(&error_label);
 
-        let footer = gtk::Button::with_label("Open Quick Settings in Luma");
+        let footer = gtk::Button::new();
         footer.add_css_class("control-footer");
         footer.set_has_frame(false);
+        let footer_content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        footer_content.set_halign(gtk::Align::Fill);
+        let footer_icon = gtk::Image::from_icon_name("system-search-symbolic");
+        footer_icon.add_css_class("control-footer-icon");
+        let footer_label = gtk::Label::new(Some("Open Quick Settings in Luma"));
+        footer_label.set_xalign(0.0);
+        footer_label.set_hexpand(true);
+        let footer_arrow = gtk::Image::from_icon_name("go-next-symbolic");
+        footer_arrow.add_css_class("control-footer-arrow");
+        footer_content.append(&footer_icon);
+        footer_content.append(&footer_label);
+        footer_content.append(&footer_arrow);
+        footer.set_child(Some(&footer_content));
 
         let navigation = NavigationUi {
             page: Rc::new(Cell::new(ControlCenterFocus::Overview)),
@@ -1021,15 +1364,28 @@ impl ControlCenterView {
             back_button: back_button.clone(),
             title,
             subtitle,
-            footer: footer.clone(),
+            footer_label,
             error_slot: error_slot.clone(),
             error_label,
             errors: errors.clone(),
             pending: Rc::new(RefCell::new(BTreeMap::new())),
+            page_changed: Rc::new(RefCell::new(None)),
         };
 
         let current = Rc::new(RefCell::new(spec.clone()));
         let suppress_controls = Rc::new(Cell::new(false));
+        let bluetooth_discovery_active = Rc::new(Cell::new(false));
+        let discovery_sender = action_sender.clone();
+        let discovery_current = current.clone();
+        let discovery_active = bluetooth_discovery_active.clone();
+        *navigation.page_changed.borrow_mut() = Some(Rc::new(move |page| {
+            sync_bluetooth_discovery(
+                &discovery_sender,
+                &discovery_current,
+                &discovery_active,
+                page == ControlCenterFocus::Bluetooth,
+            );
+        }));
         let brightness_device = Rc::new(RefCell::new(
             spec.brightness.as_ref().map(|value| value.device.clone()),
         ));
@@ -1066,6 +1422,7 @@ impl ControlCenterView {
             ControlCenterFocus::Power,
             &navigation,
         );
+        overview.append(&section_eyebrow("CONTROLS"));
         overview.append(&quick_grid);
 
         let sliders = gtk::Box::new(gtk::Orientation::Vertical, 6);
@@ -1080,6 +1437,7 @@ impl ControlCenterView {
             slider_row("display-brightness-symbolic", "Brightness");
         sliders.append(&overview_volume_row);
         sliders.append(&overview_brightness_row);
+        overview.append(&section_eyebrow("LEVELS"));
         overview.append(&sliders);
 
         let overview_media = media_card(
@@ -1093,10 +1451,14 @@ impl ControlCenterView {
         let summaries = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         summaries.add_css_class("summary-grid");
         summaries.set_homogeneous(true);
-        let (keyboard_summary_button, keyboard_summary) = summary_tile("Keyboard");
-        let (resources_summary_button, resources_summary) = summary_tile("CPU / RAM");
-        let (battery_summary_button, battery_summary) = summary_tile("Battery");
-        let (time_summary_button, time_summary) = summary_tile("Focus");
+        let (keyboard_summary_button, keyboard_summary) =
+            summary_tile("input-keyboard-symbolic", "Keyboard");
+        let (resources_summary_button, resources_summary) =
+            summary_tile("utilities-system-monitor-symbolic", "CPU / RAM");
+        let (battery_summary_button, battery_summary) =
+            summary_tile("battery-good-symbolic", "Battery");
+        let (time_summary_button, time_summary) =
+            summary_tile("preferences-system-time-symbolic", "Focus");
         connect_navigation(
             &keyboard_summary_button,
             ControlCenterFocus::Keyboard,
@@ -1117,16 +1479,17 @@ impl ControlCenterView {
         summaries.append(&resources_summary_button);
         summaries.append(&battery_summary_button);
         summaries.append(&time_summary_button);
+        overview.append(&section_eyebrow("AT A GLANCE"));
         overview.append(&summaries);
         stack.add_named(&overview, Some(ControlCenterFocus::Overview.as_str()));
 
-        let network_page = connectivity_page("network-wireless-symbolic", "Wi-Fi");
+        let network_page = network_page();
         stack.add_named(
-            &network_page.root,
+            &network_page.connectivity.root,
             Some(ControlCenterFocus::Network.as_str()),
         );
 
-        let bluetooth_page = connectivity_page("bluetooth-symbolic", "Bluetooth");
+        let bluetooth_page = bluetooth_page();
         stack.add_named(
             &bluetooth_page.root,
             Some(ControlCenterFocus::Bluetooth.as_str()),
@@ -1140,6 +1503,11 @@ impl ControlCenterView {
         let (detail_volume_row, detail_volume_scale, detail_volume_value, detail_volume_button) =
             volume_slider_row();
         audio_page.append(&detail_volume_row);
+        audio_page.append(&section_eyebrow("OUTPUT"));
+        let audio_output_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        audio_output_list.add_css_class("audio-output-list");
+        audio_output_list.set_vexpand(false);
+        audio_page.append(&audio_output_list);
         let detail_media = media_card(
             action_sender.clone(),
             errors.clone(),
@@ -1177,12 +1545,13 @@ impl ControlCenterView {
 
         let keyboard_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
         keyboard_page.add_css_class("control-page");
-        let (keyboard_hero, keyboard_state, _) =
+        let (keyboard_hero, keyboard_state, keyboard_detail) =
             detail_hero("input-keyboard-symbolic", "Current layout");
         keyboard_page.append(&keyboard_hero);
-        let keyboard_button = gtk::Button::with_label("Switch keyboard layout");
-        keyboard_button.add_css_class("primary-action");
-        keyboard_page.append(&keyboard_button);
+        keyboard_page.append(&section_eyebrow("AVAILABLE LAYOUTS"));
+        let keyboard_layout_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        keyboard_layout_list.add_css_class("keyboard-layout-list");
+        keyboard_page.append(&keyboard_layout_list);
         stack.add_named(&keyboard_page, Some(ControlCenterFocus::Keyboard.as_str()));
 
         let resources_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -1263,25 +1632,28 @@ impl ControlCenterView {
         let nav_for_footer = navigation.clone();
         let sender_for_footer = action_sender.clone();
         let motion_for_footer = motion.clone();
+        let output_for_footer = output_name.to_string();
         footer.connect_clicked(move |_| {
             let focus = nav_for_footer.page.get();
-            let handle = ActionHandle {
-                sender: sender_for_footer.clone(),
-                errors: nav_for_footer.errors.clone(),
-                navigation: nav_for_footer.clone(),
-                focus,
-            };
-            handle.send(
-                "open-luma",
-                ActionIntent::OpenContextQuery {
-                    query: focus.luma_query().to_string(),
+            motion_for_footer.dismiss();
+            let sender = sender_for_footer.clone();
+            let output = output_for_footer.clone();
+            glib::timeout_add_local_once(
+                Duration::from_millis(CONTROL_CENTER_EXIT_MS),
+                move || {
+                    let _ = sender.send(ActionRequest {
+                        origin: control_center_origin(focus, "open-luma"),
+                        intent: ActionIntent::OpenContextQuery {
+                            context: focus.into(),
+                            output,
+                        },
+                    });
                 },
             );
-            motion_for_footer.dismiss();
         });
 
         connect_toggle_controls(
-            [&network_tile.toggle, &network_page.toggle],
+            [&network_tile.toggle, &network_page.connectivity.toggle],
             suppress_controls.clone(),
             current.clone(),
             ActionHandle {
@@ -1348,16 +1720,6 @@ impl ControlCenterView {
             });
         }
 
-        let keyboard_action = ActionHandle {
-            sender: action_sender.clone(),
-            errors: errors.clone(),
-            navigation: navigation.clone(),
-            focus: ControlCenterFocus::Keyboard,
-        };
-        keyboard_button.connect_clicked(move |_| {
-            keyboard_action.send("cycle-layout", ActionIntent::ToggleKeyboardLayout);
-        });
-
         let quick_timer_action = ActionHandle {
             sender: action_sender.clone(),
             errors: errors.clone(),
@@ -1412,11 +1774,20 @@ impl ControlCenterView {
 
         let errors_for_close = errors.clone();
         let nav_for_close = navigation.clone();
+        let current_for_close = current.clone();
+        let discovery_for_close = bluetooth_discovery_active.clone();
+        let sender_for_close = action_sender.clone();
         window.connect_visible_notify(move |window| {
             if !window.is_visible() {
                 errors_for_close.borrow_mut().close();
                 nav_for_close.pending.borrow_mut().clear();
                 nav_for_close.render_error();
+                sync_bluetooth_discovery(
+                    &sender_for_close,
+                    &current_for_close,
+                    &discovery_for_close,
+                    false,
+                );
             }
         });
 
@@ -1448,6 +1819,8 @@ impl ControlCenterView {
             volume_scales: vec![overview_volume_scale, detail_volume_scale],
             volume_values: vec![overview_volume_value, detail_volume_value],
             volume_buttons: vec![overview_volume_button, detail_volume_button],
+            audio_output_list,
+            audio_output_specs: RefCell::new(Vec::new()),
             brightness_rows: vec![overview_brightness_row, detail_brightness_row],
             brightness_scales: vec![overview_brightness_scale, detail_brightness_scale],
             brightness_values: vec![overview_brightness_value, detail_brightness_value],
@@ -1468,6 +1841,9 @@ impl ControlCenterView {
             battery_detail,
             power_profile,
             keyboard_state,
+            keyboard_detail,
+            keyboard_layout_list,
+            keyboard_layout_specs: RefCell::new(Vec::new()),
             cpu_gauge,
             memory_gauge,
             calendar_title,
@@ -1478,6 +1854,7 @@ impl ControlCenterView {
             clock_label: clock,
             errors,
             suppress_controls,
+            bluetooth_discovery_active,
             timer_sender: action_sender,
         };
         view.navigation
@@ -1492,9 +1869,21 @@ impl ControlCenterView {
 
     pub fn present(&self) {
         self.motion.present();
+        sync_bluetooth_discovery(
+            &self.timer_sender,
+            &self.current,
+            &self.bluetooth_discovery_active,
+            self.current_page() == ControlCenterFocus::Bluetooth,
+        );
     }
 
     pub fn dismiss(&self) {
+        sync_bluetooth_discovery(
+            &self.timer_sender,
+            &self.current,
+            &self.bluetooth_discovery_active,
+            false,
+        );
         self.motion.dismiss();
     }
 
@@ -1503,6 +1892,12 @@ impl ControlCenterView {
     }
 
     pub fn destroy(&self) {
+        sync_bluetooth_discovery(
+            &self.timer_sender,
+            &self.current,
+            &self.bluetooth_discovery_active,
+            false,
+        );
         self.motion.destroy();
     }
 
@@ -1524,6 +1919,12 @@ impl ControlCenterView {
 
     pub fn update(&self, spec: &ControlCenterSpec) {
         *self.current.borrow_mut() = spec.clone();
+        sync_bluetooth_discovery(
+            &self.timer_sender,
+            &self.current,
+            &self.bluetooth_discovery_active,
+            self.is_visible() && self.current_page() == ControlCenterFocus::Bluetooth,
+        );
         self.suppress_controls.set(true);
 
         update_toggle_tile(&self.network_tile, &spec.network);
@@ -1541,29 +1942,46 @@ impl ControlCenterView {
             );
             self.quick_layout.set(Some(quick_layout));
         }
-        self.audio_tile.detail.set_label(&format!(
-            "{} · {}%",
-            if spec.audio.muted {
-                "Muted"
-            } else {
-                &spec.audio.detail
-            },
-            spec.audio.percent.unwrap_or_default()
-        ));
-        set_enabled_class(&self.audio_tile.root, !spec.audio.muted);
+        let audio_available = !spec.audio.outputs.is_empty() && spec.audio.percent.is_some();
+        self.audio_tile.detail.set_label(
+            &spec
+                .audio
+                .percent
+                .map(|percent| {
+                    format!(
+                        "{} · {percent}%",
+                        if spec.audio.muted {
+                            "Muted"
+                        } else {
+                            &spec.audio.detail
+                        }
+                    )
+                })
+                .unwrap_or_else(|| spec.audio.detail.clone()),
+        );
+        set_enabled_class(&self.audio_tile.root, audio_available && !spec.audio.muted);
         self.audio_tile.toggle.set_active(!spec.audio.muted);
+        self.audio_tile.toggle.set_sensitive(audio_available);
         update_action_tile(&self.power_tile, &spec.power);
 
         let volume = spec.audio.percent.unwrap_or_default();
         for scale in &self.volume_scales {
             scale.set_value(f64::from(volume));
+            scale.set_sensitive(audio_available);
         }
         for label in &self.volume_values {
-            label.set_label(&format!("{volume}%"));
+            label.set_label(
+                &spec
+                    .audio
+                    .percent
+                    .map(|percent| format!("{percent}%"))
+                    .unwrap_or_else(|| "--".to_string()),
+            );
         }
         for button in &self.volume_buttons {
             button.set_icon_name(volume_icon_name(spec.audio.muted, spec.audio.percent));
             button.set_tooltip_text(Some(if spec.audio.muted { "Unmute" } else { "Mute" }));
+            button.set_sensitive(audio_available);
             if spec.audio.muted {
                 button.add_css_class("muted");
             } else {
@@ -1594,7 +2012,7 @@ impl ControlCenterView {
         }
         self.artwork.show(spec.media.as_ref(), &self.media_widgets);
 
-        self.keyboard_summary.set_label(&spec.keyboard);
+        self.keyboard_summary.set_label(&spec.keyboard.summary);
         self.resources_summary.set_label(&format!(
             "{} / {}",
             percent_label(spec.cpu_percent),
@@ -1619,14 +2037,30 @@ impl ControlCenterView {
                 .unwrap_or_else(|| spec.clock.clone()),
         );
 
-        update_connectivity_page(&self.network_page, &spec.network);
-        update_connectivity_page(&self.bluetooth_page, &spec.bluetooth);
-        self.audio_state.set_label(if spec.audio.muted {
-            "Muted"
-        } else {
-            "Sound on"
-        });
+        update_connectivity_page(&self.network_page.connectivity, &spec.network);
+        update_network_traffic(&self.network_page, &spec.network_traffic);
+        update_bluetooth_page(
+            &self.bluetooth_page,
+            &spec.bluetooth_manager,
+            self.timer_sender.clone(),
+        );
+        self.audio_state
+            .set_label(if spec.audio.outputs.is_empty() {
+                "Unavailable"
+            } else if spec.audio.muted {
+                "Muted"
+            } else {
+                "Sound on"
+            });
         self.audio_detail.set_label(&spec.audio.detail);
+        reconcile_audio_outputs(
+            &self.audio_output_list,
+            &mut self.audio_output_specs.borrow_mut(),
+            &spec.audio.outputs,
+            self.timer_sender.clone(),
+            self.errors.clone(),
+            self.navigation.clone(),
+        );
 
         self.battery_hero.set_visible(spec.battery_present);
         if spec.battery_present {
@@ -1643,7 +2077,16 @@ impl ControlCenterView {
             });
         }
         self.power_profile.set_label(&spec.power.detail);
-        self.keyboard_state.set_label(&spec.keyboard);
+        self.keyboard_state.set_label(&spec.keyboard.current);
+        self.keyboard_detail.set_label(&spec.keyboard.detail);
+        reconcile_keyboard_layouts(
+            &self.keyboard_layout_list,
+            &mut self.keyboard_layout_specs.borrow_mut(),
+            &spec.keyboard.layouts,
+            self.timer_sender.clone(),
+            self.errors.clone(),
+            self.navigation.clone(),
+        );
         update_metric(&self.cpu_gauge, spec.cpu_percent);
         update_metric(&self.memory_gauge, spec.memory_percent);
 
@@ -1683,7 +2126,10 @@ impl ControlCenterView {
         match &completion.result {
             ActionResult::Completed => self.errors.borrow_mut().retry(focus),
             ActionResult::Failed { detail, .. } => {
-                self.errors.borrow_mut().record_failure(focus, detail)
+                self.errors.borrow_mut().record_failure(focus, detail);
+                if completion.origin.ends_with(":open-luma") {
+                    self.present();
+                }
             }
         }
         self.navigation.finish_action(focus);
@@ -1778,21 +2224,175 @@ fn connect_navigation(button: &gtk::Button, page: ControlCenterFocus, navigation
     button.connect_clicked(move |_| navigation.navigate(page, false));
 }
 
-fn summary_tile(title: &str) -> (gtk::Button, gtk::Label) {
+fn section_eyebrow(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.add_css_class("section-eyebrow");
+    label.set_xalign(0.0);
+    label
+}
+
+fn summary_tile(icon_name: &str, title: &str) -> (gtk::Button, gtk::Label) {
     let button = gtk::Button::new();
     button.add_css_class("summary-tile");
     button.set_has_frame(false);
     button.set_hexpand(true);
-    let column = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.add_css_class("summary-icon");
+    let title = gtk::Label::new(Some(title));
+    title.add_css_class("summary-label");
+    title.set_xalign(0.0);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    header.append(&icon);
+    header.append(&title);
     let value = gtk::Label::new(None);
+    value.add_css_class("summary-value");
+    value.set_xalign(0.0);
     value.set_max_width_chars(12);
     value.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    let title = gtk::Label::new(Some(title));
-    title.add_css_class("supporting-text");
+    column.append(&header);
     column.append(&value);
-    column.append(&title);
     button.set_child(Some(&column));
     (button, value)
+}
+
+fn network_page() -> NetworkPage {
+    let connectivity = connectivity_page("network-wireless-symbolic", "Wi-Fi");
+    let traffic_root = gtk::Box::new(gtk::Orientation::Vertical, 7);
+    traffic_root.add_css_class("network-traffic");
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let title = section_eyebrow("LIVE TRAFFIC");
+    title.set_hexpand(true);
+    let interface = gtk::Label::new(None);
+    interface.add_css_class("network-interface");
+    interface.set_xalign(1.0);
+    heading.append(&title);
+    heading.append(&interface);
+    let graphs = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+    graphs.add_css_class("network-graphs");
+    graphs.set_homogeneous(true);
+    let download = traffic_graph("DOWNLOAD", "download");
+    let upload = traffic_graph("UPLOAD", "upload");
+    graphs.append(&download.root);
+    graphs.append(&upload.root);
+    traffic_root.append(&heading);
+    traffic_root.append(&graphs);
+    connectivity.root.append(&traffic_root);
+    NetworkPage {
+        connectivity,
+        traffic_root,
+        interface,
+        download,
+        upload,
+    }
+}
+
+fn traffic_graph(title: &str, class_name: &str) -> TrafficGraph {
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    root.add_css_class("network-graph-card");
+    root.add_css_class(class_name);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    let title = gtk::Label::new(Some(title));
+    title.add_css_class("network-graph-title");
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    let value = gtk::Label::new(Some("--"));
+    value.add_css_class("network-graph-value");
+    value.set_xalign(1.0);
+    header.append(&title);
+    header.append(&value);
+    let area = gtk::DrawingArea::new();
+    area.add_css_class("network-graph");
+    area.set_content_height(54);
+    area.set_hexpand(true);
+    let history = Rc::new(RefCell::new(Vec::<u64>::new()));
+    let history_for_draw = history.clone();
+    area.set_draw_func(move |area, context, width, height| {
+        draw_traffic_graph(area, context, width, height, &history_for_draw.borrow());
+    });
+    root.append(&header);
+    root.append(&area);
+    TrafficGraph {
+        root,
+        value,
+        area,
+        history,
+    }
+}
+
+fn draw_traffic_graph(
+    area: &gtk::DrawingArea,
+    context: &gtk::cairo::Context,
+    width: i32,
+    height: i32,
+    history: &[u64],
+) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+    let width = f64::from(width);
+    let height = f64::from(height);
+    let bottom = height - 3.0;
+    let color = area.color();
+
+    context.set_line_width(1.0);
+    context.set_source_rgba(
+        f64::from(color.red()),
+        f64::from(color.green()),
+        f64::from(color.blue()),
+        0.10,
+    );
+    for fraction in [1.0 / 3.0, 2.0 / 3.0] {
+        context.move_to(0.0, height * fraction);
+        context.line_to(width, height * fraction);
+    }
+    let _ = context.stroke();
+
+    if history.is_empty() {
+        return;
+    }
+    let peak = history.iter().copied().max().unwrap_or_default().max(1) as f64;
+    let step = width / (NETWORK_GRAPH_SAMPLES.saturating_sub(1) as f64);
+    let start_x = width - step * history.len().saturating_sub(1) as f64;
+    let points = history
+        .iter()
+        .enumerate()
+        .map(|(index, sample)| {
+            let x = start_x + step * index as f64;
+            let y = bottom - ((*sample as f64 / peak) * (height - 8.0));
+            (x, y)
+        })
+        .collect::<Vec<_>>();
+
+    context.move_to(points[0].0, bottom);
+    for (x, y) in &points {
+        context.line_to(*x, *y);
+    }
+    context.line_to(points.last().map(|point| point.0).unwrap_or(width), bottom);
+    context.close_path();
+    context.set_source_rgba(
+        f64::from(color.red()),
+        f64::from(color.green()),
+        f64::from(color.blue()),
+        0.13,
+    );
+    let _ = context.fill();
+
+    context.move_to(points[0].0, points[0].1);
+    for (x, y) in points.iter().skip(1) {
+        context.line_to(*x, *y);
+    }
+    context.set_line_width(2.0);
+    context.set_line_join(gtk::cairo::LineJoin::Round);
+    context.set_line_cap(gtk::cairo::LineCap::Round);
+    context.set_source_rgba(
+        f64::from(color.red()),
+        f64::from(color.green()),
+        f64::from(color.blue()),
+        0.92,
+    );
+    let _ = context.stroke();
 }
 
 fn connectivity_page(icon_name: &str, title: &str) -> ConnectivityPage {
@@ -1842,6 +2442,59 @@ fn connectivity_page(icon_name: &str, title: &str) -> ConnectivityPage {
         toggle_row: row,
         toggle_label: label,
         toggle,
+    }
+}
+
+fn bluetooth_page() -> BluetoothPage {
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    page.add_css_class("control-page");
+
+    let hero = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    hero.add_css_class("detail-hero");
+    hero.add_css_class("bluetooth-hero");
+    let icon = gtk::Image::from_icon_name("bluetooth-symbolic");
+    icon.add_css_class("detail-hero-icon");
+    hero.append(&icon);
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 3);
+    text.set_hexpand(true);
+    let eyebrow = gtk::Label::new(Some("Bluetooth"));
+    eyebrow.add_css_class("detail-eyebrow");
+    eyebrow.set_xalign(0.0);
+    let state = gtk::Label::new(None);
+    state.add_css_class("detail-hero-title");
+    state.set_xalign(0.0);
+    let detail = gtk::Label::new(None);
+    detail.add_css_class("supporting-text");
+    detail.set_xalign(0.0);
+    text.append(&eyebrow);
+    text.append(&state);
+    text.append(&detail);
+    let toggle = gtk::Switch::new();
+    toggle.set_valign(gtk::Align::Center);
+    toggle.set_tooltip_text(Some("Turn Bluetooth on or off"));
+    hero.append(&text);
+    hero.append(&toggle);
+    page.append(&hero);
+
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 7);
+    list.add_css_class("bluetooth-device-list");
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.add_css_class("bluetooth-device-scroll");
+    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroll.set_min_content_height(120);
+    scroll.set_max_content_height(420);
+    scroll.set_propagate_natural_height(true);
+    scroll.set_child(Some(&list));
+    page.append(&scroll);
+
+    BluetoothPage {
+        root: page,
+        icon,
+        state,
+        detail,
+        toggle,
+        list,
+        previous: RefCell::new(None),
     }
 }
 
@@ -1975,6 +2628,162 @@ fn metric_row(title: &str) -> MetricGauge {
     }
 }
 
+fn reconcile_audio_outputs(
+    list: &gtk::Box,
+    previous: &mut Vec<AudioOutputControlSpec>,
+    outputs: &[AudioOutputControlSpec],
+    sender: Sender<ActionRequest>,
+    errors: Rc<RefCell<ControlCenterErrors>>,
+    navigation: NavigationUi,
+) {
+    if previous == outputs {
+        return;
+    }
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    *previous = outputs.to_vec();
+
+    if outputs.is_empty() {
+        let empty = gtk::Label::new(Some("No audio outputs available"));
+        empty.add_css_class("empty-state");
+        empty.set_xalign(0.0);
+        list.append(&empty);
+        return;
+    }
+
+    let handle = ActionHandle {
+        sender,
+        errors,
+        navigation,
+        focus: ControlCenterFocus::Audio,
+    };
+    for output in outputs {
+        let row = gtk::Button::new();
+        row.add_css_class("audio-output-row");
+        row.set_has_frame(false);
+        row.set_hexpand(true);
+        row.set_tooltip_text(Some(&format!("Use {} as audio output", output.label)));
+        if output.selected {
+            row.add_css_class("selected");
+        }
+
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        let icon = gtk::Image::from_icon_name(&output.icon_name);
+        icon.add_css_class("audio-output-icon");
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text.set_hexpand(true);
+        let label = gtk::Label::new(Some(&output.label));
+        label.add_css_class("audio-output-title");
+        label.set_xalign(0.0);
+        label.set_max_width_chars(36);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        let detail = gtk::Label::new(Some(&output.detail));
+        detail.add_css_class("audio-output-detail");
+        detail.set_xalign(0.0);
+        detail.set_max_width_chars(42);
+        detail.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        text.append(&label);
+        text.append(&detail);
+        let selected = gtk::Image::from_icon_name("object-select-symbolic");
+        selected.add_css_class("audio-output-selected");
+        selected.set_visible(output.selected);
+        content.append(&icon);
+        content.append(&text);
+        content.append(&selected);
+        row.set_child(Some(&content));
+
+        if !output.selected {
+            let handle = handle.clone();
+            let sink_name = output.name.clone();
+            row.connect_clicked(move |_| {
+                handle.send(
+                    "set-output",
+                    ActionIntent::SetAudioOutput {
+                        sink_name: sink_name.clone(),
+                    },
+                );
+            });
+        }
+        list.append(&row);
+    }
+}
+
+fn reconcile_keyboard_layouts(
+    list: &gtk::Box,
+    previous: &mut Vec<KeyboardLayoutControlSpec>,
+    layouts: &[KeyboardLayoutControlSpec],
+    sender: Sender<ActionRequest>,
+    errors: Rc<RefCell<ControlCenterErrors>>,
+    navigation: NavigationUi,
+) {
+    if previous == layouts {
+        return;
+    }
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    *previous = layouts.to_vec();
+
+    if layouts.is_empty() {
+        let empty = gtk::Label::new(Some("No keyboard layouts available"));
+        empty.add_css_class("empty-state");
+        empty.set_xalign(0.0);
+        list.append(&empty);
+        return;
+    }
+
+    let handle = ActionHandle {
+        sender,
+        errors,
+        navigation,
+        focus: ControlCenterFocus::Keyboard,
+    };
+    for layout in layouts {
+        let row = gtk::Button::new();
+        row.add_css_class("keyboard-layout-row");
+        row.set_has_frame(false);
+        row.set_hexpand(true);
+        row.set_tooltip_text(Some(&format!("Switch to {}", layout.raw_name)));
+        if layout.selected {
+            row.add_css_class("selected");
+        }
+
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        let badge = gtk::Label::new(Some(&layout.title));
+        badge.add_css_class("keyboard-layout-badge");
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text.set_hexpand(true);
+        let title = gtk::Label::new(Some(&layout.title));
+        title.add_css_class("keyboard-layout-title");
+        title.set_xalign(0.0);
+        let detail = gtk::Label::new(Some(&layout.detail));
+        detail.add_css_class("keyboard-layout-detail");
+        detail.set_xalign(0.0);
+        text.append(&title);
+        text.append(&detail);
+        let selected = gtk::Image::from_icon_name("object-select-symbolic");
+        selected.add_css_class("keyboard-layout-selected");
+        selected.set_visible(layout.selected);
+        content.append(&badge);
+        content.append(&text);
+        content.append(&selected);
+        row.set_child(Some(&content));
+
+        if !layout.selected {
+            let handle = handle.clone();
+            let index = layout.index;
+            row.connect_clicked(move |_| {
+                handle.send(
+                    "select-layout",
+                    ActionIntent::SelectKeyboardLayout { index },
+                );
+            });
+        }
+        list.append(&row);
+    }
+}
+
 fn media_card(
     sender: Sender<ActionRequest>,
     errors: Rc<RefCell<ControlCenterErrors>>,
@@ -1985,6 +2794,7 @@ fn media_card(
     root.add_css_class("media-card");
     root.add_css_class("missing-art");
     root.set_size_request(-1, 140);
+    root.set_vexpand(false);
     root.set_overflow(gtk::Overflow::Hidden);
 
     let artwork = gtk::Picture::new();
@@ -2188,6 +2998,501 @@ fn update_connectivity_page(page: &ConnectivityPage, spec: &QuickControlSpec) {
         .set_label(&format!("Enable {}", spec.label));
     page.toggle.set_active(spec.enabled);
     page.toggle.set_sensitive(spec.toggle_available);
+}
+
+fn update_bluetooth_page(
+    page: &BluetoothPage,
+    spec: &BluetoothManagerSpec,
+    sender: Sender<ActionRequest>,
+) {
+    page.icon.set_icon_name(Some(if spec.powered {
+        "bluetooth-active-symbolic"
+    } else {
+        "bluetooth-disabled-symbolic"
+    }));
+    page.state
+        .set_label(if spec.powered { "On" } else { "Off" });
+    page.detail.set_label(if !spec.powered {
+        "Turn on Bluetooth to find devices"
+    } else if spec.discovering {
+        match spec.connected_count {
+            0 => "Scanning for nearby devices…",
+            1 => "1 connected · Scanning…",
+            count => {
+                return page
+                    .detail
+                    .set_label(&format!("{count} connected · Scanning…"));
+            }
+        }
+    } else {
+        match spec.connected_count {
+            0 => "No devices connected",
+            1 => "1 device connected",
+            count => return page.detail.set_label(&format!("{count} devices connected")),
+        }
+    });
+    page.toggle.set_active(spec.powered);
+    page.toggle.set_sensitive(spec.available);
+
+    if page.previous.borrow().as_ref() == Some(spec) {
+        return;
+    }
+    *page.previous.borrow_mut() = Some(spec.clone());
+    while let Some(child) = page.list.first_child() {
+        page.list.remove(&child);
+    }
+
+    if let Some(prompt) = spec.prompt.as_ref() {
+        page.list.append(&bluetooth_pairing_prompt(prompt, sender));
+        return;
+    }
+    if !spec.powered {
+        let empty = gtk::Label::new(Some("Bluetooth is off"));
+        empty.add_css_class("empty-state");
+        empty.set_xalign(0.0);
+        page.list.append(&empty);
+        return;
+    }
+    if let Some(error) = spec.error.as_deref() {
+        let error = gtk::Label::new(Some(error));
+        error.add_css_class("bluetooth-error");
+        error.set_wrap(true);
+        error.set_xalign(0.0);
+        page.list.append(&error);
+    }
+
+    let connected = spec
+        .devices
+        .iter()
+        .filter(|device| device.connected)
+        .cloned()
+        .collect::<Vec<_>>();
+    let saved = spec
+        .devices
+        .iter()
+        .filter(|device| device.paired && !device.connected)
+        .cloned()
+        .collect::<Vec<_>>();
+    let nearby = spec
+        .devices
+        .iter()
+        .filter(|device| !device.paired && !device.connected)
+        .cloned()
+        .collect::<Vec<_>>();
+    append_bluetooth_section(&page.list, "CONNECTED", &connected, sender.clone());
+    append_bluetooth_section(&page.list, "SAVED DEVICES", &saved, sender.clone());
+    if !nearby.is_empty() {
+        append_bluetooth_section(&page.list, "NEARBY", &nearby, sender);
+    } else {
+        let heading = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+        heading.add_css_class("bluetooth-section-heading");
+        let label = section_eyebrow("NEARBY");
+        label.set_hexpand(true);
+        heading.append(&label);
+        if spec.discovering {
+            let spinner = gtk::Spinner::new();
+            spinner.add_css_class("bluetooth-scan-spinner");
+            spinner.start();
+            heading.append(&spinner);
+        }
+        page.list.append(&heading);
+        let empty = gtk::Label::new(Some(if spec.discovering {
+            "Looking for devices…"
+        } else {
+            "No nearby devices found"
+        }));
+        empty.add_css_class("empty-state");
+        empty.set_xalign(0.0);
+        page.list.append(&empty);
+    }
+}
+
+fn append_bluetooth_section(
+    list: &gtk::Box,
+    title: &str,
+    devices: &[BluetoothDeviceControlSpec],
+    sender: Sender<ActionRequest>,
+) {
+    if devices.is_empty() {
+        return;
+    }
+    list.append(&section_eyebrow(title));
+    for device in devices {
+        list.append(&bluetooth_device_row(device, sender.clone()));
+    }
+}
+
+fn bluetooth_device_row(
+    device: &BluetoothDeviceControlSpec,
+    sender: Sender<ActionRequest>,
+) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    row.add_css_class("bluetooth-device-row");
+    if device.connected {
+        row.add_css_class("connected");
+    }
+    if device.error.is_some() {
+        row.add_css_class("has-error");
+    }
+
+    let primary = gtk::Button::new();
+    primary.add_css_class("bluetooth-device-primary");
+    primary.set_has_frame(false);
+    primary.set_hexpand(true);
+    primary.set_sensitive(device.operation.is_none());
+    let accessible_action = if device.connected {
+        "Disconnect"
+    } else if device.paired {
+        "Connect"
+    } else {
+        "Pair"
+    };
+    let accessible_label = format!("{accessible_action} {}", device.name);
+    primary.update_property(&[
+        gtk::accessible::Property::Label(&accessible_label),
+        gtk::accessible::Property::Description(&device.detail),
+    ]);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    let icon = gtk::Image::from_icon_name(&device.icon_name);
+    icon.add_css_class("bluetooth-device-icon");
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    let name = gtk::Label::new(Some(&device.name));
+    name.add_css_class("bluetooth-device-title");
+    name.set_xalign(0.0);
+    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    let detail_text = device.error.as_deref().unwrap_or(&device.detail);
+    let detail = gtk::Label::new(Some(detail_text));
+    detail.add_css_class("bluetooth-device-detail");
+    detail.set_xalign(0.0);
+    detail.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    text.append(&name);
+    text.append(&detail);
+    content.append(&icon);
+    content.append(&text);
+    if device.operation.is_some() {
+        let spinner = gtk::Spinner::new();
+        spinner.start();
+        spinner.add_css_class("bluetooth-device-spinner");
+        content.append(&spinner);
+    } else if device.connected {
+        let connected = gtk::Image::from_icon_name("object-select-symbolic");
+        connected.add_css_class("bluetooth-device-connected");
+        content.append(&connected);
+    }
+    primary.set_child(Some(&content));
+
+    let address = device.address.clone();
+    let connected = device.connected;
+    let paired = device.paired;
+    let sender_for_primary = sender.clone();
+    primary.connect_clicked(move |_| {
+        let intent = if connected {
+            ActionIntent::DisconnectBluetoothDevice {
+                address: address.clone(),
+            }
+        } else if paired {
+            ActionIntent::ConnectBluetoothDevice {
+                address: address.clone(),
+            }
+        } else {
+            ActionIntent::PairBluetoothDevice {
+                address: address.clone(),
+            }
+        };
+        send_bluetooth_action(&sender_for_primary, "device", intent);
+    });
+    row.append(&primary);
+
+    if device.paired {
+        let forget = icon_button("user-trash-symbolic", &format!("Forget {}", device.name));
+        forget.add_css_class("bluetooth-forget-button");
+        forget.set_sensitive(device.operation.is_none());
+        let row_for_confirm = row.clone();
+        let sender_for_forget = sender.clone();
+        let address = device.address.clone();
+        let name = device.name.clone();
+        forget.connect_clicked(move |_| {
+            while let Some(child) = row_for_confirm.first_child() {
+                row_for_confirm.remove(&child);
+            }
+            row_for_confirm.add_css_class("confirming");
+            let question = gtk::Label::new(Some(&format!("Forget {name}?")));
+            question.set_xalign(0.0);
+            question.set_hexpand(true);
+            let cancel = gtk::Button::with_label("Cancel");
+            cancel.add_css_class("compact-action");
+            let forget_confirm = gtk::Button::with_label("Forget");
+            forget_confirm.add_css_class("destructive-action");
+            let row_for_cancel = row_for_confirm.clone();
+            cancel.connect_clicked(move |_| {
+                row_for_cancel.set_visible(false);
+            });
+            let sender = sender_for_forget.clone();
+            let address = address.clone();
+            forget_confirm.connect_clicked(move |_| {
+                send_bluetooth_action(
+                    &sender,
+                    "forget",
+                    ActionIntent::ForgetBluetoothDevice {
+                        address: address.clone(),
+                    },
+                );
+            });
+            row_for_confirm.append(&question);
+            row_for_confirm.append(&cancel);
+            row_for_confirm.append(&forget_confirm);
+        });
+        row.append(&forget);
+    }
+    row
+}
+
+fn bluetooth_pairing_prompt(
+    prompt: &BluetoothPairingPrompt,
+    sender: Sender<ActionRequest>,
+) -> gtk::Box {
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    card.add_css_class("bluetooth-pairing-card");
+    let eyebrow = section_eyebrow("PAIRING REQUEST");
+    let title = gtk::Label::new(Some(&prompt.device_name));
+    title.add_css_class("bluetooth-pairing-title");
+    title.set_xalign(0.0);
+    let instruction = gtk::Label::new(None);
+    instruction.add_css_class("supporting-text");
+    instruction.set_wrap(true);
+    instruction.set_xalign(0.0);
+    card.append(&eyebrow);
+    card.append(&title);
+    card.append(&instruction);
+
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+    actions.set_halign(gtk::Align::End);
+    let reject = gtk::Button::with_label("Cancel");
+    reject.add_css_class("compact-action");
+    let sender_for_reject = sender.clone();
+    let address = prompt.address.clone();
+    reject.connect_clicked(move |_| {
+        send_bluetooth_action(
+            &sender_for_reject,
+            "cancel-pairing",
+            ActionIntent::CancelBluetoothPairing {
+                address: address.clone(),
+            },
+        );
+    });
+    actions.append(&reject);
+
+    match &prompt.kind {
+        BluetoothPairingPromptKind::ConfirmPasskey { passkey } => {
+            instruction.set_label("Confirm that this code matches the device:");
+            let code = gtk::Label::new(Some(&format!("{passkey:06}")));
+            code.add_css_class("bluetooth-pairing-code");
+            card.append(&code);
+            let accept = gtk::Button::with_label("Pair");
+            accept.add_css_class("primary-action");
+            connect_pairing_response(&accept, sender, prompt.id, BluetoothPairingResponse::Accept);
+            actions.append(&accept);
+        }
+        BluetoothPairingPromptKind::EnterPinCode => {
+            instruction.set_label("Enter the PIN shown by the device.");
+            let entry = gtk::Entry::new();
+            entry.set_placeholder_text(Some("PIN"));
+            entry.set_max_length(16);
+            card.append(&entry);
+            let accept = gtk::Button::with_label("Continue");
+            accept.add_css_class("primary-action");
+            accept.set_sensitive(false);
+            let accept_for_change = accept.clone();
+            entry.connect_changed(move |entry| {
+                let value = entry.text();
+                accept_for_change.set_sensitive(
+                    !value.is_empty()
+                        && value.len() <= 16
+                        && value
+                            .chars()
+                            .all(|character| character.is_ascii_alphanumeric()),
+                );
+            });
+            let sender = sender.clone();
+            let entry_for_click = entry.clone();
+            let prompt_id = prompt.id;
+            accept.connect_clicked(move |_| {
+                send_bluetooth_action(
+                    &sender,
+                    "pairing-response",
+                    ActionIntent::RespondBluetoothPairing {
+                        prompt_id,
+                        response: BluetoothPairingResponse::PinCode(
+                            entry_for_click.text().to_string(),
+                        ),
+                    },
+                );
+            });
+            actions.append(&accept);
+        }
+        BluetoothPairingPromptKind::EnterPasskey => {
+            instruction.set_label("Enter the six-digit passkey shown by the device.");
+            let entry = gtk::Entry::new();
+            entry.set_placeholder_text(Some("000000"));
+            entry.set_max_length(6);
+            entry.set_input_purpose(gtk::InputPurpose::Digits);
+            card.append(&entry);
+            let accept = gtk::Button::with_label("Continue");
+            accept.add_css_class("primary-action");
+            accept.set_sensitive(false);
+            let accept_for_change = accept.clone();
+            entry.connect_changed(move |entry| {
+                let value = entry.text();
+                accept_for_change.set_sensitive(
+                    !value.is_empty() && value.chars().all(|character| character.is_ascii_digit()),
+                );
+            });
+            let sender = sender.clone();
+            let entry_for_click = entry.clone();
+            let prompt_id = prompt.id;
+            accept.connect_clicked(move |_| {
+                if let Ok(passkey) = entry_for_click.text().parse::<u32>() {
+                    send_bluetooth_action(
+                        &sender,
+                        "pairing-response",
+                        ActionIntent::RespondBluetoothPairing {
+                            prompt_id,
+                            response: BluetoothPairingResponse::Passkey(passkey),
+                        },
+                    );
+                }
+            });
+            actions.append(&accept);
+        }
+        BluetoothPairingPromptKind::DisplayPinCode { pin_code } => {
+            instruction.set_label("Enter this PIN on the device, then wait for it to connect:");
+            let code = gtk::Label::new(Some(pin_code));
+            code.add_css_class("bluetooth-pairing-code");
+            card.append(&code);
+        }
+        BluetoothPairingPromptKind::DisplayPasskey { passkey, entered } => {
+            instruction.set_label(&format!(
+                "Type this code on the device · {entered}/6 digits entered"
+            ));
+            let code = gtk::Label::new(Some(&format!("{passkey:06}")));
+            code.add_css_class("bluetooth-pairing-code");
+            card.append(&code);
+        }
+        BluetoothPairingPromptKind::Authorize => {
+            instruction.set_label("Allow this device to pair with this computer?");
+            let accept = gtk::Button::with_label("Allow");
+            accept.add_css_class("primary-action");
+            connect_pairing_response(&accept, sender, prompt.id, BluetoothPairingResponse::Accept);
+            actions.append(&accept);
+        }
+    }
+    card.append(&actions);
+    card
+}
+
+fn connect_pairing_response(
+    button: &gtk::Button,
+    sender: Sender<ActionRequest>,
+    prompt_id: u64,
+    response: BluetoothPairingResponse,
+) {
+    button.connect_clicked(move |_| {
+        send_bluetooth_action(
+            &sender,
+            "pairing-response",
+            ActionIntent::RespondBluetoothPairing {
+                prompt_id,
+                response: response.clone(),
+            },
+        );
+    });
+}
+
+fn send_bluetooth_action(sender: &Sender<ActionRequest>, action: &str, intent: ActionIntent) {
+    let _ = sender.send(ActionRequest {
+        origin: control_center_origin(ControlCenterFocus::Bluetooth, action),
+        intent,
+    });
+}
+
+fn sync_bluetooth_discovery(
+    sender: &Sender<ActionRequest>,
+    current: &Rc<RefCell<ControlCenterSpec>>,
+    active: &Rc<Cell<bool>>,
+    page_visible: bool,
+) {
+    let spec = current.borrow();
+    let desired =
+        page_visible && spec.bluetooth_manager.available && spec.bluetooth_manager.powered;
+    if !page_visible && let Some(prompt) = spec.bluetooth_manager.prompt.as_ref() {
+        send_bluetooth_action(
+            sender,
+            "cancel-pairing",
+            ActionIntent::CancelBluetoothPairing {
+                address: prompt.address.clone(),
+            },
+        );
+    }
+    drop(spec);
+    if active.get() == desired {
+        return;
+    }
+    send_bluetooth_action(
+        sender,
+        if desired { "start-scan" } else { "stop-scan" },
+        ActionIntent::SetBluetoothDiscovery { enabled: desired },
+    );
+    active.set(desired);
+}
+
+fn update_network_traffic(page: &NetworkPage, spec: &NetworkTrafficSpec) {
+    page.traffic_root.set_visible(spec.interface.is_some());
+    page.interface
+        .set_label(spec.interface.as_deref().unwrap_or_default());
+    update_traffic_graph(
+        &page.download,
+        spec.download_bytes_per_second,
+        &spec.download_history,
+    );
+    update_traffic_graph(
+        &page.upload,
+        spec.upload_bytes_per_second,
+        &spec.upload_history,
+    );
+}
+
+fn update_traffic_graph(graph: &TrafficGraph, rate: Option<u64>, history: &[u64]) {
+    graph.value.set_label(&format_network_rate(rate));
+    *graph.history.borrow_mut() = history.to_vec();
+    graph.area.queue_draw();
+}
+
+fn format_network_rate(rate: Option<u64>) -> String {
+    let Some(rate) = rate else {
+        return "--".to_string();
+    };
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = 1024.0 * KIB;
+    const GIB: f64 = 1024.0 * MIB;
+    let rate = rate as f64;
+    if rate < KIB {
+        format!("{rate:.0} B/s")
+    } else if rate < MIB {
+        format_rate_unit(rate / KIB, "KB/s")
+    } else if rate < GIB {
+        format_rate_unit(rate / MIB, "MB/s")
+    } else {
+        format_rate_unit(rate / GIB, "GB/s")
+    }
+}
+
+fn format_rate_unit(value: f64, unit: &str) -> String {
+    if value < 10.0 {
+        format!("{value:.1} {unit}")
+    } else {
+        format!("{value:.0} {unit}")
+    }
 }
 
 fn quick_grid_placements(count: usize) -> Vec<(i32, i32, i32)> {
@@ -2440,15 +3745,17 @@ fn set_enabled_class(widget: &impl IsA<gtk::Widget>, enabled: bool) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AudioState, BarSnapshot, BluetoothState, BrightnessState, ConnectivityState, MediaState,
-        NetworkState, PlaybackStatus, PowerProfile, PowerState, ResourceState, TimerState,
+        AudioOutputState, AudioState, BarSnapshot, BluetoothDeviceOperation, BluetoothDeviceState,
+        BluetoothState, BrightnessState, ConnectivityState, KeyboardLayoutOption,
+        KeyboardLayoutState, MediaState, NetworkState, PlaybackStatus, PowerProfile, PowerState,
+        ResourceState, TimerState,
     };
 
     use super::{
         ControlCenterErrors, ControlCenterFocus, ControlCenterMotionEvent,
         ControlCenterMotionPhase, MetricLevel, SliderDebounce, TimerActionState, TimerControlSpec,
-        build_control_center_spec, control_center_origin, focus_from_origin, metric_visual,
-        quick_grid_placements, timer_action_state, volume_icon_name,
+        build_control_center_spec, control_center_origin, focus_from_origin, format_network_rate,
+        metric_visual, quick_grid_placements, timer_action_state, volume_icon_name,
     };
 
     #[test]
@@ -2510,6 +3817,15 @@ mod tests {
     }
 
     #[test]
+    fn network_rates_use_compact_binary_units() {
+        assert_eq!(format_network_rate(None), "--");
+        assert_eq!(format_network_rate(Some(512)), "512 B/s");
+        assert_eq!(format_network_rate(Some(1536)), "1.5 KB/s");
+        assert_eq!(format_network_rate(Some(12 * 1024)), "12 KB/s");
+        assert_eq!(format_network_rate(Some(3 * 1024 * 1024)), "3.0 MB/s");
+    }
+
+    #[test]
     fn overview_spec_combines_controls_metrics_and_optional_content() {
         let mut snapshot = BarSnapshot::default();
         snapshot.system.network = NetworkState {
@@ -2519,16 +3835,31 @@ mod tests {
             wifi_available: true,
             ethernet_available: true,
             wifi_enabled: Some(true),
+            interface: Some("wlan0".to_string()),
+            download_bytes_per_second: Some(1536),
+            upload_bytes_per_second: Some(512),
+            download_history: vec![0, 512, 1536],
+            upload_history: vec![0, 128, 512],
         };
         snapshot.system.bluetooth = BluetoothState {
             available: true,
             powered: true,
             connected_device: Some("Headphones".to_string()),
             audio_device: Some("Headphones".to_string()),
+            ..BluetoothState::default()
         };
         snapshot.system.audio = AudioState {
             volume_percent: Some(49),
             muted: false,
+            outputs: vec![AudioOutputState {
+                name: "bluez_output.headphones".to_string(),
+                description: "Robin's Headphones".to_string(),
+                alias: Some("Headphones".to_string()),
+                port_description: None,
+                port_type: Some("Headphones".to_string()),
+                bus: Some("bluetooth".to_string()),
+                is_default: true,
+            }],
         };
         snapshot.system.brightness = BrightnessState {
             device: Some("intel_backlight".to_string()),
@@ -2545,7 +3876,30 @@ mod tests {
             profile: PowerProfile::Balanced,
             changed_at: 0,
         };
-        snapshot.system.keyboard_layout = Some("English (US)".to_string());
+        snapshot.system.keyboard_layout = KeyboardLayoutState {
+            current_index: Some(0),
+            current_name: Some("English (US)".to_string()),
+            layouts: vec![
+                KeyboardLayoutOption {
+                    index: 0,
+                    name: "English (US)".to_string(),
+                    layout: Some("us".to_string()),
+                    variant: None,
+                },
+                KeyboardLayoutOption {
+                    index: 1,
+                    name: "English (Dvorak)".to_string(),
+                    layout: Some("us".to_string()),
+                    variant: Some("dvorak".to_string()),
+                },
+                KeyboardLayoutOption {
+                    index: 2,
+                    name: "German (KOY)".to_string(),
+                    layout: Some("de".to_string()),
+                    variant: Some("koy".to_string()),
+                },
+            ],
+        };
         snapshot.system.media = Some(MediaState {
             player: "spotify".to_string(),
             status: PlaybackStatus::Playing,
@@ -2567,11 +3921,20 @@ mod tests {
 
         assert_eq!(spec.network.detail, "Home");
         assert!(spec.network.enabled);
+        assert_eq!(spec.network_traffic.interface.as_deref(), Some("wlan0"));
+        assert_eq!(spec.network_traffic.download_history, vec![0, 512, 1536]);
         assert_eq!(spec.audio.percent, Some(49));
+        assert_eq!(spec.audio.detail, "Headphones");
+        assert_eq!(spec.audio.outputs[0].icon_name, "audio-headphones-symbolic");
+        assert!(spec.audio.outputs[0].selected);
         assert_eq!(spec.brightness.as_ref().unwrap().device, "intel_backlight");
         assert_eq!(spec.cpu_percent, Some(14));
         assert_eq!(spec.memory_percent, Some(32));
-        assert_eq!(spec.keyboard, "US");
+        assert_eq!(spec.keyboard.summary, "US");
+        assert_eq!(spec.keyboard.current, "US — Standard");
+        assert_eq!(spec.keyboard.layouts[1].detail, "Dvorak");
+        assert_eq!(spec.keyboard.layouts[2].title, "DE");
+        assert_eq!(spec.keyboard.layouts[2].detail, "KOY");
         assert_eq!(spec.battery_percent, Some(82));
         assert!(spec.battery_present);
         assert!(spec.charging);
@@ -2598,6 +3961,7 @@ mod tests {
             wifi_available: true,
             ethernet_available: true,
             wifi_enabled: Some(true),
+            ..NetworkState::default()
         };
 
         let spec = build_control_center_spec(&snapshot);
@@ -2615,6 +3979,7 @@ mod tests {
             wifi_available: false,
             ethernet_available: true,
             wifi_enabled: None,
+            ..NetworkState::default()
         };
         snapshot.system.bluetooth = BluetoothState {
             available: true,
@@ -2635,6 +4000,45 @@ mod tests {
         assert!(!spec.battery_present);
         assert_eq!(spec.brightness, None);
         assert_eq!(spec.power.detail, "Performance");
+    }
+
+    #[test]
+    fn bluetooth_manager_spec_preserves_device_sections_and_progress() {
+        let mut snapshot = BarSnapshot::default();
+        snapshot.system.bluetooth = BluetoothState {
+            available: true,
+            powered: true,
+            discovering: true,
+            devices: vec![
+                BluetoothDeviceState {
+                    address: "AA:00:00:00:00:01".to_string(),
+                    name: "Headphones".to_string(),
+                    icon_name: "audio-headphones-symbolic".to_string(),
+                    paired: true,
+                    trusted: true,
+                    connected: true,
+                    audio_capable: true,
+                    battery_percent: Some(73),
+                    ..BluetoothDeviceState::default()
+                },
+                BluetoothDeviceState {
+                    address: "AA:00:00:00:00:02".to_string(),
+                    name: "Controller".to_string(),
+                    icon_name: "input-gaming-symbolic".to_string(),
+                    paired: true,
+                    operation: Some(BluetoothDeviceOperation::Connecting),
+                    ..BluetoothDeviceState::default()
+                },
+            ],
+            ..BluetoothState::default()
+        };
+
+        let spec = build_control_center_spec(&snapshot).bluetooth_manager;
+
+        assert!(spec.discovering);
+        assert_eq!(spec.connected_count, 1);
+        assert_eq!(spec.devices[0].detail, "Connected · 73% battery");
+        assert_eq!(spec.devices[1].detail, "Connecting…");
     }
 
     #[test]

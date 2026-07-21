@@ -5,11 +5,42 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cockpit_bar::{
-    Direction, OutputState, StateUpdate, SystemUpdate, WindowState, WorkspaceState,
+    Direction, KeyboardLayoutOption, KeyboardLayoutState, OutputState, StateUpdate, SystemUpdate,
+    WindowState, WorkspaceState,
     compositor::{
         CompositorAction, CompositorAdapter, HyprlandAdapter, NiriAdapter, detect_compositor,
     },
 };
+
+fn keyboard_state(current_index: u8) -> KeyboardLayoutState {
+    let layouts = vec![
+        KeyboardLayoutOption {
+            index: 0,
+            name: "English (US)".to_string(),
+            layout: Some("us".to_string()),
+            variant: None,
+        },
+        KeyboardLayoutOption {
+            index: 1,
+            name: "English (Dvorak)".to_string(),
+            layout: Some("us".to_string()),
+            variant: Some("dvorak".to_string()),
+        },
+        KeyboardLayoutOption {
+            index: 2,
+            name: "German (KOY)".to_string(),
+            layout: Some("de".to_string()),
+            variant: Some("koy".to_string()),
+        },
+    ];
+    KeyboardLayoutState {
+        current_index: Some(current_index),
+        current_name: layouts
+            .get(usize::from(current_index))
+            .map(|layout| layout.name.clone()),
+        layouts,
+    }
+}
 
 fn unique_temp_dir(label: &str) -> PathBuf {
     let unique = SystemTime::now()
@@ -147,7 +178,7 @@ fn expected_initial_snapshot() -> Vec<StateUpdate> {
             },
         ]),
         StateUpdate::FocusedOutput(Some("DP-2".to_string())),
-        StateUpdate::System(SystemUpdate::KeyboardLayout(Some("us".to_string()))),
+        StateUpdate::System(SystemUpdate::KeyboardLayout(keyboard_state(0))),
     ]
 }
 
@@ -554,7 +585,7 @@ fn expected_transitions() -> Vec<StateUpdate> {
                 changed_at: 0,
             },
         ]),
-        StateUpdate::System(SystemUpdate::KeyboardLayout(Some("de".to_string()))),
+        StateUpdate::System(SystemUpdate::KeyboardLayout(keyboard_state(2))),
     ]
 }
 
@@ -837,6 +868,9 @@ fn compositor_hyprland_actions_use_direct_argv() {
     adapter
         .execute(CompositorAction::CycleKeyboardLayout)
         .expect("cycle keyboard layout");
+    adapter
+        .execute(CompositorAction::SelectKeyboardLayout { index: 1 })
+        .expect("select keyboard layout");
 
     assert_eq!(
         recorded.lock().unwrap().as_slice(),
@@ -887,6 +921,14 @@ fn compositor_hyprland_actions_use_direct_argv() {
                     "switchxkblayout".to_string(),
                     "at-translated-set-2-keyboard".to_string(),
                     "next".to_string(),
+                ],
+            ),
+            (
+                "hyprctl".to_string(),
+                vec![
+                    "switchxkblayout".to_string(),
+                    "at-translated-set-2-keyboard".to_string(),
+                    "1".to_string(),
                 ],
             ),
         ]
@@ -1024,6 +1066,9 @@ fn compositor_niri_actions_use_direct_argv() {
     adapter
         .execute(CompositorAction::CycleKeyboardLayout)
         .expect("cycle keyboard layout");
+    adapter
+        .execute(CompositorAction::SelectKeyboardLayout { index: 2 })
+        .expect("select keyboard layout");
 
     assert_eq!(
         recorded.lock().unwrap().as_slice(),
@@ -1080,6 +1125,15 @@ fn compositor_niri_actions_use_direct_argv() {
                     "action".to_string(),
                     "switch-layout".to_string(),
                     "next".to_string(),
+                ],
+            ),
+            (
+                "niri".to_string(),
+                vec![
+                    "msg".to_string(),
+                    "action".to_string(),
+                    "switch-layout".to_string(),
+                    "2".to_string(),
                 ],
             ),
         ]

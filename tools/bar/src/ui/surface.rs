@@ -13,8 +13,8 @@ use gtk4_layer_shell::{Edge, Layer, LayerShell};
 
 use crate::{
     ActionCompletion, ActionIntent, ActionRequest, AppConfig, BarSnapshot, ContextCard,
-    ContextTier, Direction, Dismissals, MediaControlAction, OutputRole, WorkspaceState,
-    select_context,
+    ContextTier, DesktopContext, Direction, Dismissals, MediaControlAction, OutputRole,
+    WorkspaceState, select_context,
 };
 
 use super::context_card::{context_presentation, context_tier, warning_text};
@@ -323,6 +323,27 @@ impl SurfaceRegistry {
             .values_mut()
             .any(|surface| surface.handle_completion(completion))
     }
+
+    pub fn open_control_center(
+        &self,
+        context: DesktopContext,
+        requested_output: Option<&str>,
+    ) -> bool {
+        let requested = requested_output.and_then(|output| self.surfaces.get(output));
+        let primary = requested
+            .filter(|surface| matches!(surface, SurfaceHandle::Primary(_)))
+            .or_else(|| {
+                self.surfaces
+                    .values()
+                    .find(|surface| matches!(surface, SurfaceHandle::Primary(_)))
+            });
+        let Some(SurfaceHandle::Primary(surface)) = primary else {
+            return false;
+        };
+        surface.control_center.show_page(context.into());
+        surface.control_center.present();
+        true
+    }
 }
 
 fn monitors_by_connector(display: &gdk::Display) -> BTreeMap<String, gdk::Monitor> {
@@ -528,6 +549,7 @@ impl PrimarySurface {
         let control_center = Rc::new(ControlCenterView::new(
             application,
             monitor,
+            &spec.output_name,
             SURFACE_MARGIN,
             SURFACE_MARGIN,
             initial_system.control_center(),
@@ -926,7 +948,9 @@ fn install_title_interactions(
     secondary.connect_pressed(move |_, _, _, _| {
         let _ = action_sender.send(ActionRequest {
             origin: format!("title-secondary:{secondary_output}"),
-            intent: ActionIntent::OpenWindowSearch,
+            intent: ActionIntent::OpenWindowSearch {
+                output: secondary_output.clone(),
+            },
         });
     });
     button.add_controller(secondary);

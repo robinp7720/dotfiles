@@ -1,11 +1,14 @@
+use std::collections::VecDeque;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc::Sender,
+    mpsc::{RecvTimeoutError, Sender},
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use zbus::{
@@ -17,13 +20,14 @@ use zbus::{
 
 use crate::{ConnectivityState, NetworkState, SourceHealth, SourceId, StateUpdate, SystemUpdate};
 
-use super::{CancellableRecv, SourceSupervisor, forward_blocking_iterator, recv_with_cancellation};
+use super::{SourceSupervisor, forward_blocking_iterator};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ActiveConnection {
     kind: ConnectionKind,
     label: Option<String>,
     signal_percent: Option<u8>,
+    interface: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,6 +52,110 @@ const DEVICE_INTERFACE: &str = "org.freedesktop.NetworkManager.Device";
 
 const NETWORK_SIGNAL_QUEUE: usize = 32;
 const NETWORK_RESTART_DELAY: Duration = Duration::from_secs(1);
+const NETWORK_SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
+const NETWORK_HISTORY_SAMPLES: usize = 60;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NetworkCounters {
+    received_bytes: u64,
+    transmitted_bytes: u64,
+}
+
+#[derive(Debug, Default)]
+struct TrafficSampler {
+    interface: Option<String>,
+    previous: Option<(Instant, NetworkCounters)>,
+    download_bytes_per_second: Option<u64>,
+    upload_bytes_per_second: Option<u64>,
+    download_history: VecDeque<u64>,
+    upload_history: VecDeque<u64>,
+}
+
+impl TrafficSampler {
+    fn update(&mut self, state: &mut NetworkState, sample: bool) {
+        if self.interface != state.interface {
+            self.reset(state.interface.clone());
+        }
+        if sample {
+            self.sample();
+        }
+        state.download_bytes_per_second = self.download_bytes_per_second;
+        state.upload_bytes_per_second = self.upload_bytes_per_second;
+        state.download_history = self.download_history.iter().copied().collect();
+        state.upload_history = self.upload_history.iter().copied().collect();
+    }
+
+    fn sample(&mut self) {
+        let Some(interface) = self.interface.as_deref() else {
+            return;
+        };
+        let Ok(counters) = read_network_counters(interface) else {
+            self.download_bytes_per_second = None;
+            self.upload_bytes_per_second = None;
+            return;
+        };
+        self.record(Instant::now(), counters);
+    }
+
+    fn record(&mut self, now: Instant, counters: NetworkCounters) {
+        if let Some((previous_at, previous)) = self.previous {
+            let elapsed = now.duration_since(previous_at).as_secs_f64();
+            if elapsed > 0.0 {
+                let download = ((counters
+                    .received_bytes
+                    .saturating_sub(previous.received_bytes)
+                    as f64)
+                    / elapsed)
+                    .round() as u64;
+                let upload = ((counters
+                    .transmitted_bytes
+                    .saturating_sub(previous.transmitted_bytes)
+                    as f64)
+                    / elapsed)
+                    .round() as u64;
+                self.download_bytes_per_second = Some(download);
+                self.upload_bytes_per_second = Some(upload);
+                push_sample(&mut self.download_history, download);
+                push_sample(&mut self.upload_history, upload);
+            }
+        }
+        self.previous = Some((now, counters));
+    }
+
+    fn reset(&mut self, interface: Option<String>) {
+        self.interface = interface;
+        self.previous = None;
+        self.download_bytes_per_second = None;
+        self.upload_bytes_per_second = None;
+        self.download_history.clear();
+        self.upload_history.clear();
+    }
+}
+
+fn push_sample(history: &mut VecDeque<u64>, sample: u64) {
+    if history.len() == NETWORK_HISTORY_SAMPLES {
+        history.pop_front();
+    }
+    history.push_back(sample);
+}
+
+fn read_network_counters(interface: &str) -> Result<NetworkCounters> {
+    let statistics = Path::new("/sys/class/net")
+        .join(interface)
+        .join("statistics");
+    Ok(NetworkCounters {
+        received_bytes: read_counter(&statistics.join("rx_bytes"))?,
+        transmitted_bytes: read_counter(&statistics.join("tx_bytes"))?,
+    })
+}
+
+fn read_counter(path: &Path) -> Result<u64> {
+    fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?
+        .trim()
+        .parse::<u64>()
+        .with_context(|| format!("invalid counter in {}", path.display()))
+}
 
 fn map_connectivity_state(value: u32) -> ConnectivityState {
     match value {
@@ -66,7 +174,7 @@ fn build_network_state(
 ) -> NetworkState {
     let connectivity = map_connectivity_state(connectivity);
 
-    match active {
+    let mut state = match active {
         Some(active) => match active.kind {
             ConnectionKind::Wifi => NetworkState {
                 connectivity,
@@ -75,6 +183,7 @@ fn build_network_state(
                 wifi_available: capabilities.wifi,
                 ethernet_available: capabilities.ethernet,
                 wifi_enabled,
+                ..NetworkState::default()
             },
             ConnectionKind::Ethernet => NetworkState {
                 connectivity,
@@ -87,6 +196,7 @@ fn build_network_state(
                 wifi_available: capabilities.wifi,
                 ethernet_available: capabilities.ethernet,
                 wifi_enabled,
+                ..NetworkState::default()
             },
             ConnectionKind::Other => NetworkState {
                 connectivity,
@@ -95,6 +205,7 @@ fn build_network_state(
                 wifi_available: capabilities.wifi,
                 ethernet_available: capabilities.ethernet,
                 wifi_enabled,
+                ..NetworkState::default()
             },
         },
         None => NetworkState {
@@ -112,8 +223,11 @@ fn build_network_state(
             wifi_available: capabilities.wifi,
             ethernet_available: capabilities.ethernet,
             wifi_enabled,
+            ..NetworkState::default()
         },
-    }
+    };
+    state.interface = active.and_then(|connection| connection.interface.clone());
+    state
 }
 
 fn wifi_signal_icon(signal_percent: Option<u8>) -> &'static str {
@@ -129,11 +243,10 @@ fn wifi_signal_icon(signal_percent: Option<u8>) -> &'static str {
 fn publish_network_snapshot(
     sender: &Sender<StateUpdate>,
     cancelled: &Arc<AtomicBool>,
-    connection: &Connection,
+    state: &NetworkState,
 ) -> Result<()> {
-    let state = read_network_state(connection)?;
     if sender
-        .send(StateUpdate::System(SystemUpdate::Network(state)))
+        .send(StateUpdate::System(SystemUpdate::Network(state.clone())))
         .is_err()
     {
         cancelled.store(true, Ordering::Relaxed);
@@ -248,6 +361,7 @@ fn read_active_connection(connection: &Connection, path: &str) -> Result<ActiveC
     let label = proxy
         .get_property::<String>("Id")
         .context("failed to read active connection Id")?;
+    let interface = read_active_interface(connection, &proxy).ok();
 
     if kind != ConnectionKind::Wifi {
         return Ok(ActiveConnection {
@@ -258,6 +372,7 @@ fn read_active_connection(connection: &Connection, path: &str) -> Result<ActiveC
                 Some(label)
             },
             signal_percent: None,
+            interface,
         });
     }
 
@@ -271,7 +386,26 @@ fn read_active_connection(connection: &Connection, path: &str) -> Result<ActiveC
         kind,
         label: ssid.or_else(|| normalize_label(&label)),
         signal_percent,
+        interface,
     })
+}
+
+fn read_active_interface(connection: &Connection, active: &Proxy<'_>) -> Result<String> {
+    let devices: Vec<OwnedObjectPath> = active
+        .get_property("Devices")
+        .context("failed to read active connection devices")?;
+    let device = devices
+        .first()
+        .context("active connection did not expose a device")?;
+    Proxy::new(
+        connection,
+        NETWORK_MANAGER_DESTINATION,
+        device.as_str(),
+        DEVICE_INTERFACE,
+    )
+    .with_context(|| format!("failed to build NetworkManager device proxy for {device}"))?
+    .get_property::<String>("Interface")
+    .context("failed to read active network interface")
 }
 
 fn read_access_point(connection: &Connection, path: &str) -> Result<(Option<String>, Option<u8>)> {
@@ -301,7 +435,7 @@ fn read_network_state_nmcli() -> Result<ActiveConnection> {
         .args([
             "-t",
             "-f",
-            "TYPE,STATE,CONNECTION,SIGNAL",
+            "DEVICE,TYPE,STATE,CONNECTION,SIGNAL",
             "device",
             "status",
         ])
@@ -315,6 +449,7 @@ fn read_network_state_nmcli() -> Result<ActiveConnection> {
     let stdout = String::from_utf8(output.stdout).context("nmcli output was not UTF-8")?;
     for line in stdout.lines() {
         let mut fields = line.split(':');
+        let interface = normalize_label(fields.next().unwrap_or_default());
         let kind = match fields.next() {
             Some("wifi") => ConnectionKind::Wifi,
             Some("ethernet") => ConnectionKind::Ethernet,
@@ -332,6 +467,7 @@ fn read_network_state_nmcli() -> Result<ActiveConnection> {
             kind,
             label,
             signal_percent,
+            interface,
         });
     }
 
@@ -397,18 +533,33 @@ fn run_network_worker(sender: &Sender<StateUpdate>, cancelled: &Arc<AtomicBool>)
     let signals = network_signal_stream(&connection)?;
     let signal_events = forward_blocking_iterator(signals);
 
-    publish_network_snapshot(sender, cancelled, &connection)?;
+    let mut state = read_network_state(&connection)?;
+    let mut sampler = TrafficSampler::default();
+    sampler.update(&mut state, true);
+    publish_network_snapshot(sender, cancelled, &state)?;
+    let mut next_sample = Instant::now() + NETWORK_SAMPLE_INTERVAL;
 
     loop {
-        match recv_with_cancellation(&signal_events, cancelled, Duration::from_millis(100)) {
-            CancellableRecv::Item(Some(message)) => {
+        if cancelled.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+        match signal_events.recv_timeout(Duration::from_millis(100)) {
+            Ok(Some(message)) => {
                 message.context("failed to receive NetworkManager signal")?;
-                publish_network_snapshot(sender, cancelled, &connection)?;
+                state = read_network_state(&connection)?;
+                sampler.update(&mut state, false);
+                publish_network_snapshot(sender, cancelled, &state)?;
             }
-            CancellableRecv::Item(None) | CancellableRecv::Disconnected => {
+            Ok(None) | Err(RecvTimeoutError::Disconnected) => {
                 return Err(anyhow!("NetworkManager signal stream closed unexpectedly"));
             }
-            CancellableRecv::Cancelled => return Ok(false),
+            Err(RecvTimeoutError::Timeout) => {}
+        }
+        let now = Instant::now();
+        if now >= next_sample {
+            sampler.update(&mut state, true);
+            publish_network_snapshot(sender, cancelled, &state)?;
+            next_sample = now + NETWORK_SAMPLE_INTERVAL;
         }
     }
 }
@@ -416,10 +567,13 @@ fn run_network_worker(sender: &Sender<StateUpdate>, cancelled: &Arc<AtomicBool>)
 #[cfg(test)]
 mod tests {
     use super::{
-        ActiveConnection, ConnectionKind, NetworkCapabilities, build_network_state,
-        capabilities_from_device_types, map_connectivity_state, parse_nmcli_capabilities,
+        ActiveConnection, ConnectionKind, NETWORK_HISTORY_SAMPLES, NetworkCapabilities,
+        NetworkCounters, TrafficSampler, build_network_state, capabilities_from_device_types,
+        map_connectivity_state, parse_nmcli_capabilities, push_sample,
     };
     use crate::{ConnectivityState, NetworkState};
+    use std::collections::VecDeque;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn networkmanager_connectivity_values_map_to_bar_states() {
@@ -444,6 +598,7 @@ mod tests {
                 kind: ConnectionKind::Wifi,
                 label: Some("Cafe | Wi-Fi".to_string()),
                 signal_percent: Some(78),
+                interface: Some("wlan0".to_string()),
             }),
         );
 
@@ -456,6 +611,8 @@ mod tests {
                 wifi_available: true,
                 ethernet_available: true,
                 wifi_enabled: Some(true),
+                interface: Some("wlan0".to_string()),
+                ..NetworkState::default()
             }
         );
     }
@@ -474,6 +631,7 @@ mod tests {
 
         assert_eq!(state.wifi_enabled, Some(false));
         assert_eq!(state.connectivity, ConnectivityState::Disconnected);
+        assert_eq!(state.interface, None);
     }
 
     #[test]
@@ -507,5 +665,43 @@ mod tests {
                 ethernet: true,
             }
         );
+    }
+
+    #[test]
+    fn network_history_keeps_only_the_latest_minute() {
+        let mut history = VecDeque::new();
+        for sample in 0..(NETWORK_HISTORY_SAMPLES as u64 + 3) {
+            push_sample(&mut history, sample);
+        }
+
+        assert_eq!(history.len(), NETWORK_HISTORY_SAMPLES);
+        assert_eq!(history.front(), Some(&3));
+        assert_eq!(history.back(), Some(&(NETWORK_HISTORY_SAMPLES as u64 + 2)));
+    }
+
+    #[test]
+    fn traffic_sampler_calculates_rates_from_counter_deltas() {
+        let start = Instant::now();
+        let mut sampler = TrafficSampler::default();
+        sampler.reset(Some("eth0".to_string()));
+        sampler.record(
+            start,
+            NetworkCounters {
+                received_bytes: 1_000,
+                transmitted_bytes: 2_000,
+            },
+        );
+        sampler.record(
+            start + Duration::from_secs(2),
+            NetworkCounters {
+                received_bytes: 5_096,
+                transmitted_bytes: 4_048,
+            },
+        );
+
+        assert_eq!(sampler.download_bytes_per_second, Some(2_048));
+        assert_eq!(sampler.upload_bytes_per_second, Some(1_024));
+        assert_eq!(sampler.download_history.back(), Some(&2_048));
+        assert_eq!(sampler.upload_history.back(), Some(&1_024));
     }
 }

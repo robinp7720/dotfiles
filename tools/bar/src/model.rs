@@ -116,7 +116,8 @@ pub struct WindowState {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemState {
-    pub keyboard_layout: Option<String>,
+    #[serde(default)]
+    pub keyboard_layout: KeyboardLayoutState,
     pub resources: ResourceState,
     pub network: NetworkState,
     pub bluetooth: BluetoothState,
@@ -133,7 +134,7 @@ pub struct SystemState {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SystemUpdate {
-    KeyboardLayout(Option<String>),
+    KeyboardLayout(KeyboardLayoutState),
     Resources(ResourceState),
     Network(NetworkState),
     Bluetooth(BluetoothState),
@@ -144,6 +145,22 @@ pub enum SystemUpdate {
     Media(Option<MediaState>),
     Calendar(Option<CalendarEvent>),
     Timers(Vec<TimerState>),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyboardLayoutState {
+    pub current_index: Option<u8>,
+    pub current_name: Option<String>,
+    #[serde(default)]
+    pub layouts: Vec<KeyboardLayoutOption>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyboardLayoutOption {
+    pub index: u8,
+    pub name: String,
+    pub layout: Option<String>,
+    pub variant: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +189,16 @@ pub struct NetworkState {
     pub ethernet_available: bool,
     #[serde(default)]
     pub wifi_enabled: Option<bool>,
+    #[serde(default)]
+    pub interface: Option<String>,
+    #[serde(default)]
+    pub download_bytes_per_second: Option<u64>,
+    #[serde(default)]
+    pub upload_bytes_per_second: Option<u64>,
+    #[serde(default)]
+    pub download_history: Vec<u64>,
+    #[serde(default)]
+    pub upload_history: Vec<u64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,12 +208,82 @@ pub struct BluetoothState {
     pub powered: bool,
     pub connected_device: Option<String>,
     pub audio_device: Option<String>,
+    #[serde(default)]
+    pub discovering: bool,
+    #[serde(default)]
+    pub devices: Vec<BluetoothDeviceState>,
+    #[serde(default)]
+    pub pairing_prompt: Option<BluetoothPairingPrompt>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothDeviceState {
+    pub address: String,
+    pub name: String,
+    pub icon_name: String,
+    pub paired: bool,
+    pub trusted: bool,
+    pub connected: bool,
+    pub audio_capable: bool,
+    pub battery_percent: Option<u8>,
+    pub rssi: Option<i16>,
+    pub operation: Option<BluetoothDeviceOperation>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BluetoothDeviceOperation {
+    Connecting,
+    Disconnecting,
+    Pairing,
+    Forgetting,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothPairingPrompt {
+    pub id: u64,
+    pub address: String,
+    pub device_name: String,
+    pub kind: BluetoothPairingPromptKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BluetoothPairingPromptKind {
+    ConfirmPasskey { passkey: u32 },
+    EnterPinCode,
+    EnterPasskey,
+    DisplayPinCode { pin_code: String },
+    DisplayPasskey { passkey: u32, entered: u16 },
+    Authorize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BluetoothPairingResponse {
+    Accept,
+    PinCode(String),
+    Passkey(u32),
+    Reject,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioState {
     pub volume_percent: Option<u8>,
     pub muted: bool,
+    #[serde(default)]
+    pub outputs: Vec<AudioOutputState>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioOutputState {
+    pub name: String,
+    pub description: String,
+    pub alias: Option<String>,
+    pub port_description: Option<String>,
+    pub port_type: Option<String>,
+    pub bus: Option<String>,
+    pub is_default: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,6 +298,122 @@ pub enum PowerProfile {
     #[default]
     Balanced,
     PowerSaver,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopContext {
+    #[default]
+    Overview,
+    Keyboard,
+    Resources,
+    Network,
+    Bluetooth,
+    Audio,
+    Power,
+    Clock,
+}
+
+impl DesktopContext {
+    pub const ALL: [Self; 8] = [
+        Self::Overview,
+        Self::Keyboard,
+        Self::Resources,
+        Self::Network,
+        Self::Bluetooth,
+        Self::Audio,
+        Self::Power,
+        Self::Clock,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Overview => "overview",
+            Self::Keyboard => "keyboard",
+            Self::Resources => "resources",
+            Self::Network => "network",
+            Self::Bluetooth => "bluetooth",
+            Self::Audio => "audio",
+            Self::Power => "power",
+            Self::Clock => "clock",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextHealth {
+    #[default]
+    Healthy,
+    Degraded,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContextAction {
+    SelectKeyboardLayout {
+        index: u8,
+    },
+    SetWifiEnabled {
+        enabled: bool,
+    },
+    SetBluetoothPowered {
+        powered: bool,
+    },
+    ConnectBluetoothDevice {
+        address: String,
+    },
+    DisconnectBluetoothDevice {
+        address: String,
+    },
+    SetVolumePercent {
+        percent: u8,
+    },
+    ToggleMute,
+    SetAudioOutput {
+        sink_name: String,
+    },
+    ControlMedia {
+        player: String,
+        action: MediaControlAction,
+    },
+    SetBrightnessPercent {
+        device: String,
+        percent: u8,
+    },
+    SetPowerProfile {
+        profile: PowerProfile,
+    },
+    PauseTimer {
+        id: String,
+    },
+    ResumeTimer {
+        id: String,
+    },
+    CancelTimer {
+        id: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextActionSpec {
+    pub title: String,
+    pub subtitle: String,
+    pub icon_name: String,
+    pub accessory: Option<String>,
+    pub action: ContextAction,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextSnapshot {
+    pub context: DesktopContext,
+    pub title: String,
+    pub icon_name: String,
+    pub summary: String,
+    pub detail: String,
+    pub health: ContextHealth,
+    pub actions: Vec<ContextActionSpec>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -346,9 +559,15 @@ pub enum ActionIntent {
         window_id: String,
     },
     ToggleKeyboardLayout,
-    OpenWindowSearch,
+    SelectKeyboardLayout {
+        index: u8,
+    },
+    OpenWindowSearch {
+        output: String,
+    },
     OpenContextQuery {
-        query: String,
+        context: DesktopContext,
+        output: String,
     },
     ControlMedia {
         player: String,
@@ -358,11 +577,36 @@ pub enum ActionIntent {
         percent: u8,
     },
     ToggleMute,
+    SetAudioOutput {
+        sink_name: String,
+    },
     SetWifiEnabled {
         enabled: bool,
     },
     SetBluetoothPowered {
         powered: bool,
+    },
+    SetBluetoothDiscovery {
+        enabled: bool,
+    },
+    ConnectBluetoothDevice {
+        address: String,
+    },
+    DisconnectBluetoothDevice {
+        address: String,
+    },
+    PairBluetoothDevice {
+        address: String,
+    },
+    ForgetBluetoothDevice {
+        address: String,
+    },
+    RespondBluetoothPairing {
+        prompt_id: u64,
+        response: BluetoothPairingResponse,
+    },
+    CancelBluetoothPairing {
+        address: String,
     },
     SetBrightnessPercent {
         device: String,
@@ -370,6 +614,9 @@ pub enum ActionIntent {
     },
     CyclePowerProfile {
         direction: Direction,
+    },
+    SetPowerProfile {
+        profile: PowerProfile,
     },
     StartTimer {
         label: String,
@@ -388,7 +635,7 @@ pub enum ActionIntent {
 
 #[cfg(test)]
 mod tests {
-    use super::{BluetoothState, MediaState, NetworkState, PowerState};
+    use super::{AudioState, BluetoothState, MediaState, NetworkState, PowerState};
 
     #[test]
     fn network_state_deserializes_without_new_wifi_radio_field() {
@@ -400,6 +647,9 @@ mod tests {
         assert_eq!(state.wifi_enabled, None);
         assert!(!state.wifi_available);
         assert!(!state.ethernet_available);
+        assert_eq!(state.interface, None);
+        assert!(state.download_history.is_empty());
+        assert!(state.upload_history.is_empty());
     }
 
     #[test]
@@ -425,5 +675,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(state.art_url, None);
+    }
+
+    #[test]
+    fn audio_state_deserializes_without_output_inventory() {
+        let state: AudioState =
+            serde_json::from_str(r#"{"volume_percent":42,"muted":false}"#).unwrap();
+
+        assert!(state.outputs.is_empty());
     }
 }

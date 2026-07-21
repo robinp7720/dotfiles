@@ -11,7 +11,7 @@ use std::ffi::CStr;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    mpsc::{self, Receiver, Sender},
 };
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,7 +21,7 @@ use anyhow::Result;
 use crate::{ClockState, StateUpdate, SystemUpdate};
 
 pub use audio::spawn_audio_source;
-pub use bluetooth::spawn_bluetooth_source;
+pub use bluetooth::{BluetoothCommand, BluetoothControlClient, spawn_bluetooth_source};
 pub use brightness::{parse_brightnessctl_output, spawn_brightness_source};
 pub use calendar::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
 pub use media::spawn_media_source;
@@ -57,12 +57,14 @@ impl RetryState {
     }
 }
 
+#[cfg(test)]
 pub(crate) enum CancellableRecv<T> {
     Item(T),
     Cancelled,
     Disconnected,
 }
 
+#[cfg(test)]
 pub(crate) fn recv_with_cancellation<T>(
     receiver: &Receiver<T>,
     cancelled: &Arc<AtomicBool>,
@@ -75,8 +77,8 @@ pub(crate) fn recv_with_cancellation<T>(
 
         match receiver.recv_timeout(poll_interval) {
             Ok(value) => return CancellableRecv::Item(value),
-            Err(RecvTimeoutError::Timeout) => continue,
-            Err(RecvTimeoutError::Disconnected) => return CancellableRecv::Disconnected,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return CancellableRecv::Disconnected,
         }
     }
 }

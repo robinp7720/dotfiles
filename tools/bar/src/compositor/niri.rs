@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::StateUpdate;
+use crate::{KeyboardLayoutOption, KeyboardLayoutState, StateUpdate};
 
 use super::{
     BlockingEventReader, CommandEnv, CommandRunner, CompositorAction, CompositorAdapter, EventRead,
@@ -21,7 +21,7 @@ pub struct NiriAdapter {
     pending: VecDeque<StateUpdate>,
     command_runner: CommandRunner,
     command_env: CommandEnv,
-    keyboard_layouts: Vec<String>,
+    keyboard_layouts: Vec<KeyboardLayoutOption>,
 }
 
 struct NiriSources {
@@ -207,6 +207,18 @@ impl CompositorAdapter for NiriAdapter {
                     &self.command_env,
                 )?;
             }
+            CompositorAction::SelectKeyboardLayout { index } => {
+                (self.command_runner)(
+                    "niri",
+                    &[
+                        "msg".to_string(),
+                        "action".to_string(),
+                        "switch-layout".to_string(),
+                        index.to_string(),
+                    ],
+                    &self.command_env,
+                )?;
+            }
         }
 
         Ok(())
@@ -294,7 +306,7 @@ fn apply_snapshot(
     workspaces_json: &str,
     windows_json: &str,
     keyboard_layouts_json: &str,
-) -> Result<Vec<String>> {
+) -> Result<Vec<KeyboardLayoutOption>> {
     let outputs: Vec<NiriOutput> =
         serde_json::from_str(outputs_json).context("failed to parse niri outputs JSON")?;
     let workspaces: Vec<NiriWorkspace> =
@@ -359,17 +371,64 @@ fn apply_snapshot(
         }
     }
 
-    if keyboard_layouts.current_idx < keyboard_layouts.names.len() {
-        state.keyboard_layout = Some(keyboard_layouts.names[keyboard_layouts.current_idx].clone());
-    }
+    let keyboard_state = niri_keyboard_layout_state(&keyboard_layouts);
+    let options = keyboard_state.layouts.clone();
+    state.keyboard_layout = keyboard_state;
 
-    Ok(keyboard_layouts.names)
+    Ok(options)
+}
+
+fn niri_keyboard_layout_state(layouts: &NiriKeyboardLayouts) -> KeyboardLayoutState {
+    let options = layouts
+        .names
+        .iter()
+        .enumerate()
+        .filter_map(|(index, name)| {
+            let index = u8::try_from(index).ok()?;
+            let (layout, variant) = niri_layout_parts(name);
+            Some(KeyboardLayoutOption {
+                index,
+                name: name.clone(),
+                layout,
+                variant,
+            })
+        })
+        .collect::<Vec<_>>();
+    let current_index = u8::try_from(layouts.current_idx)
+        .ok()
+        .filter(|index| options.iter().any(|option| option.index == *index));
+    let current_name = current_index.and_then(|index| {
+        options
+            .iter()
+            .find(|option| option.index == index)
+            .map(|option| option.name.clone())
+    });
+
+    KeyboardLayoutState {
+        current_index,
+        current_name,
+        layouts: options,
+    }
+}
+
+fn niri_layout_parts(name: &str) -> (Option<String>, Option<String>) {
+    let lower = name.to_ascii_lowercase();
+    if lower == "us" || lower.contains("english (us)") {
+        (Some("us".to_string()), None)
+    } else if lower.contains("dvorak") {
+        (Some("us".to_string()), Some("dvorak".to_string()))
+    } else if lower == "de" || lower.contains("german") {
+        let variant = lower.contains("koy").then(|| "koy".to_string());
+        (Some("de".to_string()), variant)
+    } else {
+        (Some(name.to_string()), None)
+    }
 }
 
 fn apply_event(
     tracker: &mut StateTracker,
     pending: &mut VecDeque<StateUpdate>,
-    keyboard_layouts: &mut Vec<String>,
+    keyboard_layouts: &mut Vec<KeyboardLayoutOption>,
     line: &str,
 ) -> Result<()> {
     let value: Value =
@@ -442,7 +501,8 @@ fn apply_event(
                 "KeyboardLayoutSwitched index {idx} out of range"
             )));
         };
-        tracker.state.keyboard_layout = Some(layout.clone());
+        tracker.state.keyboard_layout.current_index = Some(layout.index);
+        tracker.state.keyboard_layout.current_name = Some(layout.name.clone());
         tracker.push_diffs(pending);
         return Ok(());
     }
@@ -453,10 +513,9 @@ fn apply_event(
                 reconnect_error("KeyboardLayoutsChanged missing keyboard_layouts")
             })?)
             .map_err(reconnect_error)?;
-        *keyboard_layouts = parsed.names.clone();
-        if parsed.current_idx < keyboard_layouts.len() {
-            tracker.state.keyboard_layout = Some(keyboard_layouts[parsed.current_idx].clone());
-        }
+        let keyboard_state = niri_keyboard_layout_state(&parsed);
+        *keyboard_layouts = keyboard_state.layouts.clone();
+        tracker.state.keyboard_layout = keyboard_state;
         tracker.push_diffs(pending);
     }
 

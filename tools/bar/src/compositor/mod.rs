@@ -6,7 +6,10 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 
-use crate::{Direction, OutputState, StateUpdate, SystemUpdate, WindowState, WorkspaceState};
+use crate::{
+    Direction, KeyboardLayoutState, OutputState, StateUpdate, SystemUpdate, WindowState,
+    WorkspaceState,
+};
 
 pub mod hyprland;
 pub mod niri;
@@ -42,6 +45,9 @@ pub enum CompositorAction {
         window_id: String,
     },
     CycleKeyboardLayout,
+    SelectKeyboardLayout {
+        index: u8,
+    },
 }
 
 pub fn detect_compositor(env: &[(&str, &str)]) -> Result<Box<dyn CompositorAdapter>> {
@@ -73,7 +79,7 @@ pub(crate) struct NormalizedState {
     pub workspaces: BTreeMap<String, RawWorkspace>,
     pub windows: BTreeMap<String, RawWindow>,
     pub focused_output: Option<String>,
-    pub keyboard_layout: Option<String>,
+    pub keyboard_layout: KeyboardLayoutState,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -81,7 +87,7 @@ pub(crate) struct StateTracker {
     pub state: NormalizedState,
     outputs_cache: Vec<OutputState>,
     focused_output_cache: Option<String>,
-    keyboard_layout_cache: Option<String>,
+    keyboard_layout_cache: KeyboardLayoutState,
 }
 
 impl StateTracker {

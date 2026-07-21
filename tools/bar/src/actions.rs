@@ -5,15 +5,19 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use serde::Deserialize;
 
 use crate::{
-    ActionIntent, CompositorAction, CompositorAdapter, ControlClient, ControlRequest,
-    ControlResponse, Direction, MediaControlAction, PowerProfile, detect_compositor,
+    ActionIntent, BluetoothCommand, BluetoothControlClient, CompositorAction, CompositorAdapter,
+    ControlClient, ControlRequest, ControlResponse, Direction, MediaControlAction, PowerProfile,
+    detect_compositor,
 };
 
 pub trait ActionBackend: Send {
     fn execute_compositor(&mut self, action: CompositorAction) -> Result<()>;
     fn execute_service_command(&mut self, spec: ProcessSpec) -> Result<()>;
+    fn set_audio_output(&mut self, sink_name: &str) -> Result<()>;
+    fn control_bluetooth(&mut self, command: BluetoothCommand) -> Result<()>;
     fn launch_process(&mut self, spec: ProcessSpec) -> Result<()>;
     fn control_timer(&mut self, request: ControlRequest) -> Result<()>;
 }
@@ -108,12 +112,15 @@ impl<B: ActionBackend> ActionRouter<B> {
             ActionIntent::ToggleKeyboardLayout => self
                 .backend
                 .execute_compositor(CompositorAction::CycleKeyboardLayout),
-            ActionIntent::OpenWindowSearch => {
-                self.backend.launch_process(luma_query_process("windows"))
+            ActionIntent::SelectKeyboardLayout { index } => self
+                .backend
+                .execute_compositor(CompositorAction::SelectKeyboardLayout { index }),
+            ActionIntent::OpenWindowSearch { output } => {
+                self.backend.launch_process(luma_window_process(&output))
             }
-            ActionIntent::OpenContextQuery { query } => {
-                self.backend.launch_process(luma_query_process(&query))
-            }
+            ActionIntent::OpenContextQuery { context, output } => self
+                .backend
+                .launch_process(luma_context_process(context, &output)),
             ActionIntent::ControlMedia { player, action } => self
                 .backend
                 .execute_service_command(media_process(&player, action)),
@@ -121,12 +128,40 @@ impl<B: ActionBackend> ActionRouter<B> {
                 .backend
                 .execute_service_command(volume_process(percent)),
             ActionIntent::ToggleMute => self.backend.execute_service_command(mute_process()),
+            ActionIntent::SetAudioOutput { sink_name } => self.backend.set_audio_output(&sink_name),
             ActionIntent::SetWifiEnabled { enabled } => {
                 self.backend.execute_service_command(wifi_process(enabled))
             }
             ActionIntent::SetBluetoothPowered { powered } => self
                 .backend
-                .execute_service_command(bluetooth_power_process(powered)),
+                .control_bluetooth(BluetoothCommand::SetPowered(powered)),
+            ActionIntent::SetBluetoothDiscovery { enabled } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::SetDiscovery(enabled)),
+            ActionIntent::ConnectBluetoothDevice { address } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::Connect(address)),
+            ActionIntent::DisconnectBluetoothDevice { address } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::Disconnect(address)),
+            ActionIntent::PairBluetoothDevice { address } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::Pair(address)),
+            ActionIntent::ForgetBluetoothDevice { address } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::Forget(address)),
+            ActionIntent::RespondBluetoothPairing {
+                prompt_id,
+                response,
+            } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::RespondPairing {
+                    prompt_id,
+                    response,
+                }),
+            ActionIntent::CancelBluetoothPairing { address } => self
+                .backend
+                .control_bluetooth(BluetoothCommand::CancelPairing(address)),
             ActionIntent::SetBrightnessPercent { device, percent } => self
                 .backend
                 .execute_service_command(brightness_process(&device, percent)),
@@ -135,6 +170,12 @@ impl<B: ActionBackend> ActionRouter<B> {
                 self.backend
                     .execute_service_command(power_profile_process(&next))?;
                 self.power_profile = next;
+                Ok(())
+            }
+            ActionIntent::SetPowerProfile { profile } => {
+                self.backend
+                    .execute_service_command(power_profile_process(&profile))?;
+                self.power_profile = profile;
                 Ok(())
             }
             ActionIntent::StartTimer {
@@ -197,10 +238,11 @@ where
 pub struct SystemActionBackend {
     compositor: Box<dyn CompositorAdapter>,
     control_client: ControlClient,
+    bluetooth: BluetoothControlClient,
 }
 
 impl SystemActionBackend {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env(bluetooth: BluetoothControlClient) -> Result<Self> {
         let env = std::env::vars().collect::<Vec<_>>();
         let env_refs = env
             .iter()
@@ -210,16 +252,19 @@ impl SystemActionBackend {
         Ok(Self {
             compositor: detect_compositor(&env_refs)?,
             control_client: ControlClient::new()?,
+            bluetooth,
         })
     }
 
     pub fn from_parts(
         compositor: Box<dyn CompositorAdapter>,
         control_client: ControlClient,
+        bluetooth: BluetoothControlClient,
     ) -> Self {
         Self {
             compositor,
             control_client,
+            bluetooth,
         }
     }
 }
@@ -233,13 +278,28 @@ impl ActionBackend for SystemActionBackend {
         run_process(spec)
     }
 
+    fn set_audio_output(&mut self, sink_name: &str) -> Result<()> {
+        set_audio_output(sink_name)
+    }
+
+    fn control_bluetooth(&mut self, command: BluetoothCommand) -> Result<()> {
+        self.bluetooth.send(command)
+    }
+
     fn launch_process(&mut self, spec: ProcessSpec) -> Result<()> {
         spawn_process(spec)
     }
 
     fn control_timer(&mut self, request: ControlRequest) -> Result<()> {
         match self.control_client.send(&request)? {
-            ControlResponse::Accepted | ControlResponse::Timers { .. } => Ok(()),
+            ControlResponse::Accepted
+            | ControlResponse::Timers { .. }
+            | ControlResponse::Contexts { .. }
+            | ControlResponse::ActionResult { success: true, .. } => Ok(()),
+            ControlResponse::ActionResult {
+                success: false,
+                message,
+            } => bail!(message.unwrap_or_else(|| "action failed".to_string())),
             ControlResponse::Error { message } => bail!(message),
         }
     }
@@ -271,8 +331,22 @@ fn spawn_process(spec: ProcessSpec) -> Result<()> {
     Ok(())
 }
 
-fn luma_query_process(query: &str) -> ProcessSpec {
-    ProcessSpec::new("Luma", ["--query", query])
+fn luma_window_process(output: &str) -> ProcessSpec {
+    ProcessSpec::new("Luma", ["--mode", "windows", "--output", output])
+}
+
+fn luma_context_process(context: crate::DesktopContext, output: &str) -> ProcessSpec {
+    ProcessSpec::new(
+        "Luma",
+        [
+            "--context",
+            context.as_str(),
+            "--output",
+            output,
+            "--placement",
+            "bar",
+        ],
+    )
 }
 
 fn media_process(player: &str, action: MediaControlAction) -> ProcessSpec {
@@ -302,12 +376,69 @@ fn mute_process() -> ProcessSpec {
     ProcessSpec::new("wpctl", ["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
 }
 
-fn wifi_process(enabled: bool) -> ProcessSpec {
-    ProcessSpec::new("nmcli", ["radio", "wifi", on_off(enabled)])
+#[derive(Debug, Deserialize)]
+struct PactlSinkInput {
+    index: u64,
 }
 
-fn bluetooth_power_process(powered: bool) -> ProcessSpec {
-    ProcessSpec::new("bluetoothctl", ["power", on_off(powered)])
+fn set_audio_output(sink_name: &str) -> Result<()> {
+    run_process(default_sink_process(sink_name))?;
+    let stream_indices = read_sink_input_indices()
+        .context("output selected, but current playback streams could not be inspected")?;
+    let mut failures = Vec::new();
+    for index in stream_indices {
+        if let Err(error) = run_process(move_sink_input_process(index, sink_name)) {
+            let stream_still_exists = read_sink_input_indices()
+                .map(|current| current.contains(&index))
+                .unwrap_or(true);
+            if stream_still_exists {
+                failures.push(format!("stream {index}: {error}"));
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "output selected, but {} playback stream(s) could not be moved: {}",
+            failures.len(),
+            failures.join("; ")
+        )
+    }
+}
+
+fn read_sink_input_indices() -> Result<Vec<u64>> {
+    let spec = ProcessSpec::new("pactl", ["-f", "json", "list", "sink-inputs"]);
+    let output = Command::new(&spec.program)
+        .args(&spec.args)
+        .output()
+        .with_context(|| format!("failed to execute {}", spec.display()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        bail!("{} exited with {}: {stderr}", spec.display(), output.status);
+    }
+    let inputs: Vec<PactlSinkInput> = serde_json::from_slice(&output.stdout)
+        .context("pactl sink-input list was not valid JSON")?;
+    Ok(inputs.into_iter().map(|input| input.index).collect())
+}
+
+fn default_sink_process(sink_name: &str) -> ProcessSpec {
+    ProcessSpec::new("pactl", ["set-default-sink", sink_name])
+}
+
+fn move_sink_input_process(index: u64, sink_name: &str) -> ProcessSpec {
+    ProcessSpec::new(
+        "pactl",
+        [
+            "move-sink-input".to_string(),
+            index.to_string(),
+            sink_name.to_string(),
+        ],
+    )
+}
+
+fn wifi_process(enabled: bool) -> ProcessSpec {
+    ProcessSpec::new("nmcli", ["radio", "wifi", on_off(enabled)])
 }
 
 fn brightness_process(device: &str, percent: u8) -> ProcessSpec {
@@ -367,9 +498,11 @@ mod tests {
 
     use crate::{
         ActionBackend, ActionCompletion, ActionIntent, ActionRequest, ActionResult, ActionRouter,
-        CompositorAction, ControlRequest, Direction, MediaControlAction, PowerProfile, ProcessSpec,
-        spawn_action_worker,
+        BluetoothCommand, CompositorAction, ControlRequest, Direction, MediaControlAction,
+        PowerProfile, ProcessSpec, spawn_action_worker,
     };
+
+    use super::{default_sink_process, move_sink_input_process};
 
     #[test]
     fn workspace_click_routes_to_compositor_backend() {
@@ -477,7 +610,6 @@ mod tests {
                 ProcessSpec::new("wpctl", ["set-volume", "@DEFAULT_AUDIO_SINK@", "100%"],),
                 ProcessSpec::new("wpctl", ["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]),
                 ProcessSpec::new("nmcli", ["radio", "wifi", "off"]),
-                ProcessSpec::new("bluetoothctl", ["power", "on"]),
                 ProcessSpec::new(
                     "brightnessctl",
                     [
@@ -491,6 +623,96 @@ mod tests {
             ]
         );
         assert_no_shell_expansion(&commands);
+        assert_eq!(
+            state.lock().unwrap().bluetooth_commands,
+            vec![BluetoothCommand::SetPowered(true)]
+        );
+    }
+
+    #[test]
+    fn audio_output_selection_uses_a_typed_backend_operation() {
+        let state = SpyState::default_shared();
+        let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
+
+        assert_eq!(
+            router.execute(ActionIntent::SetAudioOutput {
+                sink_name: "bluez_output.headphones; echo unsafe".to_string(),
+            }),
+            ActionResult::Completed
+        );
+        assert_eq!(
+            state.lock().unwrap().audio_outputs,
+            vec!["bluez_output.headphones; echo unsafe".to_string()]
+        );
+        let specs = [
+            default_sink_process("bluez_output.headphones; echo unsafe"),
+            move_sink_input_process(42, "bluez_output.headphones; echo unsafe"),
+        ];
+        assert_eq!(
+            specs[0],
+            ProcessSpec::new(
+                "pactl",
+                ["set-default-sink", "bluez_output.headphones; echo unsafe"],
+            )
+        );
+        assert_eq!(
+            specs[1],
+            ProcessSpec::new(
+                "pactl",
+                [
+                    "move-sink-input",
+                    "42",
+                    "bluez_output.headphones; echo unsafe",
+                ],
+            )
+        );
+        assert_no_shell_expansion(&specs);
+    }
+
+    #[test]
+    fn bluetooth_manager_actions_use_typed_controller_commands() {
+        let state = SpyState::default_shared();
+        let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
+        let address = "AA:BB:CC:DD:EE:FF".to_string();
+        for intent in [
+            ActionIntent::SetBluetoothDiscovery { enabled: true },
+            ActionIntent::ConnectBluetoothDevice {
+                address: address.clone(),
+            },
+            ActionIntent::DisconnectBluetoothDevice {
+                address: address.clone(),
+            },
+            ActionIntent::PairBluetoothDevice {
+                address: address.clone(),
+            },
+            ActionIntent::ForgetBluetoothDevice {
+                address: address.clone(),
+            },
+            ActionIntent::RespondBluetoothPairing {
+                prompt_id: 7,
+                response: crate::BluetoothPairingResponse::Accept,
+            },
+            ActionIntent::CancelBluetoothPairing {
+                address: address.clone(),
+            },
+        ] {
+            assert_eq!(router.execute(intent), ActionResult::Completed);
+        }
+        assert_eq!(
+            state.lock().unwrap().bluetooth_commands,
+            vec![
+                BluetoothCommand::SetDiscovery(true),
+                BluetoothCommand::Connect(address.clone()),
+                BluetoothCommand::Disconnect(address.clone()),
+                BluetoothCommand::Pair(address.clone()),
+                BluetoothCommand::Forget(address.clone()),
+                BluetoothCommand::RespondPairing {
+                    prompt_id: 7,
+                    response: crate::BluetoothPairingResponse::Accept,
+                },
+                BluetoothCommand::CancelPairing(address),
+            ]
+        );
     }
 
     #[test]
@@ -498,13 +720,18 @@ mod tests {
         let state = SpyState::default_shared();
         let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
 
-        let result = router.execute(ActionIntent::OpenWindowSearch);
+        let result = router.execute(ActionIntent::OpenWindowSearch {
+            output: "DP-5".to_string(),
+        });
 
         assert_eq!(result, ActionResult::Completed);
         let processes = state.lock().unwrap().launched_processes.clone();
         assert_eq!(
             processes,
-            vec![ProcessSpec::new("Luma", ["--query", "windows"])]
+            vec![ProcessSpec::new(
+                "Luma",
+                ["--mode", "windows", "--output", "DP-5"],
+            )]
         );
         assert_no_shell_expansion(&processes);
     }
@@ -515,14 +742,25 @@ mod tests {
         let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
 
         let result = router.execute(ActionIntent::OpenContextQuery {
-            query: "power".to_string(),
+            context: crate::DesktopContext::Power,
+            output: "DP-5".to_string(),
         });
 
         assert_eq!(result, ActionResult::Completed);
         let processes = state.lock().unwrap().launched_processes.clone();
         assert_eq!(
             processes,
-            vec![ProcessSpec::new("Luma", ["--query", "power"])]
+            vec![ProcessSpec::new(
+                "Luma",
+                [
+                    "--context",
+                    "power",
+                    "--output",
+                    "DP-5",
+                    "--placement",
+                    "bar",
+                ],
+            )]
         );
         assert_no_shell_expansion(&processes);
     }
@@ -584,7 +822,9 @@ mod tests {
         state.lock().unwrap().launch_error = Some("launcher missing".to_string());
         let mut router = ActionRouter::new(SpyBackend::new(state));
 
-        let result = router.execute(ActionIntent::OpenWindowSearch);
+        let result = router.execute(ActionIntent::OpenWindowSearch {
+            output: "DP-5".to_string(),
+        });
 
         assert_eq!(
             result,
@@ -649,7 +889,8 @@ mod tests {
             .send(ActionRequest {
                 origin: "context-popover:42".to_string(),
                 intent: ActionIntent::OpenContextQuery {
-                    query: "power".to_string(),
+                    context: crate::DesktopContext::Power,
+                    output: "DP-5".to_string(),
                 },
             })
             .unwrap();
@@ -663,7 +904,8 @@ mod tests {
             ActionCompletion {
                 origin: "context-popover:42".to_string(),
                 intent: ActionIntent::OpenContextQuery {
-                    query: "power".to_string(),
+                    context: crate::DesktopContext::Power,
+                    output: "DP-5".to_string(),
                 },
                 result: ActionResult::Completed,
             }
@@ -674,6 +916,8 @@ mod tests {
     struct SpyState {
         compositor_actions: Vec<CompositorAction>,
         service_commands: Vec<ProcessSpec>,
+        audio_outputs: Vec<String>,
+        bluetooth_commands: Vec<BluetoothCommand>,
         launched_processes: Vec<ProcessSpec>,
         timer_requests: Vec<ControlRequest>,
         launch_error: Option<String>,
@@ -703,6 +947,20 @@ mod tests {
 
         fn execute_service_command(&mut self, spec: ProcessSpec) -> Result<()> {
             self.state.lock().unwrap().service_commands.push(spec);
+            Ok(())
+        }
+
+        fn set_audio_output(&mut self, sink_name: &str) -> Result<()> {
+            self.state
+                .lock()
+                .unwrap()
+                .audio_outputs
+                .push(sink_name.to_string());
+            Ok(())
+        }
+
+        fn control_bluetooth(&mut self, command: BluetoothCommand) -> Result<()> {
+            self.state.lock().unwrap().bluetooth_commands.push(command);
             Ok(())
         }
 

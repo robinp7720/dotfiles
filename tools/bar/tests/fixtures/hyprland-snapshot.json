@@ -51,8 +51,20 @@
   "devices": {
     "keyboards": [
       {
+        "name": "logitech-usb-keyboard",
+        "layout": "us, us, de",
+        "variant": ",dvorak,koy",
+        "active_layout_index": 2,
+        "active_keymap": "German (KOY)",
+        "main": false
+      },
+      {
         "name": "at-translated-set-2-keyboard",
-        "active_keymap": "us"
+        "layout": "us, us, de",
+        "variant": ",dvorak,koy",
+        "active_layout_index": 0,
+        "active_keymap": "English (US)",
+        "main": true
       }
     ]
   }

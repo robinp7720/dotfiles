@@ -3,7 +3,7 @@ use crate::{
     SourceHealth, SourceId,
 };
 
-use super::control_center::{ControlCenterSpec, build_control_center_spec};
+use super::control_center::{ControlCenterSpec, build_control_center_spec, keyboard_bar_labels};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SystemModuleId {
@@ -106,11 +106,7 @@ fn build_button_spec(
 }
 
 fn keyboard_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
-    let layout = snapshot
-        .system
-        .keyboard_layout
-        .as_deref()
-        .unwrap_or("Unknown layout");
+    let (label, layout) = keyboard_bar_labels(&snapshot.system.keyboard_layout);
     let mut classes = base_classes(SystemModuleId::Keyboard);
     apply_health(
         &mut classes,
@@ -120,7 +116,7 @@ fn keyboard_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
     SystemButtonSpec {
         id: SystemModuleId::Keyboard,
         icon_name: "input-keyboard-symbolic".to_string(),
-        label: Some(short_layout_label(layout)),
+        label: Some(label),
         tooltip: with_health_note(
             format!("Keyboard layout: {layout}"),
             snapshot.system.source_health.get(&SourceId::Compositor),
@@ -249,28 +245,6 @@ fn clock_button(snapshot: &BarSnapshot) -> SystemButtonSpec {
         label: Some(snapshot.system.clock.label.clone()),
         tooltip: with_health_note(format!("Clock: {}", snapshot.system.clock.label), health),
         classes,
-    }
-}
-
-fn short_layout_label(layout: &str) -> String {
-    let lower = layout.to_ascii_lowercase();
-    if lower.contains("dvorak") {
-        "DV".to_string()
-    } else if lower.contains("us") {
-        "US".to_string()
-    } else {
-        layout
-            .split(|ch: char| !ch.is_ascii_alphanumeric())
-            .find(|segment| !segment.is_empty())
-            .map(|segment| {
-                segment
-                    .chars()
-                    .take(2)
-                    .collect::<String>()
-                    .to_ascii_uppercase()
-            })
-            .filter(|segment| !segment.is_empty())
-            .unwrap_or_else(|| "KB".to_string())
     }
 }
 
@@ -459,7 +433,8 @@ mod tests {
 
     use crate::{
         AppConfig, AudioState, BarSnapshot, BluetoothState, ClockState, ConnectivityState,
-        NetworkState, PowerProfile, PowerState, ResourceState, SourceHealth, SourceId,
+        KeyboardLayoutOption, KeyboardLayoutState, NetworkState, PowerProfile, PowerState,
+        ResourceState, SourceHealth, SourceId,
     };
 
     use super::{SystemModuleId, build_system_cluster};
@@ -467,18 +442,51 @@ mod tests {
     #[test]
     fn keyboard_button_compacts_us_and_dvorak_layout_labels() {
         let mut snapshot = snapshot();
-        snapshot.system.keyboard_layout = Some("English (US)".to_string());
+        snapshot.system.keyboard_layout = KeyboardLayoutState {
+            current_index: Some(0),
+            current_name: Some("English (US)".to_string()),
+            layouts: vec![KeyboardLayoutOption {
+                index: 0,
+                name: "English (US)".to_string(),
+                layout: Some("us".to_string()),
+                variant: None,
+            }],
+        };
 
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
         let keyboard = cluster.module(SystemModuleId::Keyboard);
         assert_eq!(keyboard.label.as_deref(), Some("US"));
         assert!(keyboard.tooltip.contains("English (US)"));
 
-        snapshot.system.keyboard_layout = Some("English (Dvorak)".to_string());
+        snapshot.system.keyboard_layout = KeyboardLayoutState {
+            current_index: Some(1),
+            current_name: Some("English (Dvorak)".to_string()),
+            layouts: vec![KeyboardLayoutOption {
+                index: 1,
+                name: "English (Dvorak)".to_string(),
+                layout: Some("us".to_string()),
+                variant: Some("dvorak".to_string()),
+            }],
+        };
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
         let keyboard = cluster.module(SystemModuleId::Keyboard);
-        assert_eq!(keyboard.label.as_deref(), Some("DV"));
+        assert_eq!(keyboard.label.as_deref(), Some("US-DV"));
         assert!(keyboard.tooltip.contains("English (Dvorak)"));
+
+        snapshot.system.keyboard_layout = KeyboardLayoutState {
+            current_index: Some(2),
+            current_name: Some("German (KOY)".to_string()),
+            layouts: vec![KeyboardLayoutOption {
+                index: 2,
+                name: "German (KOY)".to_string(),
+                layout: Some("de".to_string()),
+                variant: Some("koy".to_string()),
+            }],
+        };
+        let cluster = build_system_cluster(&snapshot, &AppConfig::default());
+        let keyboard = cluster.module(SystemModuleId::Keyboard);
+        assert_eq!(keyboard.label.as_deref(), Some("DE-KOY"));
+        assert!(keyboard.tooltip.contains("German (KOY)"));
     }
 
     #[test]
@@ -508,6 +516,7 @@ mod tests {
             wifi_available: true,
             ethernet_available: true,
             wifi_enabled: Some(true),
+            ..NetworkState::default()
         };
 
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
@@ -535,10 +544,12 @@ mod tests {
             powered: false,
             connected_device: None,
             audio_device: None,
+            ..BluetoothState::default()
         };
         snapshot.system.audio = AudioState {
             volume_percent: Some(42),
             muted: false,
+            outputs: Vec::new(),
         };
 
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
@@ -556,6 +567,7 @@ mod tests {
         snapshot.system.audio = AudioState {
             volume_percent: Some(42),
             muted: false,
+            outputs: Vec::new(),
         };
 
         let cluster = build_system_cluster(&snapshot, &AppConfig::default());
@@ -638,6 +650,7 @@ mod tests {
                     wifi_available: true,
                     ethernet_available: true,
                     wifi_enabled: Some(false),
+                    ..NetworkState::default()
                 },
                 ..crate::SystemState::default()
             },

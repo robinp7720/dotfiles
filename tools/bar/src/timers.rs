@@ -120,8 +120,12 @@ impl TimerStore {
                 self.persist()?;
             }
             ControlRequest::TimerList => {}
-            ControlRequest::ActivityStart { .. } | ControlRequest::ActivityFinish { .. } => {
-                bail!("timer store cannot apply activity control requests");
+            ControlRequest::ActivityStart { .. }
+            | ControlRequest::ActivityFinish { .. }
+            | ControlRequest::ContextGet { .. }
+            | ControlRequest::ContextExecute { .. }
+            | ControlRequest::ControlCenterOpen { .. } => {
+                bail!("timer store cannot apply non-timer control requests");
             }
         }
 
