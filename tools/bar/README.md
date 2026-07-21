@@ -26,6 +26,11 @@ The user-only `${XDG_RUNTIME_DIR}/cockpit-bar.sock` also provides live desktop-c
 and validated actions to Luma. Quick-settings footers launch Luma with the current page and output;
 Luma can open the corresponding detailed quick-settings page through the same socket.
 
+Time & Focus provides a locale-aware month calendar with an on-demand daily agenda, an Evolution
+handoff for event editing, quick timer presets, and labeled custom timers. The agenda uses the
+range-based `scripts/next_event.sh --agenda-json` contract while the original next-event modes stay
+available to the urgency card, lock screen, and legacy Waybar fallback.
+
 ## Rollback
 
 Immediate session rollback back to Waybar:

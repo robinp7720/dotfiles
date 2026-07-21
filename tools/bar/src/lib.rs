@@ -36,16 +36,18 @@ pub use model::{
     ActionIntent, ActivityState, ActivityStatus, ActivityUpdate, AudioOutputState, AudioState,
     BarSnapshot, BluetoothDeviceOperation, BluetoothDeviceState, BluetoothPairingPrompt,
     BluetoothPairingPromptKind, BluetoothPairingResponse, BluetoothState, BrightnessState,
-    CalendarEvent, ClockState, CommandActivity, ConnectivityState, ContextAction,
-    ContextActionSpec, ContextHealth, ContextSnapshot, DesktopContext, Direction,
-    KeyboardLayoutOption, KeyboardLayoutState, MediaControlAction, MediaState, NetworkState,
-    OutputRole, OutputState, PlaybackStatus, PowerProfile, PowerState, ResourceState, SourceHealth,
-    SourceId, StateUpdate, SystemState, SystemUpdate, TimerState, WindowState, WorkspaceState,
+    CalendarAgenda, CalendarAgendaEvent, CalendarEvent, ClockState, CommandActivity,
+    ConnectivityState, ContextAction, ContextActionSpec, ContextHealth, ContextSnapshot,
+    DesktopContext, Direction, KeyboardLayoutOption, KeyboardLayoutState, MediaControlAction,
+    MediaState, NetworkState, OutputRole, OutputState, PlaybackStatus, PowerProfile, PowerState,
+    ResourceState, SourceHealth, SourceId, StateUpdate, SystemState, SystemUpdate, TimerState,
+    WindowState, WorkspaceState,
 };
 pub use sources::{
-    BluetoothCommand, BluetoothControlClient, CalendarRecord, SourceSupervisor, battery_severity,
-    parse_calendar_json, read_proc_sample, spawn_audio_source, spawn_bluetooth_source,
-    spawn_brightness_source, spawn_calendar_source, spawn_clock_source, spawn_media_source,
+    BluetoothCommand, BluetoothControlClient, CalendarMonthRequest, CalendarRecord,
+    SourceSupervisor, battery_severity, parse_calendar_agenda_json, parse_calendar_json,
+    read_proc_sample, spawn_audio_source, spawn_bluetooth_source, spawn_brightness_source,
+    spawn_calendar_agenda_source, spawn_calendar_source, spawn_clock_source, spawn_media_source,
     spawn_network_source, spawn_power_source, spawn_resource_source,
 };
 pub use state::StateStore;

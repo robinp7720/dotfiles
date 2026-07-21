@@ -12,9 +12,9 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 
 use crate::{
-    ActionCompletion, ActionIntent, ActionRequest, AppConfig, BarSnapshot, ContextCard,
-    ContextTier, DesktopContext, Direction, Dismissals, MediaControlAction, OutputRole,
-    WorkspaceState, select_context,
+    ActionCompletion, ActionIntent, ActionRequest, AppConfig, BarSnapshot, CalendarMonthRequest,
+    ContextCard, ContextTier, DesktopContext, Direction, Dismissals, MediaControlAction,
+    OutputRole, WorkspaceState, select_context,
 };
 
 use super::context_card::{context_presentation, context_tier, warning_text};
@@ -241,6 +241,7 @@ type PopoverRegistry = Rc<RefCell<BTreeMap<String, ManagedOverlay>>>;
 
 pub struct SurfaceRegistry {
     surfaces: BTreeMap<String, SurfaceHandle>,
+    calendar_sender: Option<Sender<CalendarMonthRequest>>,
 }
 
 impl Default for SurfaceRegistry {
@@ -253,6 +254,14 @@ impl SurfaceRegistry {
     pub fn new() -> Self {
         Self {
             surfaces: BTreeMap::new(),
+            calendar_sender: None,
+        }
+    }
+
+    pub fn with_calendar_sender(sender: Sender<CalendarMonthRequest>) -> Self {
+        Self {
+            surfaces: BTreeMap::new(),
+            calendar_sender: Some(sender),
         }
     }
 
@@ -304,8 +313,13 @@ impl SurfaceRegistry {
             match self.surfaces.get_mut(&spec.output_name) {
                 Some(surface) => surface.render(&spec),
                 None => {
-                    let surface =
-                        SurfaceHandle::new(application, monitor, &spec, action_sender.clone());
+                    let surface = SurfaceHandle::new(
+                        application,
+                        monitor,
+                        &spec,
+                        action_sender.clone(),
+                        self.calendar_sender.clone(),
+                    );
                     self.surfaces.insert(spec.output_name.clone(), surface);
                 }
             }
@@ -371,6 +385,7 @@ impl SurfaceHandle {
         monitor: &gdk::Monitor,
         spec: &SurfaceSpec,
         action_sender: Sender<ActionRequest>,
+        calendar_sender: Option<Sender<CalendarMonthRequest>>,
     ) -> Self {
         match spec.role {
             OutputRole::Primary => Self::Primary(PrimarySurface::new(
@@ -378,6 +393,7 @@ impl SurfaceHandle {
                 monitor,
                 spec,
                 action_sender,
+                calendar_sender,
             )),
             OutputRole::Reduced => Self::Reduced(ReducedSurface::new(
                 application,
@@ -440,6 +456,7 @@ impl PrimarySurface {
         monitor: &gdk::Monitor,
         spec: &SurfaceSpec,
         action_sender: Sender<ActionRequest>,
+        calendar_sender: Option<Sender<CalendarMonthRequest>>,
     ) -> Self {
         let window = base_window(application, monitor);
         window.add_css_class("bar-window");
@@ -554,6 +571,7 @@ impl PrimarySurface {
             SURFACE_MARGIN,
             initial_system.control_center(),
             action_sender.clone(),
+            calendar_sender,
         ));
         register_control_window(
             "control-center",

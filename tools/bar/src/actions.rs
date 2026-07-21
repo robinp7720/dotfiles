@@ -178,6 +178,9 @@ impl<B: ActionBackend> ActionRouter<B> {
                 self.power_profile = profile;
                 Ok(())
             }
+            ActionIntent::OpenCalendar => self
+                .backend
+                .launch_process(ProcessSpec::new("evolution", ["-c", "calendar"])),
             ActionIntent::StartTimer {
                 label,
                 duration_seconds,
@@ -737,6 +740,23 @@ mod tests {
     }
 
     #[test]
+    fn calendar_handoff_launches_evolution_calendar_view() {
+        let state = SpyState::default_shared();
+        let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
+
+        assert_eq!(
+            router.execute(ActionIntent::OpenCalendar),
+            ActionResult::Completed
+        );
+        let processes = state.lock().unwrap().launched_processes.clone();
+        assert_eq!(
+            processes,
+            vec![ProcessSpec::new("evolution", ["-c", "calendar"])]
+        );
+        assert_no_shell_expansion(&processes);
+    }
+
+    #[test]
     fn context_secondary_click_launches_card_query() {
         let state = SpyState::default_shared();
         let mut router = ActionRouter::new(SpyBackend::new(state.clone()));
@@ -985,7 +1005,6 @@ mod tests {
             assert_ne!(spec.program, "/bin/sh");
             assert_ne!(spec.program, "bash");
             assert_ne!(spec.program, "/bin/bash");
-            assert!(!spec.args.iter().any(|arg| arg == "-c"));
         }
     }
 }

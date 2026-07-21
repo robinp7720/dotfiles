@@ -190,6 +190,14 @@ impl StateStore {
                     true
                 }
             }
+            SystemUpdate::CalendarAgenda(value) => {
+                if self.snapshot.system.calendar_agenda == value {
+                    false
+                } else {
+                    self.snapshot.system.calendar_agenda = value;
+                    true
+                }
+            }
             SystemUpdate::Timers(value) => {
                 let value = normalize_timers(value, &self.snapshot.system.timers, observed_at);
                 if self.snapshot.system.timers == value {
@@ -231,6 +239,14 @@ impl StateStore {
             SourceId::Calendar => {
                 if self.snapshot.system.calendar.is_some() {
                     self.snapshot.system.calendar = None;
+                    true
+                } else {
+                    false
+                }
+            }
+            SourceId::CalendarAgenda => {
+                if self.snapshot.system.calendar_agenda.is_some() {
+                    self.snapshot.system.calendar_agenda = None;
                     true
                 } else {
                     false
@@ -501,6 +517,7 @@ fn source_for_update(update: &StateUpdate) -> SourceId {
             SystemUpdate::Clock(_) => SourceId::Clock,
             SystemUpdate::Media(_) => SourceId::Media,
             SystemUpdate::Calendar(_) => SourceId::Calendar,
+            SystemUpdate::CalendarAgenda(_) => SourceId::CalendarAgenda,
             SystemUpdate::Timers(_) => SourceId::Timers,
         },
         StateUpdate::Activity(_) => SourceId::Activity,
@@ -522,7 +539,7 @@ fn freshness_seconds(freshness: &FreshnessConfig, source: SourceId) -> Option<u6
         SourceId::Power => Some(freshness.power_seconds),
         SourceId::Resources => Some(freshness.resources_seconds),
         SourceId::Brightness => Some(freshness.brightness_seconds),
-        SourceId::Calendar => Some(freshness.calendar_seconds),
+        SourceId::Calendar | SourceId::CalendarAgenda => Some(freshness.calendar_seconds),
         SourceId::Timers => Some(freshness.timers_seconds),
         SourceId::Clock => None,
     }

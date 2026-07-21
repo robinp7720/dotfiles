@@ -27,12 +27,13 @@ use tracing::warn;
 
 use crate::{
     ActionCompletion, ActionRequest, ActionResult, ActionRouter, ActivityStatus, ActivityTracker,
-    ActivityUpdate, AppConfig, CommandActivity, ControlRequest, ControlResponse, ControlSocket,
-    ReloadStatus, SourceHealth, SourceId, StateStore, StateUpdate, SystemActionBackend,
-    SystemUpdate, TimerStore, context_snapshots, detect_compositor, intent_for_context_action,
-    reload_runtime_config, spawn_action_worker, spawn_audio_source, spawn_bluetooth_source,
-    spawn_brightness_source, spawn_clock_source, spawn_media_source, spawn_network_source,
-    spawn_power_source, spawn_resource_source,
+    ActivityUpdate, AppConfig, CalendarMonthRequest, CommandActivity, ControlRequest,
+    ControlResponse, ControlSocket, ReloadStatus, SourceHealth, SourceId, StateStore, StateUpdate,
+    SystemActionBackend, SystemUpdate, TimerStore, context_snapshots, detect_compositor,
+    intent_for_context_action, reload_runtime_config, spawn_action_worker, spawn_audio_source,
+    spawn_bluetooth_source, spawn_brightness_source, spawn_calendar_agenda_source,
+    spawn_clock_source, spawn_media_source, spawn_network_source, spawn_power_source,
+    spawn_resource_source,
 };
 
 pub use surface::{PrimarySurface, ReducedSurface, SurfaceRegistry, surface_specs};
@@ -280,13 +281,21 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
         )?,
     ];
 
+    let mut calendar_sender: Option<Sender<CalendarMonthRequest>> = None;
     match resolve_calendar_script(config_path) {
         Some(calendar_script) => {
             joins.push(crate::spawn_calendar_source(
-                calendar_script,
+                calendar_script.clone(),
                 state_tx.clone(),
                 Arc::clone(&cancelled),
             ));
+            let (sender, handle) = spawn_calendar_agenda_source(
+                calendar_script,
+                state_tx.clone(),
+                Arc::clone(&cancelled),
+            );
+            calendar_sender = Some(sender);
+            joins.push(handle);
         }
         None => {
             let message = format!(
@@ -296,6 +305,12 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
             warn!("{message}");
             let _ = state_tx.send(StateUpdate::Health {
                 source: SourceId::Calendar,
+                health: SourceHealth::Disconnected {
+                    message: message.clone(),
+                },
+            });
+            let _ = state_tx.send(StateUpdate::Health {
+                source: SourceId::CalendarAgenda,
                 health: SourceHealth::Disconnected { message },
             });
         }
@@ -318,7 +333,10 @@ fn start_runtime(config: AppConfig, config_path: &Path) -> Result<(UiRuntime, Ru
             config_path: config_path.to_path_buf(),
             store,
             activity_tracker,
-            registry: SurfaceRegistry::default(),
+            registry: calendar_sender.map_or_else(
+                SurfaceRegistry::default,
+                SurfaceRegistry::with_calendar_sender,
+            ),
             state_rx,
             completion_rx,
             action_tx,

@@ -8,8 +8,9 @@ use std::sync::{
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use cockpit_bar::{
-    CalendarEvent, FreshnessConfig, SourceHealth, SourceId, StateStore, StateUpdate, SystemUpdate,
-    parse_calendar_json, spawn_calendar_source,
+    CalendarAgenda, CalendarAgendaEvent, CalendarEvent, CalendarMonthRequest, FreshnessConfig,
+    SourceHealth, SourceId, StateStore, StateUpdate, SystemUpdate, parse_calendar_agenda_json,
+    parse_calendar_json, spawn_calendar_agenda_source, spawn_calendar_source,
 };
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -190,5 +191,90 @@ printf '%s\n' '{"healthy":false,"error":"gcalcli unavailable"}'
         Some(&SourceHealth::Disconnected {
             message: "gcalcli unavailable".to_string(),
         })
+    );
+}
+
+#[test]
+fn parse_calendar_agenda_sorts_events_and_validates_range() {
+    let request = CalendarMonthRequest::new(2027, 1).expect("month request");
+    let agenda = parse_calendar_agenda_json(
+        r#"{"healthy":true,"range_start":"2027-01-01","range_end":"2027-02-01","events":[{"id":"later","title":"Later","location":null,"calendar":"Work","start_epoch":1800439200,"end_epoch":1800442800,"all_day":false},{"id":"day","title":"Planning day","location":null,"calendar":"Personal","start_epoch":1800230400,"end_epoch":1800316800,"all_day":true}]}"#,
+        request,
+    )
+    .expect("parse agenda");
+
+    assert_eq!(agenda.year, 2027);
+    assert_eq!(agenda.month, 1);
+    assert_eq!(
+        agenda
+            .events
+            .iter()
+            .map(|event| event.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["day", "later"]
+    );
+
+    let error = parse_calendar_agenda_json(
+        r#"{"healthy":true,"range_start":"2027-02-01","range_end":"2027-03-01","events":[]}"#,
+        request,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("range does not match"));
+}
+
+#[test]
+fn agenda_source_publishes_requested_month_without_touching_next_event() {
+    let temp_dir = unique_temp_dir("calendar-agenda");
+    fs::create_dir_all(&temp_dir).expect("create temp dir");
+    let script_path = temp_dir.join("next_event.sh");
+    write_script(
+        &script_path,
+        r#"#!/usr/bin/env bash
+printf '%s\n' '{"healthy":true,"range_start":"2027-01-01","range_end":"2027-02-01","events":[{"id":"review","title":"Review","location":"Room 2","calendar":"Work","start_epoch":1800000600,"end_epoch":1800002400,"all_day":false}]}'
+"#,
+    );
+
+    let (sender, receiver) = mpsc::channel();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let (request_sender, handle) =
+        spawn_calendar_agenda_source(script_path, sender, cancelled.clone());
+    request_sender
+        .send(CalendarMonthRequest::new(2027, 1).expect("request"))
+        .expect("send month");
+
+    let first = receiver
+        .recv_timeout(Duration::from_secs(2))
+        .expect("agenda update");
+    let second = receiver
+        .recv_timeout(Duration::from_secs(2))
+        .expect("agenda health");
+    cancelled.store(true, Ordering::Relaxed);
+    drop(request_sender);
+    handle.join().expect("join agenda source");
+    fs::remove_dir_all(&temp_dir).ok();
+
+    assert_eq!(
+        first,
+        StateUpdate::System(SystemUpdate::CalendarAgenda(Some(CalendarAgenda {
+            year: 2027,
+            month: 1,
+            events: vec![CalendarAgendaEvent {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                location: Some("Room 2".to_string()),
+                calendar: Some("Work".to_string()),
+                start_epoch: 1_800_000_600,
+                end_epoch: 1_800_002_400,
+                all_day: false,
+            }],
+        })))
+    );
+    assert_eq!(
+        second,
+        StateUpdate::Health {
+            source: SourceId::CalendarAgenda,
+            health: SourceHealth::Healthy,
+        }
     );
 }

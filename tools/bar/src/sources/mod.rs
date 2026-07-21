@@ -23,7 +23,10 @@ use crate::{ClockState, StateUpdate, SystemUpdate};
 pub use audio::spawn_audio_source;
 pub use bluetooth::{BluetoothCommand, BluetoothControlClient, spawn_bluetooth_source};
 pub use brightness::{parse_brightnessctl_output, spawn_brightness_source};
-pub use calendar::{CalendarRecord, parse_calendar_json, spawn_calendar_source};
+pub use calendar::{
+    CalendarMonthRequest, CalendarRecord, parse_calendar_agenda_json, parse_calendar_json,
+    spawn_calendar_agenda_source, spawn_calendar_source,
+};
 pub use media::spawn_media_source;
 pub use network::spawn_network_source;
 pub use power::{battery_severity, spawn_power_source};

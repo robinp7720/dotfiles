@@ -262,6 +262,42 @@ assert record["end_epoch"] > 0
 PY
 }
 
+test_agenda_json_returns_sorted_deduplicated_events() {
+  local workdir="$1"
+  local json_output cache_file
+
+  mkdir -p "$workdir/bin" "$workdir/home"
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+cat <<'EOF'
+start_date	start_time	end_date	end_time	summary	location	calendar	id
+2027-01-20	10:00	2027-01-20	11:00	Later review	Room 3	Work	later-id
+2027-01-18		2027-01-19		Planning day		Personal	day-id
+2027-01-20	10:00	2027-01-20	11:00	Duplicate	Room 4	Work	later-id
+EOF
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/gcalcli"
+
+  json_output="$(run_script "$workdir" gcalcli --agenda-json --from 2027-01-01 --to 2027-02-01)"
+  CALENDAR_JSON="$json_output" python3 - <<'PY'
+import json
+import os
+
+payload = json.loads(os.environ["CALENDAR_JSON"])
+assert payload["healthy"] is True
+assert payload["empty"] is False
+assert payload["range_start"] == "2027-01-01"
+assert payload["range_end"] == "2027-02-01"
+assert [event["id"] for event in payload["events"]] == ["day-id", "later-id"]
+assert payload["events"][0]["all_day"] is True
+assert payload["events"][0]["calendar"] == "Personal"
+assert payload["events"][1]["title"] == "Duplicate"
+PY
+
+  cache_file="$workdir/cache/next-event/agenda_2027-01-01_2027-02-01.json"
+  [[ -f "$cache_file" ]] || fail "expected range-keyed agenda cache"
+}
+
 main() {
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -286,6 +322,9 @@ main() {
     control-characters)
       test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
       ;;
+    agenda-json)
+      test_agenda_json_returns_sorted_deduplicated_events "$tmpdir/agenda-json"
+      ;;
     all)
       test_gcalcli_json_and_waybar_contract "$tmpdir/gcalcli-contract"
       test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
@@ -293,6 +332,7 @@ main() {
       test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"
       test_date_only_gcalcli_rows_preserve_legacy_rendering "$tmpdir/date-only-gcalcli"
       test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
+      test_agenda_json_returns_sorted_deduplicated_events "$tmpdir/agenda-json"
       ;;
     *)
       fail "unknown test case: $1"

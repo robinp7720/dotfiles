@@ -13,9 +13,9 @@ use tracing::warn;
 use crate::{
     ActionCompletion, ActionIntent, ActionRequest, ActionResult, AudioOutputState, BarSnapshot,
     BluetoothDeviceOperation, BluetoothDeviceState, BluetoothPairingPrompt,
-    BluetoothPairingPromptKind, BluetoothPairingResponse, ConnectivityState, DesktopContext,
-    Direction, KeyboardLayoutOption, KeyboardLayoutState, MediaControlAction, PlaybackStatus,
-    PowerProfile,
+    BluetoothPairingPromptKind, BluetoothPairingResponse, CalendarAgenda, CalendarAgendaEvent,
+    CalendarMonthRequest, ConnectivityState, DesktopContext, Direction, KeyboardLayoutOption,
+    KeyboardLayoutState, MediaControlAction, PlaybackStatus, PowerProfile, SourceHealth, SourceId,
 };
 
 use super::artwork::{
@@ -251,7 +251,10 @@ pub struct ControlCenterSpec {
     pub battery_percent: Option<u8>,
     pub charging: bool,
     pub clock: String,
+    pub clock_epoch: i64,
     pub calendar: Option<CalendarControlSpec>,
+    pub calendar_agenda: Option<CalendarAgenda>,
+    pub calendar_agenda_error: Option<String>,
     pub timers: Vec<TimerControlSpec>,
     pub media: Option<MediaControlSpec>,
 }
@@ -420,10 +423,17 @@ pub fn build_control_center_spec(snapshot: &BarSnapshot) -> ControlCenterSpec {
         battery_percent: system.power.battery_percent,
         charging: system.power.charging,
         clock: system.clock.label.clone(),
+        clock_epoch: system.clock.epoch_seconds,
         calendar: system.calendar.as_ref().map(|event| CalendarControlSpec {
             title: event.title.clone(),
             location: event.location.clone(),
         }),
+        calendar_agenda: system.calendar_agenda.clone(),
+        calendar_agenda_error: match system.source_health.get(&SourceId::CalendarAgenda) {
+            Some(SourceHealth::Disconnected { message }) => Some(message.clone()),
+            Some(SourceHealth::Stale { .. }) => Some("Calendar agenda is stale".to_string()),
+            _ => None,
+        },
         timers: system
             .timers
             .iter()
@@ -694,8 +704,10 @@ struct NavigationUi {
     error_label: gtk::Label,
     errors: Rc<RefCell<ControlCenterErrors>>,
     pending: Rc<RefCell<BTreeMap<ControlCenterFocus, usize>>>,
-    page_changed: Rc<RefCell<Option<Rc<dyn Fn(ControlCenterFocus)>>>>,
+    page_changed: PageChanged,
 }
+
+type PageChanged = Rc<RefCell<Option<Rc<dyn Fn(ControlCenterFocus)>>>>;
 
 impl NavigationUi {
     fn navigate(&self, page: ControlCenterFocus, backwards: bool) {
@@ -1005,6 +1017,36 @@ struct TimerRowWidgets {
 
 type TimerWidgets = BTreeMap<String, TimerRowWidgets>;
 
+#[derive(Clone)]
+struct TimePage {
+    root: gtk::Box,
+    clock: gtk::Label,
+    date: gtk::Label,
+    view_stack: gtk::Stack,
+    calendar_tab: gtk::ToggleButton,
+    calendar: gtk::Calendar,
+    agenda_list: gtk::Box,
+    agenda_empty: gtk::Label,
+    agenda_status: gtk::Label,
+    rendered_agenda: Rc<RefCell<Option<AgendaRenderKey>>>,
+    expanded_event: Rc<RefCell<Option<String>>>,
+    agenda_details: Rc<RefCell<BTreeMap<String, gtk::Box>>>,
+    latest_spec: Rc<RefCell<ControlCenterSpec>>,
+    calendar_action: ActionHandle,
+    calendar_sender: Option<Sender<CalendarMonthRequest>>,
+    timer_list: gtk::Box,
+    timer_empty: gtk::Label,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AgendaRenderKey {
+    year: i32,
+    month: u32,
+    day: i32,
+    events: Vec<CalendarAgendaEvent>,
+    error: Option<String>,
+}
+
 const METRIC_SEGMENTS: usize = 10;
 const NETWORK_GRAPH_SAMPLES: usize = 60;
 const CONTROL_CENTER_ENTER_MS: u64 = 320;
@@ -1251,10 +1293,7 @@ pub struct ControlCenterView {
     keyboard_layout_specs: RefCell<Vec<KeyboardLayoutControlSpec>>,
     cpu_gauge: MetricGauge,
     memory_gauge: MetricGauge,
-    calendar_title: gtk::Label,
-    calendar_detail: gtk::Label,
-    timer_list: gtk::Box,
-    timer_empty: gtk::Label,
+    time_page: TimePage,
     timer_widgets: RefCell<TimerWidgets>,
     clock_label: gtk::Label,
     errors: Rc<RefCell<ControlCenterErrors>>,
@@ -1264,6 +1303,7 @@ pub struct ControlCenterView {
 }
 
 impl ControlCenterView {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         application: &gtk::Application,
         monitor: &gtk::gdk::Monitor,
@@ -1272,6 +1312,7 @@ impl ControlCenterView {
         right_margin: i32,
         spec: &ControlCenterSpec,
         action_sender: Sender<ActionRequest>,
+        calendar_sender: Option<Sender<CalendarMonthRequest>>,
     ) -> Self {
         let window = gtk::ApplicationWindow::builder()
             .application(application)
@@ -1378,14 +1419,6 @@ impl ControlCenterView {
         let discovery_sender = action_sender.clone();
         let discovery_current = current.clone();
         let discovery_active = bluetooth_discovery_active.clone();
-        *navigation.page_changed.borrow_mut() = Some(Rc::new(move |page| {
-            sync_bluetooth_discovery(
-                &discovery_sender,
-                &discovery_current,
-                &discovery_active,
-                page == ControlCenterFocus::Bluetooth,
-            );
-        }));
         let brightness_device = Rc::new(RefCell::new(
             spec.brightness.as_ref().map(|value| value.device.clone()),
         ));
@@ -1571,48 +1604,26 @@ impl ControlCenterView {
             Some(ControlCenterFocus::Resources.as_str()),
         );
 
-        let clock_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        clock_page.add_css_class("control-page");
-        let calendar_card = gtk::Box::new(gtk::Orientation::Vertical, 3);
-        calendar_card.add_css_class("detail-card");
-        let calendar_eyebrow = gtk::Label::new(Some("NEXT EVENT"));
-        calendar_eyebrow.add_css_class("detail-eyebrow");
-        calendar_eyebrow.set_xalign(0.0);
-        let calendar_title = gtk::Label::new(None);
-        calendar_title.add_css_class("detail-card-title");
-        calendar_title.set_xalign(0.0);
-        calendar_title.set_max_width_chars(40);
-        calendar_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        let calendar_detail = gtk::Label::new(None);
-        calendar_detail.add_css_class("supporting-text");
-        calendar_detail.set_xalign(0.0);
-        calendar_detail.set_max_width_chars(40);
-        calendar_detail.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        calendar_card.append(&calendar_eyebrow);
-        calendar_card.append(&calendar_title);
-        calendar_card.append(&calendar_detail);
-        clock_page.append(&calendar_card);
-        let timers_heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let timers_title = gtk::Label::new(Some("Timers"));
-        timers_title.add_css_class("section-title");
-        timers_title.set_xalign(0.0);
-        timers_title.set_hexpand(true);
-        let quick_timer = gtk::Button::with_label("+ 5 min");
-        quick_timer.add_css_class("compact-action");
-        timers_heading.append(&timers_title);
-        timers_heading.append(&quick_timer);
-        clock_page.append(&timers_heading);
-        let timer_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        let timer_empty = gtk::Label::new(Some("No active timers"));
-        timer_empty.add_css_class("empty-state");
-        timer_empty.set_xalign(0.0);
-        timer_list.append(&timer_empty);
-        let timer_scroll = gtk::ScrolledWindow::new();
-        timer_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        timer_scroll.set_min_content_height(150);
-        timer_scroll.set_child(Some(&timer_list));
-        clock_page.append(&timer_scroll);
-        stack.add_named(&clock_page, Some(ControlCenterFocus::Clock.as_str()));
+        let time_page = build_time_page(
+            spec,
+            action_sender.clone(),
+            errors.clone(),
+            navigation.clone(),
+            calendar_sender,
+        );
+        stack.add_named(&time_page.root, Some(ControlCenterFocus::Clock.as_str()));
+        let time_page_for_navigation = time_page.clone();
+        *navigation.page_changed.borrow_mut() = Some(Rc::new(move |page| {
+            sync_bluetooth_discovery(
+                &discovery_sender,
+                &discovery_current,
+                &discovery_active,
+                page == ControlCenterFocus::Bluetooth,
+            );
+            if page == ControlCenterFocus::Clock {
+                reset_time_page(&time_page_for_navigation);
+            }
+        }));
 
         root.append(&stack);
         root.append(&error_slot);
@@ -1693,7 +1704,7 @@ impl ControlCenterView {
             suppress_controls.clone(),
             current.clone(),
             audio_action.clone(),
-            |spec, active| ((!spec.audio.muted) != active).then_some(ActionIntent::ToggleMute),
+            |spec, active| (spec.audio.muted == active).then_some(ActionIntent::ToggleMute),
         );
         for button in [&overview_volume_button, &detail_volume_button] {
             let handle = audio_action.clone();
@@ -1719,22 +1730,6 @@ impl ControlCenterView {
                 );
             });
         }
-
-        let quick_timer_action = ActionHandle {
-            sender: action_sender.clone(),
-            errors: errors.clone(),
-            navigation: navigation.clone(),
-            focus: ControlCenterFocus::Clock,
-        };
-        quick_timer.connect_clicked(move |_| {
-            quick_timer_action.send(
-                "start-timer",
-                ActionIntent::StartTimer {
-                    label: "Quick timer".to_string(),
-                    duration_seconds: 300,
-                },
-            );
-        });
 
         let volume_handle = ActionHandle {
             sender: action_sender.clone(),
@@ -1846,10 +1841,7 @@ impl ControlCenterView {
             keyboard_layout_specs: RefCell::new(Vec::new()),
             cpu_gauge,
             memory_gauge,
-            calendar_title,
-            calendar_detail,
-            timer_list,
-            timer_empty,
+            time_page,
             timer_widgets: RefCell::new(BTreeMap::new()),
             clock_label: clock,
             errors,
@@ -2090,17 +2082,10 @@ impl ControlCenterView {
         update_metric(&self.cpu_gauge, spec.cpu_percent);
         update_metric(&self.memory_gauge, spec.memory_percent);
 
-        if let Some(calendar) = spec.calendar.as_ref() {
-            self.calendar_title.set_label(&calendar.title);
-            self.calendar_detail
-                .set_label(calendar.location.as_deref().unwrap_or("Upcoming"));
-        } else {
-            self.calendar_title.set_label("Nothing upcoming");
-            self.calendar_detail.set_label("Calendar is clear");
-        }
+        update_time_page(&self.time_page, spec);
         reconcile_timers(
-            &self.timer_list,
-            &self.timer_empty,
+            &self.time_page.timer_list,
+            &self.time_page.timer_empty,
             &mut self.timer_widgets.borrow_mut(),
             &spec.timers,
             self.timer_sender.clone(),
@@ -3539,6 +3524,580 @@ fn update_media(widgets: &MediaWidgets, spec: Option<&MediaControlSpec>) {
     }
 }
 
+fn build_time_page(
+    spec: &ControlCenterSpec,
+    action_sender: Sender<ActionRequest>,
+    errors: Rc<RefCell<ControlCenterErrors>>,
+    navigation: NavigationUi,
+    calendar_sender: Option<Sender<CalendarMonthRequest>>,
+) -> TimePage {
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    root.add_css_class("control-page");
+    root.add_css_class("time-page");
+
+    let hero = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    hero.add_css_class("time-hero");
+    let icon = gtk::Image::from_icon_name("preferences-system-time-symbolic");
+    icon.add_css_class("time-hero-icon");
+    icon.set_pixel_size(26);
+    hero.append(&icon);
+    let hero_text = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    hero_text.set_hexpand(true);
+    let clock = gtk::Label::new(Some(&spec.clock));
+    clock.add_css_class("time-hero-clock");
+    clock.set_xalign(0.0);
+    let date = gtk::Label::new(None);
+    date.add_css_class("time-hero-date");
+    date.set_xalign(0.0);
+    hero_text.append(&clock);
+    hero_text.append(&date);
+    hero.append(&hero_text);
+    let today = gtk::Button::with_label("Today");
+    today.add_css_class("compact-action");
+    hero.append(&today);
+    root.append(&hero);
+
+    let tabs = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    tabs.add_css_class("time-tabs");
+    tabs.set_homogeneous(true);
+    let calendar_tab = gtk::ToggleButton::with_label("Calendar");
+    let timers_tab = gtk::ToggleButton::with_label("Timers");
+    calendar_tab.add_css_class("time-tab");
+    timers_tab.add_css_class("time-tab");
+    timers_tab.set_group(Some(&calendar_tab));
+    calendar_tab.set_active(true);
+    tabs.append(&calendar_tab);
+    tabs.append(&timers_tab);
+    root.append(&tabs);
+
+    let view_stack = gtk::Stack::new();
+    view_stack.add_css_class("time-view-stack");
+    view_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    view_stack.set_transition_duration(160);
+    view_stack.set_hhomogeneous(true);
+    view_stack.set_vhomogeneous(false);
+
+    let calendar_view = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    calendar_view.add_css_class("time-calendar-view");
+    let calendar = gtk::Calendar::new();
+    calendar.add_css_class("time-calendar");
+    calendar.set_show_day_names(true);
+    calendar.set_show_heading(true);
+    calendar.set_show_week_numbers(false);
+    calendar_view.append(&calendar);
+
+    let agenda_heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let agenda_title = gtk::Label::new(Some("Selected day"));
+    agenda_title.add_css_class("section-title");
+    agenda_title.set_xalign(0.0);
+    agenda_title.set_hexpand(true);
+    let open_calendar = gtk::Button::with_label("Open calendar");
+    open_calendar.add_css_class("compact-action");
+    agenda_heading.append(&agenda_title);
+    agenda_heading.append(&open_calendar);
+    calendar_view.append(&agenda_heading);
+
+    let agenda_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    agenda_list.add_css_class("agenda-list");
+    let agenda_empty = gtk::Label::new(Some("No events on this day"));
+    agenda_empty.add_css_class("empty-state");
+    agenda_empty.set_xalign(0.0);
+    let agenda_status = gtk::Label::new(Some("Loading calendar…"));
+    agenda_status.add_css_class("calendar-status");
+    agenda_status.set_xalign(0.0);
+    let agenda_scroll = gtk::ScrolledWindow::new();
+    agenda_scroll.add_css_class("agenda-scroll");
+    agenda_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    agenda_scroll.set_min_content_height(150);
+    agenda_scroll.set_max_content_height(190);
+    agenda_scroll.set_propagate_natural_height(true);
+    let agenda_content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    agenda_content.append(&agenda_status);
+    agenda_content.append(&agenda_empty);
+    agenda_content.append(&agenda_list);
+    agenda_scroll.set_child(Some(&agenda_content));
+    calendar_view.append(&agenda_scroll);
+    view_stack.add_named(&calendar_view, Some("calendar"));
+
+    let timers_view = gtk::Box::new(gtk::Orientation::Vertical, 9);
+    timers_view.add_css_class("time-timers-view");
+    timers_view.append(&section_eyebrow("QUICK START"));
+    let presets = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    presets.add_css_class("timer-presets");
+    presets.set_homogeneous(true);
+    let timer_action = ActionHandle {
+        sender: action_sender.clone(),
+        errors: errors.clone(),
+        navigation: navigation.clone(),
+        focus: ControlCenterFocus::Clock,
+    };
+    for minutes in [5_u64, 15, 25, 45] {
+        let button = gtk::Button::with_label(&format!("{minutes} min"));
+        button.add_css_class("timer-preset");
+        let handle = timer_action.clone();
+        button.connect_clicked(move |_| {
+            handle.send(
+                "start-timer",
+                ActionIntent::StartTimer {
+                    label: format!("{minutes} minute timer"),
+                    duration_seconds: minutes * 60,
+                },
+            );
+        });
+        presets.append(&button);
+    }
+    timers_view.append(&presets);
+    timers_view.append(&section_eyebrow("CUSTOM TIMER"));
+    let composer = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    composer.add_css_class("timer-composer");
+    let timer_label = gtk::Entry::new();
+    timer_label.set_placeholder_text(Some("Timer label"));
+    timer_label.set_hexpand(true);
+    let duration = gtk::SpinButton::with_range(1.0, 720.0, 1.0);
+    duration.set_value(25.0);
+    duration.set_tooltip_text(Some("Duration in minutes"));
+    duration.set_width_chars(4);
+    let minutes_label = gtk::Label::new(Some("min"));
+    minutes_label.add_css_class("supporting-text");
+    let start = gtk::Button::with_label("Start");
+    start.add_css_class("primary-action");
+    composer.append(&timer_label);
+    composer.append(&duration);
+    composer.append(&minutes_label);
+    composer.append(&start);
+    timers_view.append(&composer);
+
+    let active_heading = gtk::Label::new(Some("Active timers"));
+    active_heading.add_css_class("section-title");
+    active_heading.set_xalign(0.0);
+    timers_view.append(&active_heading);
+    let timer_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let timer_empty = gtk::Label::new(Some("No active timers"));
+    timer_empty.add_css_class("empty-state");
+    timer_empty.set_xalign(0.0);
+    timer_list.append(&timer_empty);
+    let timer_scroll = gtk::ScrolledWindow::new();
+    timer_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    timer_scroll.set_min_content_height(170);
+    timer_scroll.set_max_content_height(250);
+    timer_scroll.set_propagate_natural_height(true);
+    timer_scroll.set_child(Some(&timer_list));
+    timers_view.append(&timer_scroll);
+    view_stack.add_named(&timers_view, Some("timers"));
+    view_stack.set_visible_child_name("calendar");
+    root.append(&view_stack);
+
+    let calendar_action = ActionHandle {
+        sender: action_sender,
+        errors,
+        navigation,
+        focus: ControlCenterFocus::Clock,
+    };
+    let open_handle = calendar_action.clone();
+    open_calendar.connect_clicked(move |_| {
+        open_handle.send("open-calendar", ActionIntent::OpenCalendar);
+    });
+
+    let stack_for_calendar = view_stack.clone();
+    calendar_tab.connect_toggled(move |button| {
+        if button.is_active() {
+            stack_for_calendar.set_visible_child_name("calendar");
+        }
+    });
+    let stack_for_timers = view_stack.clone();
+    timers_tab.connect_toggled(move |button| {
+        if button.is_active() {
+            stack_for_timers.set_visible_child_name("timers");
+        }
+    });
+
+    let custom_handle = timer_action;
+    let label_for_start = timer_label.clone();
+    let duration_for_start = duration.clone();
+    start.connect_clicked(move |_| {
+        let minutes = u64::try_from(duration_for_start.value_as_int())
+            .unwrap_or(1)
+            .clamp(1, 720);
+        let raw_label = label_for_start.text();
+        let label = if raw_label.trim().is_empty() {
+            "Timer".to_string()
+        } else {
+            raw_label.trim().to_string()
+        };
+        custom_handle.send(
+            "start-timer",
+            ActionIntent::StartTimer {
+                label,
+                duration_seconds: minutes * 60,
+            },
+        );
+        label_for_start.set_text("");
+    });
+
+    let page = TimePage {
+        root,
+        clock,
+        date,
+        view_stack,
+        calendar_tab,
+        calendar,
+        agenda_list,
+        agenda_empty,
+        agenda_status,
+        rendered_agenda: Rc::new(RefCell::new(None)),
+        expanded_event: Rc::new(RefCell::new(None)),
+        agenda_details: Rc::new(RefCell::new(BTreeMap::new())),
+        latest_spec: Rc::new(RefCell::new(spec.clone())),
+        calendar_action,
+        calendar_sender,
+        timer_list,
+        timer_empty,
+    };
+
+    connect_time_calendar(&page);
+    let page_for_today = page.clone();
+    today.connect_clicked(move |_| reset_time_calendar(&page_for_today));
+    request_calendar_month(&page);
+    page
+}
+
+fn connect_time_calendar(page: &TimePage) {
+    let latest = page.latest_spec.clone();
+    let list = page.agenda_list.clone();
+    let empty = page.agenda_empty.clone();
+    let status = page.agenda_status.clone();
+    let rendered = page.rendered_agenda.clone();
+    let expanded = page.expanded_event.clone();
+    let details = page.agenda_details.clone();
+    let action = page.calendar_action.clone();
+    page.calendar.connect_day_selected(move |calendar| {
+        render_agenda(
+            calendar,
+            &list,
+            &empty,
+            &status,
+            &rendered,
+            &expanded,
+            &details,
+            &latest.borrow(),
+            &action,
+        );
+    });
+
+    macro_rules! connect_load {
+        ($signal:ident) => {{
+            let sender = page.calendar_sender.clone();
+            let status = page.agenda_status.clone();
+            let empty = page.agenda_empty.clone();
+            let list = page.agenda_list.clone();
+            let rendered = page.rendered_agenda.clone();
+            page.calendar.$signal(move |calendar| {
+                begin_calendar_load(calendar, &sender, &status, &empty, &list, &rendered);
+            });
+        }};
+    }
+    connect_load!(connect_next_month);
+    connect_load!(connect_prev_month);
+    connect_load!(connect_next_year);
+    connect_load!(connect_prev_year);
+}
+
+fn begin_calendar_load(
+    calendar: &gtk::Calendar,
+    sender: &Option<Sender<CalendarMonthRequest>>,
+    status: &gtk::Label,
+    empty: &gtk::Label,
+    list: &gtk::Box,
+    rendered: &Rc<RefCell<Option<AgendaRenderKey>>>,
+) {
+    calendar.clear_marks();
+    status.set_label(if sender.is_some() {
+        "Loading calendar…"
+    } else {
+        "Calendar integration unavailable"
+    });
+    status.set_visible(true);
+    empty.set_visible(false);
+    clear_box(list);
+    rendered.borrow_mut().take();
+    if let Some(sender) = sender {
+        let _ = sender.send(CalendarMonthRequest {
+            year: calendar.year(),
+            month: u32::try_from(calendar.month()).unwrap_or(1),
+        });
+    }
+}
+
+fn request_calendar_month(page: &TimePage) {
+    begin_calendar_load(
+        &page.calendar,
+        &page.calendar_sender,
+        &page.agenda_status,
+        &page.agenda_empty,
+        &page.agenda_list,
+        &page.rendered_agenda,
+    );
+}
+
+fn reset_time_page(page: &TimePage) {
+    page.calendar_tab.set_active(true);
+    page.view_stack.set_visible_child_name("calendar");
+    reset_time_calendar(page);
+}
+
+fn reset_time_calendar(page: &TimePage) {
+    if let Ok(today) = glib::DateTime::now_local() {
+        page.calendar.set_date(&today);
+    }
+    request_calendar_month(page);
+}
+
+fn update_time_page(page: &TimePage, spec: &ControlCenterSpec) {
+    *page.latest_spec.borrow_mut() = spec.clone();
+    page.clock.set_label(&spec.clock);
+    page.date.set_label(&local_date_label(spec.clock_epoch));
+    update_calendar_marks(&page.calendar, spec.calendar_agenda.as_ref());
+    render_agenda(
+        &page.calendar,
+        &page.agenda_list,
+        &page.agenda_empty,
+        &page.agenda_status,
+        &page.rendered_agenda,
+        &page.expanded_event,
+        &page.agenda_details,
+        spec,
+        &page.calendar_action,
+    );
+}
+
+fn local_date_label(epoch: i64) -> String {
+    glib::DateTime::from_unix_local(epoch)
+        .and_then(|date| date.format("%A, %e %B"))
+        .map(|label| label.trim().to_string())
+        .unwrap_or_else(|_| "Local time".to_string())
+}
+
+fn update_calendar_marks(calendar: &gtk::Calendar, agenda: Option<&CalendarAgenda>) {
+    calendar.clear_marks();
+    let Some(agenda) = agenda.filter(|agenda| {
+        agenda.year == calendar.year()
+            && agenda.month == u32::try_from(calendar.month()).unwrap_or_default()
+    }) else {
+        return;
+    };
+    for day in 1..=31 {
+        if !events_for_local_day(&agenda.events, agenda.year, agenda.month, day).is_empty() {
+            calendar.mark_day(u32::try_from(day).unwrap_or_default());
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_agenda(
+    calendar: &gtk::Calendar,
+    list: &gtk::Box,
+    empty: &gtk::Label,
+    status: &gtk::Label,
+    rendered: &Rc<RefCell<Option<AgendaRenderKey>>>,
+    expanded: &Rc<RefCell<Option<String>>>,
+    details: &Rc<RefCell<BTreeMap<String, gtk::Box>>>,
+    spec: &ControlCenterSpec,
+    action: &ActionHandle,
+) {
+    let year = calendar.year();
+    let month = u32::try_from(calendar.month()).unwrap_or(1);
+    let day = calendar.day();
+    let matching = spec
+        .calendar_agenda
+        .as_ref()
+        .filter(|agenda| agenda.year == year && agenda.month == month);
+    let events = matching
+        .map(|agenda| events_for_local_day(&agenda.events, year, month, day))
+        .unwrap_or_default();
+    let key = AgendaRenderKey {
+        year,
+        month,
+        day,
+        events: events.clone(),
+        error: spec.calendar_agenda_error.clone(),
+    };
+    if rendered.borrow().as_ref() == Some(&key) {
+        return;
+    }
+    *rendered.borrow_mut() = Some(key);
+    clear_box(list);
+    details.borrow_mut().clear();
+    expanded.borrow_mut().take();
+
+    if matching.is_none() {
+        status.set_label(
+            spec.calendar_agenda_error
+                .as_deref()
+                .unwrap_or("Loading calendar…"),
+        );
+        status.set_visible(true);
+        empty.set_visible(false);
+        return;
+    }
+    status.set_visible(false);
+    empty.set_visible(events.is_empty());
+    for event in events {
+        list.append(&agenda_event_row(&event, expanded, details, action));
+    }
+}
+
+fn events_for_local_day(
+    events: &[CalendarAgendaEvent],
+    year: i32,
+    month: u32,
+    day: i32,
+) -> Vec<CalendarAgendaEvent> {
+    let Ok(start) =
+        glib::DateTime::from_local(year, i32::try_from(month).unwrap_or(1), day, 0, 0, 0.0)
+    else {
+        return Vec::new();
+    };
+    let Ok(end) = start.add_days(1) else {
+        return Vec::new();
+    };
+    let start_epoch = start.to_unix();
+    let end_epoch = end.to_unix();
+    let mut matching = events
+        .iter()
+        .filter(|event| {
+            let event_end = if event.end_epoch == event.start_epoch {
+                event.start_epoch.saturating_add(1)
+            } else {
+                event.end_epoch
+            };
+            event.start_epoch < end_epoch && event_end > start_epoch
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    matching.sort_by(|left, right| {
+        (!left.all_day, left.start_epoch, &left.title).cmp(&(
+            !right.all_day,
+            right.start_epoch,
+            &right.title,
+        ))
+    });
+    matching
+}
+
+fn agenda_event_row(
+    event: &CalendarAgendaEvent,
+    expanded: &Rc<RefCell<Option<String>>>,
+    details: &Rc<RefCell<BTreeMap<String, gtk::Box>>>,
+    action: &ActionHandle,
+) -> gtk::Box {
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    root.add_css_class("agenda-event");
+    let header = gtk::Button::new();
+    header.add_css_class("agenda-event-header");
+    header.set_has_frame(false);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let time = gtk::Label::new(Some(&event_time_label(event)));
+    time.add_css_class("agenda-event-time");
+    time.set_width_chars(10);
+    time.set_xalign(0.0);
+    let title = gtk::Label::new(Some(&event.title));
+    title.add_css_class("agenda-event-title");
+    title.set_hexpand(true);
+    title.set_xalign(0.0);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    let arrow = gtk::Image::from_icon_name("go-down-symbolic");
+    arrow.add_css_class("agenda-event-arrow");
+    row.append(&time);
+    row.append(&title);
+    row.append(&arrow);
+    header.set_child(Some(&row));
+    root.append(&header);
+
+    let detail = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    detail.add_css_class("agenda-event-detail");
+    detail.set_visible(false);
+    let full_time = gtk::Label::new(Some(&event_full_time_label(event)));
+    full_time.set_xalign(0.0);
+    detail.append(&full_time);
+    if let Some(location) = event.location.as_deref() {
+        let location = gtk::Label::new(Some(&format!("Location · {location}")));
+        location.add_css_class("supporting-text");
+        location.set_xalign(0.0);
+        location.set_wrap(true);
+        detail.append(&location);
+    }
+    if let Some(calendar) = event.calendar.as_deref() {
+        let calendar = gtk::Label::new(Some(&format!("Calendar · {calendar}")));
+        calendar.add_css_class("supporting-text");
+        calendar.set_xalign(0.0);
+        detail.append(&calendar);
+    }
+    let open = gtk::Button::with_label("Open in Evolution");
+    open.add_css_class("compact-action");
+    open.set_halign(gtk::Align::Start);
+    let open_handle = action.clone();
+    open.connect_clicked(move |_| open_handle.send("open-calendar", ActionIntent::OpenCalendar));
+    detail.append(&open);
+    root.append(&detail);
+    details
+        .borrow_mut()
+        .insert(event.id.clone(), detail.clone());
+
+    let event_id = event.id.clone();
+    let expanded = expanded.clone();
+    let details = details.clone();
+    header.connect_clicked(move |_| {
+        let next =
+            (expanded.borrow().as_deref() != Some(event_id.as_str())).then_some(event_id.clone());
+        for (id, detail) in details.borrow().iter() {
+            detail.set_visible(next.as_deref() == Some(id.as_str()));
+        }
+        *expanded.borrow_mut() = next;
+    });
+    root
+}
+
+fn event_time_label(event: &CalendarAgendaEvent) -> String {
+    if event.all_day {
+        return "All day".to_string();
+    }
+    glib::DateTime::from_unix_local(event.start_epoch)
+        .and_then(|date| date.format("%H:%M"))
+        .map(|label| label.to_string())
+        .unwrap_or_else(|_| "Timed".to_string())
+}
+
+fn event_full_time_label(event: &CalendarAgendaEvent) -> String {
+    let Ok(start) = glib::DateTime::from_unix_local(event.start_epoch) else {
+        return event_time_label(event);
+    };
+    if event.all_day {
+        return start
+            .format("%A, %e %B · All day")
+            .map(|label| label.to_string())
+            .unwrap_or_else(|_| "All day".to_string());
+    }
+    let start_label = start
+        .format("%A, %e %B · %H:%M")
+        .map(|label| label.to_string())
+        .unwrap_or_else(|_| event_time_label(event));
+    let end_label = glib::DateTime::from_unix_local(event.end_epoch)
+        .and_then(|date| date.format("%H:%M"))
+        .map(|label| label.to_string())
+        .unwrap_or_default();
+    if end_label.is_empty() {
+        start_label
+    } else {
+        format!("{start_label}–{end_label}")
+    }
+}
+
+fn clear_box(container: &gtk::Box) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+}
+
 fn reconcile_timers(
     list: &gtk::Box,
     empty: &gtk::Label,
@@ -3744,18 +4303,21 @@ fn set_enabled_class(widget: &impl IsA<gtk::Widget>, enabled: bool) {
 
 #[cfg(test)]
 mod tests {
+    use gtk4::glib;
+
     use crate::{
         AudioOutputState, AudioState, BarSnapshot, BluetoothDeviceOperation, BluetoothDeviceState,
-        BluetoothState, BrightnessState, ConnectivityState, KeyboardLayoutOption,
-        KeyboardLayoutState, MediaState, NetworkState, PlaybackStatus, PowerProfile, PowerState,
-        ResourceState, TimerState,
+        BluetoothState, BrightnessState, CalendarAgendaEvent, ConnectivityState,
+        KeyboardLayoutOption, KeyboardLayoutState, MediaState, NetworkState, PlaybackStatus,
+        PowerProfile, PowerState, ResourceState, TimerState,
     };
 
     use super::{
         ControlCenterErrors, ControlCenterFocus, ControlCenterMotionEvent,
         ControlCenterMotionPhase, MetricLevel, SliderDebounce, TimerActionState, TimerControlSpec,
-        build_control_center_spec, control_center_origin, focus_from_origin, format_network_rate,
-        metric_visual, quick_grid_placements, timer_action_state, volume_icon_name,
+        build_control_center_spec, control_center_origin, events_for_local_day, focus_from_origin,
+        format_network_rate, metric_visual, quick_grid_placements, timer_action_state,
+        volume_icon_name,
     };
 
     #[test]
@@ -3823,6 +4385,51 @@ mod tests {
         assert_eq!(format_network_rate(Some(1536)), "1.5 KB/s");
         assert_eq!(format_network_rate(Some(12 * 1024)), "12 KB/s");
         assert_eq!(format_network_rate(Some(3 * 1024 * 1024)), "3.0 MB/s");
+    }
+
+    #[test]
+    fn selected_day_includes_overlapping_events_and_sorts_all_day_first() {
+        let day = glib::DateTime::from_local(2027, 1, 20, 0, 0, 0.0).unwrap();
+        let previous = day.add_days(-1).unwrap();
+        let next = day.add_days(1).unwrap();
+        let events = vec![
+            CalendarAgendaEvent {
+                id: "meeting".to_string(),
+                title: "Meeting".to_string(),
+                location: None,
+                calendar: Some("Work".to_string()),
+                start_epoch: day.to_unix() + 10 * 60 * 60,
+                end_epoch: day.to_unix() + 11 * 60 * 60,
+                all_day: false,
+            },
+            CalendarAgendaEvent {
+                id: "conference".to_string(),
+                title: "Conference".to_string(),
+                location: None,
+                calendar: None,
+                start_epoch: previous.to_unix(),
+                end_epoch: next.to_unix(),
+                all_day: true,
+            },
+            CalendarAgendaEvent {
+                id: "tomorrow".to_string(),
+                title: "Tomorrow".to_string(),
+                location: None,
+                calendar: None,
+                start_epoch: next.to_unix() + 60,
+                end_epoch: next.to_unix() + 120,
+                all_day: false,
+            },
+        ];
+
+        let selected = events_for_local_day(&events, 2027, 1, 20);
+        assert_eq!(
+            selected
+                .iter()
+                .map(|event| event.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["conference", "meeting"]
+        );
     }
 
     #[test]

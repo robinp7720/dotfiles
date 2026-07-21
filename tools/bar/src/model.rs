@@ -128,6 +128,8 @@ pub struct SystemState {
     pub clock: ClockState,
     pub media: Option<MediaState>,
     pub calendar: Option<CalendarEvent>,
+    #[serde(default)]
+    pub calendar_agenda: Option<CalendarAgenda>,
     pub timers: Vec<TimerState>,
     pub source_health: BTreeMap<SourceId, SourceHealth>,
 }
@@ -144,6 +146,7 @@ pub enum SystemUpdate {
     Clock(ClockState),
     Media(Option<MediaState>),
     Calendar(Option<CalendarEvent>),
+    CalendarAgenda(Option<CalendarAgenda>),
     Timers(Vec<TimerState>),
 }
 
@@ -465,6 +468,24 @@ pub struct CalendarEvent {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalendarAgenda {
+    pub year: i32,
+    pub month: u32,
+    pub events: Vec<CalendarAgendaEvent>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalendarAgendaEvent {
+    pub id: String,
+    pub title: String,
+    pub location: Option<String>,
+    pub calendar: Option<String>,
+    pub start_epoch: i64,
+    pub end_epoch: i64,
+    pub all_day: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimerState {
     pub id: String,
     pub label: String,
@@ -525,6 +546,7 @@ pub enum SourceId {
     Brightness,
     Media,
     Calendar,
+    CalendarAgenda,
     Timers,
     Activity,
     #[default]
@@ -618,6 +640,7 @@ pub enum ActionIntent {
     SetPowerProfile {
         profile: PowerProfile,
     },
+    OpenCalendar,
     StartTimer {
         label: String,
         duration_seconds: u64,
