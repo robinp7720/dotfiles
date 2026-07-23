@@ -1263,14 +1263,10 @@ pub struct ControlCenterView {
     power_tile: ActionTile,
     quick_grid: gtk::Grid,
     quick_layout: Cell<Option<(bool, bool)>>,
-    volume_scales: Vec<gtk::Scale>,
-    volume_values: Vec<gtk::Label>,
-    volume_buttons: Vec<gtk::Button>,
+    volume_sliders: Vec<VolumeSliderWidgets>,
     audio_output_list: gtk::Box,
     audio_output_specs: RefCell<Vec<AudioOutputControlSpec>>,
-    brightness_rows: Vec<gtk::Box>,
-    brightness_scales: Vec<gtk::Scale>,
-    brightness_values: Vec<gtk::Label>,
+    brightness_sliders: Vec<SliderWidgets>,
     brightness_device: Rc<RefCell<Option<String>>>,
     media_widgets: Vec<MediaWidgets>,
     artwork: ArtworkController,
@@ -1460,16 +1456,10 @@ impl ControlCenterView {
 
         let sliders = gtk::Box::new(gtk::Orientation::Vertical, 6);
         sliders.add_css_class("control-slider-group");
-        let (
-            overview_volume_row,
-            overview_volume_scale,
-            overview_volume_value,
-            overview_volume_button,
-        ) = volume_slider_row();
-        let (overview_brightness_row, overview_brightness_scale, overview_brightness_value) =
-            slider_row("display-brightness-symbolic", "Brightness");
-        sliders.append(&overview_volume_row);
-        sliders.append(&overview_brightness_row);
+        let overview_volume = volume_slider_row();
+        let overview_brightness = slider_row("display-brightness-symbolic", "Brightness");
+        sliders.append(&overview_volume.slider.row);
+        sliders.append(&overview_brightness.row);
         overview.append(&section_eyebrow("LEVELS"));
         overview.append(&sliders);
 
@@ -1533,9 +1523,8 @@ impl ControlCenterView {
         let (audio_hero, audio_state, audio_detail) =
             detail_hero("audio-volume-high-symbolic", "Audio");
         audio_page.append(&audio_hero);
-        let (detail_volume_row, detail_volume_scale, detail_volume_value, detail_volume_button) =
-            volume_slider_row();
-        audio_page.append(&detail_volume_row);
+        let detail_volume = volume_slider_row();
+        audio_page.append(&detail_volume.slider.row);
         audio_page.append(&section_eyebrow("OUTPUT"));
         let audio_output_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
         audio_output_list.add_css_class("audio-output-list");
@@ -1571,9 +1560,8 @@ impl ControlCenterView {
         profile_row.append(&profile_text);
         profile_row.append(&profile_button);
         power_page.append(&profile_row);
-        let (detail_brightness_row, detail_brightness_scale, detail_brightness_value) =
-            slider_row("display-brightness-symbolic", "Brightness");
-        power_page.append(&detail_brightness_row);
+        let detail_brightness = slider_row("display-brightness-symbolic", "Brightness");
+        power_page.append(&detail_brightness.row);
         stack.add_named(&power_page, Some(ControlCenterFocus::Power.as_str()));
 
         let keyboard_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -1706,9 +1694,9 @@ impl ControlCenterView {
             audio_action.clone(),
             |spec, active| (spec.audio.muted == active).then_some(ActionIntent::ToggleMute),
         );
-        for button in [&overview_volume_button, &detail_volume_button] {
+        for volume in [&overview_volume, &detail_volume] {
             let handle = audio_action.clone();
-            button.connect_clicked(move |_| {
+            volume.button.connect_clicked(move |_| {
                 handle.send("toggle-mute", ActionIntent::ToggleMute);
             });
         }
@@ -1737,9 +1725,9 @@ impl ControlCenterView {
             navigation: navigation.clone(),
             focus: ControlCenterFocus::Audio,
         };
-        for scale in [&overview_volume_scale, &detail_volume_scale] {
+        for volume in [&overview_volume, &detail_volume] {
             install_percent_debounce(
-                scale,
+                &volume.slider.scale,
                 suppress_controls.clone(),
                 volume_handle.clone(),
                 "set-volume",
@@ -1753,10 +1741,10 @@ impl ControlCenterView {
             navigation: navigation.clone(),
             focus: ControlCenterFocus::Power,
         };
-        for scale in [&overview_brightness_scale, &detail_brightness_scale] {
+        for brightness in [&overview_brightness, &detail_brightness] {
             let device = brightness_device.clone();
             install_percent_debounce(
-                scale,
+                &brightness.scale,
                 suppress_controls.clone(),
                 brightness_handle.clone(),
                 "set-brightness",
@@ -1811,14 +1799,10 @@ impl ControlCenterView {
             power_tile,
             quick_grid,
             quick_layout: Cell::new(None),
-            volume_scales: vec![overview_volume_scale, detail_volume_scale],
-            volume_values: vec![overview_volume_value, detail_volume_value],
-            volume_buttons: vec![overview_volume_button, detail_volume_button],
+            volume_sliders: vec![overview_volume, detail_volume],
             audio_output_list,
             audio_output_specs: RefCell::new(Vec::new()),
-            brightness_rows: vec![overview_brightness_row, detail_brightness_row],
-            brightness_scales: vec![overview_brightness_scale, detail_brightness_scale],
-            brightness_values: vec![overview_brightness_value, detail_brightness_value],
+            brightness_sliders: vec![overview_brightness, detail_brightness],
             brightness_device,
             media_widgets,
             artwork,
@@ -1957,45 +1941,40 @@ impl ControlCenterView {
         update_action_tile(&self.power_tile, &spec.power);
 
         let volume = spec.audio.percent.unwrap_or_default();
-        for scale in &self.volume_scales {
-            scale.set_value(f64::from(volume));
-            scale.set_sensitive(audio_available);
-        }
-        for label in &self.volume_values {
-            label.set_label(
-                &spec
-                    .audio
-                    .percent
-                    .map(|percent| format!("{percent}%"))
-                    .unwrap_or_else(|| "--".to_string()),
-            );
-        }
-        for button in &self.volume_buttons {
-            button.set_icon_name(volume_icon_name(spec.audio.muted, spec.audio.percent));
-            button.set_tooltip_text(Some(if spec.audio.muted { "Unmute" } else { "Mute" }));
-            button.set_sensitive(audio_available);
+        let volume_label = spec
+            .audio
+            .percent
+            .map(|percent| format!("{percent}%"))
+            .unwrap_or_else(|| "--".to_string());
+        for widgets in &self.volume_sliders {
+            widgets.slider.scale.set_value(f64::from(volume));
+            widgets.slider.scale.set_sensitive(audio_available);
+            widgets.slider.value.set_label(&volume_label);
+            widgets
+                .button
+                .set_icon_name(volume_icon_name(spec.audio.muted, spec.audio.percent));
+            widgets
+                .button
+                .set_tooltip_text(Some(if spec.audio.muted { "Unmute" } else { "Mute" }));
+            widgets.button.set_sensitive(audio_available);
             if spec.audio.muted {
-                button.add_css_class("muted");
+                widgets.button.add_css_class("muted");
             } else {
-                button.remove_css_class("muted");
+                widgets.button.remove_css_class("muted");
             }
         }
 
         if let Some(brightness) = spec.brightness.as_ref() {
             *self.brightness_device.borrow_mut() = Some(brightness.device.clone());
-            for row in &self.brightness_rows {
-                row.set_visible(true);
-            }
-            for scale in &self.brightness_scales {
-                scale.set_value(f64::from(brightness.percent));
-            }
-            for label in &self.brightness_values {
-                label.set_label(&format!("{}%", brightness.percent));
+            for widgets in &self.brightness_sliders {
+                widgets.row.set_visible(true);
+                widgets.scale.set_value(f64::from(brightness.percent));
+                widgets.value.set_label(&format!("{}%", brightness.percent));
             }
         } else {
             *self.brightness_device.borrow_mut() = None;
-            for row in &self.brightness_rows {
-                row.set_visible(false);
+            for widgets in &self.brightness_sliders {
+                widgets.row.set_visible(false);
             }
         }
 
@@ -2530,7 +2509,18 @@ fn section_intro(icon_name: &str, title: &str, detail: &str) -> gtk::Box {
     root
 }
 
-fn slider_row(icon_name: &str, tooltip: &str) -> (gtk::Box, gtk::Scale, gtk::Label) {
+struct SliderWidgets {
+    row: gtk::Box,
+    scale: gtk::Scale,
+    value: gtk::Label,
+}
+
+struct VolumeSliderWidgets {
+    slider: SliderWidgets,
+    button: gtk::Button,
+}
+
+fn slider_row(icon_name: &str, tooltip: &str) -> SliderWidgets {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     row.add_css_class("control-slider-row");
     let icon = gtk::Image::from_icon_name(icon_name);
@@ -2544,10 +2534,10 @@ fn slider_row(icon_name: &str, tooltip: &str) -> (gtk::Box, gtk::Scale, gtk::Lab
     value.set_xalign(0.5);
     row.append(&scale);
     row.append(&value);
-    (row, scale, value)
+    SliderWidgets { row, scale, value }
 }
 
-fn volume_slider_row() -> (gtk::Box, gtk::Scale, gtk::Label, gtk::Button) {
+fn volume_slider_row() -> VolumeSliderWidgets {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     row.add_css_class("control-slider-row");
     let mute = icon_button("audio-volume-high-symbolic", "Mute");
@@ -2561,7 +2551,10 @@ fn volume_slider_row() -> (gtk::Box, gtk::Scale, gtk::Label, gtk::Button) {
     value.set_xalign(0.5);
     row.append(&scale);
     row.append(&value);
-    (row, scale, value, mute)
+    VolumeSliderWidgets {
+        slider: SliderWidgets { row, scale, value },
+        button: mute,
+    }
 }
 
 fn volume_icon_name(muted: bool, percent: Option<u8>) -> &'static str {
