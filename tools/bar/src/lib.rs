@@ -54,8 +54,24 @@ pub use state::StateStore;
 pub use timers::{TimerRecord, TimerStore};
 pub use ui::BarApplication;
 
-pub fn startup(_config: &AppConfig) -> Result<()> {
+pub fn startup(config: &AppConfig) -> Result<()> {
+    if let Some(locale) = config.locale.as_deref() {
+        apply_locale_override(locale);
+    }
     Ok(())
+}
+
+fn apply_locale_override(locale: &str) {
+    let Ok(value) = std::ffi::CString::new(locale) else {
+        tracing::warn!("locale {locale:?} contains a NUL byte; ignoring override");
+        return;
+    };
+    let applied = unsafe { libc::setlocale(libc::LC_TIME, value.as_ptr()) };
+    if applied.is_null() {
+        tracing::warn!(
+            "locale {locale:?} is not installed on this system; falling back to the system default"
+        );
+    }
 }
 
 pub fn run_test_control_server(requests: usize) -> Result<()> {

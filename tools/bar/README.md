@@ -31,6 +31,9 @@ handoff for event editing, quick timer presets, and labeled custom timers. The a
 range-based `scripts/next_event.sh --agenda-json` contract while the original next-event modes stay
 available to the urgency card, lock screen, and legacy Waybar fallback.
 
+The calendar's weekday/month names follow the system locale by default; set `locale` in
+`config.toml` (e.g. `locale = "de_DE.UTF-8"`) to override it independently of the environment.
+
 ## Rollback
 
 Immediate session rollback back to Waybar:

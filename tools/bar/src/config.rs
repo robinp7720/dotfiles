@@ -14,6 +14,9 @@ enum ConfigError {
 #[serde(default, deny_unknown_fields)]
 pub struct AppConfig {
     pub primary_output: Option<String>,
+    /// Overrides the `LC_TIME` locale used for calendar/date formatting.
+    /// `None` (the default) follows the system locale.
+    pub locale: Option<String>,
     pub thresholds: ThresholdConfig,
     pub modules: ModuleConfig,
     pub freshness: FreshnessConfig,
@@ -25,6 +28,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             primary_output: Some("DP-5".to_string()),
+            locale: None,
             thresholds: ThresholdConfig::default(),
             modules: ModuleConfig::default(),
             freshness: FreshnessConfig::default(),
@@ -385,6 +389,18 @@ mod tests {
         assert_eq!(config.thresholds.critical_snooze_seconds, 300);
         assert_eq!(config.modules.reduced[0], ModuleName::Workspaces);
         assert_eq!(config.command_activity.allowlist.len(), 7);
+    }
+
+    #[test]
+    fn locale_defaults_to_none_and_follows_the_system_locale() {
+        let config = AppConfig::default();
+        assert_eq!(config.locale, None);
+    }
+
+    #[test]
+    fn locale_can_be_overridden_via_config() {
+        let config = AppConfig::from_toml("locale = \"de_DE.UTF-8\"\n").unwrap();
+        assert_eq!(config.locale.as_deref(), Some("de_DE.UTF-8"));
     }
 
     #[test]
