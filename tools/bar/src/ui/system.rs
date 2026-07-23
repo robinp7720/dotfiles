@@ -1,6 +1,6 @@
 use crate::{
-    AppConfig, AudioState, BarSnapshot, ConnectivityState, PlaybackStatus, PowerProfile,
-    SourceHealth, SourceId,
+    AppConfig, AudioState, BarSnapshot, ConnectivityState, ModuleName, PlaybackStatus,
+    PowerProfile, SourceHealth, SourceId,
 };
 
 use super::control_center::{ControlCenterSpec, build_control_center_spec, keyboard_bar_labels};
@@ -24,6 +24,22 @@ impl SystemModuleId {
             Self::Audio => "audio",
             Self::Power => "power",
             Self::Clock => "clock",
+        }
+    }
+
+    fn from_module_name(name: ModuleName) -> Option<Self> {
+        match name {
+            ModuleName::KeyboardLayout => Some(Self::Keyboard),
+            ModuleName::Resources => Some(Self::Resources),
+            ModuleName::Network => Some(Self::Network),
+            ModuleName::BluetoothAudio => Some(Self::Audio),
+            ModuleName::Power => Some(Self::Power),
+            ModuleName::Clock => Some(Self::Clock),
+            ModuleName::Workspaces
+            | ModuleName::FocusedApp
+            | ModuleName::FocusedTitle
+            | ModuleName::Context
+            | ModuleName::CriticalWarning => None,
         }
     }
 }
@@ -68,17 +84,15 @@ impl SystemCluster {
 }
 
 pub fn build_system_cluster(snapshot: &BarSnapshot, config: &AppConfig) -> SystemCluster {
-    let module_ids = [
-        SystemModuleId::Keyboard,
-        SystemModuleId::Resources,
-        SystemModuleId::Network,
-        SystemModuleId::Audio,
-        SystemModuleId::Power,
-        SystemModuleId::Clock,
-    ];
+    let mut seen = std::collections::BTreeSet::new();
+    let module_ids = config
+        .modules
+        .full
+        .iter()
+        .filter_map(|name| SystemModuleId::from_module_name(*name))
+        .filter(|id| seen.insert(*id));
 
     let modules = module_ids
-        .into_iter()
         .map(|id| SystemModuleSpec {
             button: build_button_spec(id, snapshot, config),
         })
@@ -433,11 +447,92 @@ mod tests {
 
     use crate::{
         AppConfig, AudioState, BarSnapshot, BluetoothState, ClockState, ConnectivityState,
-        KeyboardLayoutOption, KeyboardLayoutState, NetworkState, PowerProfile, PowerState,
-        ResourceState, SourceHealth, SourceId,
+        KeyboardLayoutOption, KeyboardLayoutState, ModuleName, NetworkState, PowerProfile,
+        PowerState, ResourceState, SourceHealth, SourceId,
     };
 
     use super::{SystemModuleId, build_system_cluster};
+
+    #[test]
+    fn build_system_cluster_follows_configured_module_order() {
+        let snapshot = snapshot();
+        let mut config = AppConfig::default();
+        config.modules.full = vec![ModuleName::Clock, ModuleName::Power, ModuleName::Network];
+
+        let cluster = build_system_cluster(&snapshot, &config);
+
+        assert_eq!(
+            cluster
+                .modules()
+                .iter()
+                .map(|module| module.button.id)
+                .collect::<Vec<_>>(),
+            vec![
+                SystemModuleId::Clock,
+                SystemModuleId::Power,
+                SystemModuleId::Network,
+            ]
+        );
+    }
+
+    #[test]
+    fn build_system_cluster_omits_modules_missing_from_config() {
+        let snapshot = snapshot();
+        let mut config = AppConfig::default();
+        config.modules.full = vec![ModuleName::Clock, ModuleName::Network];
+
+        let cluster = build_system_cluster(&snapshot, &config);
+
+        assert!(
+            !cluster
+                .modules()
+                .iter()
+                .any(|module| module.button.id == SystemModuleId::Resources)
+        );
+    }
+
+    #[test]
+    fn build_system_cluster_deduplicates_repeated_module_names() {
+        let snapshot = snapshot();
+        let mut config = AppConfig::default();
+        config.modules.full = vec![ModuleName::Clock, ModuleName::Clock, ModuleName::Network];
+
+        let cluster = build_system_cluster(&snapshot, &config);
+
+        assert_eq!(
+            cluster
+                .modules()
+                .iter()
+                .filter(|module| module.button.id == SystemModuleId::Clock)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn build_system_cluster_ignores_non_system_module_names() {
+        let snapshot = snapshot();
+        let mut config = AppConfig::default();
+        config.modules.full = vec![
+            ModuleName::Workspaces,
+            ModuleName::FocusedApp,
+            ModuleName::FocusedTitle,
+            ModuleName::Context,
+            ModuleName::CriticalWarning,
+            ModuleName::Clock,
+        ];
+
+        let cluster = build_system_cluster(&snapshot, &config);
+
+        assert_eq!(
+            cluster
+                .modules()
+                .iter()
+                .map(|module| module.button.id)
+                .collect::<Vec<_>>(),
+            vec![SystemModuleId::Clock]
+        );
+    }
 
     #[test]
     fn keyboard_button_compacts_us_and_dvorak_layout_labels() {

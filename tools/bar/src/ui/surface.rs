@@ -443,8 +443,11 @@ pub struct PrimarySurface {
     context_row: gtk::Box,
     context_icon: gtk::Image,
     context_label: gtk::Label,
+    system_items: gtk::Box,
     status_buttons: BTreeMap<SystemModuleId, StatusButtonView>,
+    status_button_order: Vec<SystemModuleId>,
     control_center: Rc<ControlCenterView>,
+    popover_coordinator: Rc<RefCell<PopoverCoordinator>>,
     popover_registry: PopoverRegistry,
     action_sender: Sender<ActionRequest>,
     current_spec: Option<SurfaceSpec>,
@@ -591,6 +594,11 @@ impl PrimarySurface {
             system_items.append(&status_button.button);
             status_buttons.insert(module.button.id, status_button);
         }
+        let status_button_order = initial_system
+            .modules()
+            .iter()
+            .map(|module| module.button.id)
+            .collect();
 
         root.set_start_widget(Some(&left));
         root.set_center_widget(Some(&center_slot));
@@ -614,8 +622,11 @@ impl PrimarySurface {
             context_row,
             context_icon,
             context_label,
+            system_items,
             status_buttons,
+            status_button_order,
             control_center,
+            popover_coordinator,
             popover_registry,
             action_sender,
             current_spec: None,
@@ -677,13 +688,46 @@ impl PrimarySurface {
 
     fn render_system_modules(&mut self, system: &SystemCluster) {
         self.control_center.update(system.control_center());
-        for module in system.modules() {
-            let status_button = self
-                .status_buttons
-                .get_mut(&module.button.id)
-                .expect("stable system status button");
-            status_button.update(&module.button);
+
+        let new_order: Vec<SystemModuleId> = system
+            .modules()
+            .iter()
+            .map(|module| module.button.id)
+            .collect();
+        if new_order != self.status_button_order {
+            self.rebuild_system_items(system);
+            return;
         }
+
+        for module in system.modules() {
+            if let Some(status_button) = self.status_buttons.get_mut(&module.button.id) {
+                status_button.update(&module.button);
+            }
+        }
+    }
+
+    fn rebuild_system_items(&mut self, system: &SystemCluster) {
+        while let Some(child) = self.system_items.first_child() {
+            self.system_items.remove(&child);
+        }
+        self.status_buttons.clear();
+
+        for module in system.modules() {
+            let status_button = build_status_button(
+                &module.button,
+                &self.action_sender,
+                self.control_center.clone(),
+                self.popover_coordinator.clone(),
+                self.popover_registry.clone(),
+            );
+            self.system_items.append(&status_button.button);
+            self.status_buttons.insert(module.button.id, status_button);
+        }
+        self.status_button_order = system
+            .modules()
+            .iter()
+            .map(|module| module.button.id)
+            .collect();
     }
 }
 
