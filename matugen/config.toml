@@ -48,7 +48,7 @@ output_path = '~/.config/Luma/theme.css'
 
 [templates.bar]
 input_path = '~/.config/matugen/templates/bar-colors.css'
-output_path = '~/.config/cockpit-bar/colors.css'
+output_path = '~/.config/vigil/colors.css'
 
 [templates.refind]
 input_path = '~/.config/matugen/templates/refind.json'

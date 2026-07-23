@@ -68,10 +68,10 @@ wait_for_lines() {
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
-log_file="$tmpdir/cockpit-bar.log"
+log_file="$tmpdir/vigil.log"
 mkdir -p "$tmpdir/bin"
 config_home="$tmpdir/config"
-config_dir="$config_home/cockpit-bar"
+config_dir="$config_home/vigil"
 config_path="$config_dir/config.toml"
 mkdir -p "$config_dir"
 
@@ -109,21 +109,21 @@ label = "Cargo nextest"
 prefixes = ["cargo nextest"]
 EOF
 
-cat >"$tmpdir/bin/cockpit-bar" <<'EOF'
+cat >"$tmpdir/bin/vigil" <<'EOF'
 #!/usr/bin/env zsh
 if [[ "$1" == "--config" && "$3" == "activity" && "$4" == "shell-rules" ]]; then
-  [[ "$2" == "$EXPECTED_COCKPIT_BAR_CONFIG" ]] || exit 9
+  [[ "$2" == "$EXPECTED_VIGIL_CONFIG" ]] || exit 9
   print -rn -- $'Cargo build\0cargo build\0Cargo test\0cargo test\0Cargo run\0cargo run\0npm test\0npm test\0pnpm test\0pnpm test\0Pytest\0pytest\0Make\0make\0Cargo nextest\0cargo nextest\0'
   exit 0
 fi
-print -r -- "$*" >>"$COCKPIT_BAR_LOG_FILE"
+print -r -- "$*" >>"$VIGIL_LOG_FILE"
 EOF
-chmod +x "$tmpdir/bin/cockpit-bar"
+chmod +x "$tmpdir/bin/vigil"
 
 export PATH="$tmpdir/bin:$PATH"
-export COCKPIT_BAR_LOG_FILE="$log_file"
+export VIGIL_LOG_FILE="$log_file"
 export XDG_CONFIG_HOME="$config_home"
-export EXPECTED_COCKPIT_BAR_CONFIG="$config_path"
+export EXPECTED_VIGIL_CONFIG="$config_path"
 
 source "$REPO_ROOT/bar/shell-integration.zsh"
 
@@ -133,10 +133,10 @@ assert_eq "$(classify_activity 'pytest -k secret')" "Pytest" "pytest should map 
 assert_no_match "git status"
 
 cd "$tmpdir"
-__cockpit_bar_preexec "pytest -k secret"
+__vigil_preexec "pytest -k secret"
 setopt noerrexit
 command sh -c 'exit 23'
-__cockpit_bar_precmd
+__vigil_precmd
 setopt errexit
 
 wait_for_lines "$log_file" 2

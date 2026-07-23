@@ -47,8 +47,8 @@ if [[ -r "$HOME/.config/environment" ]]; then
   source "$HOME/.config/environment"
 fi
 
-if [[ -r "$HOME/.config/cockpit-bar/shell-integration.zsh" ]]; then
-  source "$HOME/.config/cockpit-bar/shell-integration.zsh"
+if [[ -r "$HOME/.config/vigil/shell-integration.zsh" ]]; then
+  source "$HOME/.config/vigil/shell-integration.zsh"
 fi
 
 #source /opt/esp-idf/export.sh

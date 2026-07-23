@@ -1,5 +1,8 @@
 # Wayland Command Cockpit Bar Implementation Plan
 
+> Naming update (2026-07-23): the completed system is now **Vigil**. Historical
+> paths and commands below are retained as an implementation record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a Rust GTK/layer-shell bar for Hyprland and Niri with output-local WM context, prioritized dynamic activity, interactive system controls, and reduced secondary-output surfaces.

@@ -124,8 +124,9 @@ for dir in "${directories[@]}"; do
   target="$HOME/.config/$dir"
   link_path "$DIR/$dir" "$target"
 done
-echo "Linking cockpit-bar configuration"
-link_path "$DIR/bar" "$HOME/.config/cockpit-bar"
+echo "Linking Vigil configuration"
+link_path "$DIR/bar" "$HOME/.config/vigil"
+remove_managed_symlink "$HOME/.config/cockpit-bar" "$DIR/bar"
 remove_managed_symlink "$HOME/.config/rofi" "$DIR/rofi"
 
 # Setup custom scripts in ~/.local/bin
@@ -155,13 +156,14 @@ else
   warn "skipping Luma binary link because tools/launcher/target/release/Luma is missing"
 fi
 
-if [[ -x "$DIR/tools/bar/target/release/cockpit-bar" ]]; then
-  link_path "$DIR/tools/bar/target/release/cockpit-bar" "$HOME/.local/bin/cockpit-bar"
-  echo "Linked $HOME/.local/bin/cockpit-bar -> $DIR/tools/bar/target/release/cockpit-bar"
+if [[ -x "$DIR/tools/bar/target/release/vigil" ]]; then
+  link_path "$DIR/tools/bar/target/release/vigil" "$HOME/.local/bin/vigil"
+  echo "Linked $HOME/.local/bin/vigil -> $DIR/tools/bar/target/release/vigil"
 else
-  remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"
-  warn "skipping cockpit-bar binary link because tools/bar/target/release/cockpit-bar is missing"
+  remove_managed_symlink "$HOME/.local/bin/vigil" "$DIR/tools/bar/target/release/vigil"
+  warn "skipping Vigil binary link because tools/bar/target/release/vigil is missing"
 fi
+remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"
 
 remove_managed_symlink "$HOME/.local/bin/rofi" "$DIR/scripts/rofi_wrapper.sh"
 
@@ -172,6 +174,9 @@ for unit in "$DIR"/systemd/user/*.service "$DIR"/systemd/user/*.timer; do
   target="$HOME/.config/systemd/user/$(basename "$unit")"
   link_path "$unit" "$target"
 done
+remove_managed_symlink \
+  "$HOME/.config/systemd/user/cockpit-bar.service" \
+  "$DIR/systemd/user/cockpit-bar.service"
 
 if command -v systemctl >/dev/null 2>&1; then
   if ! systemctl --user daemon-reload; then

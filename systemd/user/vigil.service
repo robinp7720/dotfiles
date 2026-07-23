@@ -1,11 +1,11 @@
 [Unit]
-Description=Wayland command cockpit bar
+Description=Vigil Wayland desktop cockpit
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/cockpit-bar
+ExecStart=%h/.local/bin/vigil
 Restart=on-failure
 RestartSec=2
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin

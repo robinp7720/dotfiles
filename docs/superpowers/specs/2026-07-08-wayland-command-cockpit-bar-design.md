@@ -1,5 +1,9 @@
 # Wayland Command Cockpit Bar Design
 
+> Naming update (2026-07-23): the system is now **Vigil**. “Cockpit” remains
+> the interaction and visual design language; historical implementation names
+> in this document describe the original build.
+
 ## Goal
 
 Replace Waybar on Hyprland and Niri with a responsive Rust GTK/layer-shell bar

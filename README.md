@@ -6,11 +6,14 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 - **Hyprland setup** with shared configuration, multi-monitor layouts (`hypr/monitor_layouts`), and scripts for switching between default, game, and external display modes. Cursor theme is enforced via env vars to avoid the Hypr logo pointer.
 - **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, `cairo-dock`, `nitrogen`, and `superpaper`.
 - **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Waybar, Kitty (with an automatic USR1 reload hook), Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello from a single template directory.
-- **Productivity bars**: Polybar and Waybar configs live alongside the compositor configs, with custom power, Bluetooth, profile, and media helpers.
+- **Vigil desktop cockpit**: the native Wayland bar keeps urgent context visible,
+  provides quick settings, and delegates deeper workflows to Luma. Its source is
+  tracked as the `tools/bar` submodule.
 - **Control center overlay**: Eww provides a toggleable quick-actions panel for calendar context, media, Bluetooth, power profile, and session actions across Hyprland and Niri.
 - **Codex self-improvement**: on login, a guarded user service can let Codex pick one small dotfiles improvement, apply it, auto-commit it, and send a desktop notification with the summary.
 - **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
-- **Native tools** under `tools/`: `session-manager` for hardware-aware display profiles and `launcher` for the Luma command palette.
+- **Native tools** under `tools/`: `session-manager` for hardware-aware display
+  profiles, plus the Vigil and Luma submodules.
 
 ## Requirements
 These dotfiles assume an Arch Linux (or derivative) system with the following core packages available:
@@ -28,9 +31,10 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 ## Getting Started
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/robinp7720/dotfiles.git ~/.dotfiles
+   git clone --recurse-submodules https://github.com/robinp7720/dotfiles.git ~/.dotfiles
    cd ~/.dotfiles
    ```
+   For an existing checkout, run `git submodule update --init --recursive`.
 2. **Back up existing config** – `setup.sh` replaces conflicting files or directories with timestamped backups before linking. Review anything already living under `~/.config` if you care about preserving it.
 3. **Run the linker**
    ```bash
@@ -51,12 +55,15 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `kitty/`, `dunst/` – Application-specific themes.
 - `scripts/` – Utility scripts such as `now_playing.sh` (current track for Hyprlock), session locking, and Bluetooth/wallpaper helpers.
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
-- `tools/` – Rust utilities such as `session-manager` and `launcher`.
+- `tools/` – Rust utilities, including the Vigil (`bar`) and Luma (`launcher`)
+  submodules.
 - `tools/self-improve/` – Prompt assets for the login-time Codex automation.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
 ## Testing
 - `bash tests/codex_self_improve_test.sh` – Exercises the Codex self-improvement wrapper with fake Codex binaries in temporary git repositories.
+- `bash tests/vigil_desktop_contract.sh` – Verifies Vigil’s setup, service,
+  compositor, theme, and Luma integration contracts.
 
 ## Customization Notes
 - **Monitor naming**: Update `hypr/hyprland-config/desktop.conf` and the files under `hypr/monitor_layouts/` or `bspwm/modes/` if your outputs differ (`DP-5`, `DVI-D-2`, `HDMI-0`, etc.).
@@ -66,6 +73,8 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
 - **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
 - **Luma launcher**: Press `Super+Space` in Hyprland, Niri, or bspwm to run `tools/launcher/target/release/Luma` directly. `Super+P` opens its password mode, and the Waybar logo/control-center launcher actions use the same release binary.
+- **Vigil**: Build it with `cargo build --manifest-path tools/bar/Cargo.toml
+  --release`, rerun `setup.sh`, then restart `vigil.service`.
 - **Session locking**: `scripts/session_lock.sh` is the shared entry point for keyboard shortcuts, the control center, and the power menu. It prefers `hyprlock` on Hyprland, otherwise falls back to the current logind session lock or a direct `hyprlock` invocation when available.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Codex self-improvement**: Hyprland, Niri, and bspwm startup now call `scripts/start_codex_self_improve_service.sh`, which imports the live session environment, ensures `codex-self-improve.service` is linked into `~/.config/systemd/user/`, and starts it. The service runs `scripts/codex_self_improve.sh` at most once per boot and no more than once per `CODEX_SELF_IMPROVE_COOLDOWN_HOURS` hours (24 by default), skips dirty worktrees, writes logs under `~/.local/state/codex-self-improve/`, and auto-commits successful changes with a `chore(self-improve): ...` message. Use `CODEX_SELF_IMPROVE_DISABLED=1` to turn it off, `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to keep successful changes uncommitted, or run `~/.dotfiles/scripts/codex_self_improve.sh --force` for a manual pass.

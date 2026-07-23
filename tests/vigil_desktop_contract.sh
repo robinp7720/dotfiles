@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 require_fixed() {
   local needle="$1"
@@ -154,47 +154,89 @@ verify_managed_stale_binary_link_cleanup() {
   make_stub_commands "$stub_root"
 
   mkdir -p "$managed_home/.local/bin" "$foreign_home/.local/bin"
-  ln -s "$fixture_root/tools/bar/target/release/cockpit-bar" "$managed_home/.local/bin/cockpit-bar"
-  ln -s "/tmp/external-cockpit-bar" "$foreign_home/.local/bin/cockpit-bar"
+  ln -s "$fixture_root/tools/bar/target/release/vigil" "$managed_home/.local/bin/vigil"
+  ln -s "/tmp/external-vigil" "$foreign_home/.local/bin/vigil"
 
   PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
-  if [[ -L "$managed_home/.local/bin/cockpit-bar" ]]; then
-    printf 'managed stale cockpit-bar symlink should be removed when release binary is missing\n' >&2
+  if [[ -L "$managed_home/.local/bin/vigil" ]]; then
+    printf 'managed stale Vigil symlink should be removed when release binary is missing\n' >&2
     exit 1
   fi
 
   PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
-  if [[ ! -L "$foreign_home/.local/bin/cockpit-bar" ]]; then
-    printf 'foreign cockpit-bar symlink should be preserved when release binary is missing\n' >&2
+  if [[ ! -L "$foreign_home/.local/bin/vigil" ]]; then
+    printf 'foreign Vigil symlink should be preserved when release binary is missing\n' >&2
     exit 1
   fi
 }
 
-require_fixed 'link_path "$DIR/bar" "$HOME/.config/cockpit-bar"' "setup.sh"
-require_fixed 'if [[ -x "$DIR/tools/bar/target/release/cockpit-bar" ]]; then' "setup.sh"
-require_fixed 'link_path "$DIR/tools/bar/target/release/cockpit-bar" "$HOME/.local/bin/cockpit-bar"' "setup.sh"
-require_fixed 'remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"' "setup.sh"
+verify_legacy_cockpit_links_cleanup() {
+  local temp_root
+  local fixture_root
+  local stub_root
+  local test_home
 
-require_path "systemd/user/cockpit-bar.service"
-require_fixed 'Type=simple' "systemd/user/cockpit-bar.service"
-require_fixed 'ExecStart=%h/.local/bin/cockpit-bar' "systemd/user/cockpit-bar.service"
-require_fixed 'Restart=on-failure' "systemd/user/cockpit-bar.service"
-require_fixed 'RestartSec=2' "systemd/user/cockpit-bar.service"
-require_fixed 'After=graphical-session.target' "systemd/user/cockpit-bar.service"
-require_fixed 'PartOf=graphical-session.target' "systemd/user/cockpit-bar.service"
-require_fixed 'WantedBy=graphical-session.target' "systemd/user/cockpit-bar.service"
+  temp_root="$(mktemp -d)"
+  trap 'rm -rf -- "$temp_root"' RETURN
+
+  fixture_root="$temp_root/repo"
+  stub_root="$temp_root/stubs"
+  test_home="$temp_root/home"
+
+  make_setup_fixture "$fixture_root"
+  make_stub_commands "$stub_root"
+  mkdir -p "$test_home/.config/systemd/user" "$test_home/.local/bin"
+  ln -s "$fixture_root/bar" "$test_home/.config/cockpit-bar"
+  ln -s \
+    "$fixture_root/tools/bar/target/release/cockpit-bar" \
+    "$test_home/.local/bin/cockpit-bar"
+  ln -s \
+    "$fixture_root/systemd/user/cockpit-bar.service" \
+    "$test_home/.config/systemd/user/cockpit-bar.service"
+
+  PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+
+  [[ ! -L "$test_home/.config/cockpit-bar" ]] \
+    || { printf 'legacy managed config link should be removed\n' >&2; exit 1; }
+  [[ ! -L "$test_home/.local/bin/cockpit-bar" ]] \
+    || { printf 'legacy managed binary link should be removed\n' >&2; exit 1; }
+  [[ ! -L "$test_home/.config/systemd/user/cockpit-bar.service" ]] \
+    || { printf 'legacy managed service link should be removed\n' >&2; exit 1; }
+}
+
+require_fixed 'link_path "$DIR/bar" "$HOME/.config/vigil"' "setup.sh"
+require_fixed 'if [[ -x "$DIR/tools/bar/target/release/vigil" ]]; then' "setup.sh"
+require_fixed 'link_path "$DIR/tools/bar/target/release/vigil" "$HOME/.local/bin/vigil"' "setup.sh"
+require_fixed 'remove_managed_symlink "$HOME/.local/bin/vigil" "$DIR/tools/bar/target/release/vigil"' "setup.sh"
+require_fixed 'remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"' "setup.sh"
+require_fixed 'name = "vigil"' "tools/bar/Cargo.toml"
+require_fixed '#[command(name = "vigil")]' "tools/bar/src/main.rs"
+require_fixed '.application_id("me.robindecker.Vigil")' "tools/bar/src/ui/mod.rs"
+require_fixed 'join("vigil.sock")' "tools/bar/src/ipc.rs"
+require_fixed 'source "$HOME/.config/vigil/shell-integration.zsh"' "zshrc"
+require_fixed "output_path = '~/.config/vigil/colors.css'" "matugen/config.toml"
+
+require_path "systemd/user/vigil.service"
+require_fixed 'Description=Vigil Wayland desktop cockpit' "systemd/user/vigil.service"
+require_fixed 'Type=simple' "systemd/user/vigil.service"
+require_fixed 'ExecStart=%h/.local/bin/vigil' "systemd/user/vigil.service"
+require_fixed 'Restart=on-failure' "systemd/user/vigil.service"
+require_fixed 'RestartSec=2' "systemd/user/vigil.service"
+require_fixed 'After=graphical-session.target' "systemd/user/vigil.service"
+require_fixed 'PartOf=graphical-session.target' "systemd/user/vigil.service"
+require_fixed 'WantedBy=graphical-session.target' "systemd/user/vigil.service"
 
 require_fixed '# exec = ~/.config/waybar/launch.sh --replace &' "hypr/hyprland-config/startup.conf"
-require_fixed 'exec-once = systemctl --user restart cockpit-bar.service' "hypr/hyprland-config/startup.conf"
-require_order 'exec-once = dbus-update-activation-environment --all' 'exec-once = systemctl --user restart cockpit-bar.service' "hypr/hyprland-config/startup.conf"
-require_fixed 'layerrule = blur on, match:namespace cockpit-bar' "hypr/hyprland-config/base.conf"
-require_fixed 'layerrule = ignore_alpha 0.20, match:namespace cockpit-bar' "hypr/hyprland-config/base.conf"
+require_fixed 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
+require_order 'exec-once = dbus-update-activation-environment --all' 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
+require_fixed 'layerrule = blur on, match:namespace vigil' "hypr/hyprland-config/base.conf"
+require_fixed 'layerrule = ignore_alpha 0.20, match:namespace vigil' "hypr/hyprland-config/base.conf"
 
 require_fixed '// spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"' "niri/config.kdl"
 require_fixed 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' "niri/config.kdl"
-require_fixed 'systemctl --user restart cockpit-bar.service' "niri/config.kdl"
-require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart cockpit-bar.service' "niri/config.kdl"
-require_fixed 'match namespace="^cockpit-bar$"' "niri/config.kdl"
+require_fixed 'systemctl --user restart vigil.service' "niri/config.kdl"
+require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart vigil.service' "niri/config.kdl"
+require_fixed 'match namespace="^vigil$"' "niri/config.kdl"
 
 require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
 require_fixed 'center_slot.set_size_request(CENTER_SLOT_MIN_WIDTH, -1);' "tools/bar/src/ui/surface.rs"
@@ -206,7 +248,7 @@ require_fixed 'status_button.update(&module.button);' "tools/bar/src/ui/surface.
 require_fixed 'center_for_click.show_page(focus);' "tools/bar/src/ui/surface.rs"
 require_fixed 'window.set_default_size(512, -1);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'root.set_size_request(480, -1);' "tools/bar/src/ui/control_center.rs"
-require_fixed 'window.set_namespace(Some("cockpit-control-center"));' "tools/bar/src/ui/control_center.rs"
+require_fixed 'window.set_namespace(Some("vigil-control-center"));' "tools/bar/src/ui/control_center.rs"
 require_fixed 'window.set_layer(Layer::Overlay);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'window.set_exclusive_zone(0);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'stack.set_hhomogeneous(true);' "tools/bar/src/ui/control_center.rs"
@@ -345,14 +387,15 @@ require_fixed 'ControlCenterMotionEvent::Dismiss' "tools/bar/src/ui/control_cent
 reject_fixed 'surface.dismiss_popovers();' "tools/bar/src/ui/surface.rs"
 require_fixed 'window.set_margin(Edge::Top, top_margin);' "tools/bar/src/ui/control_center.rs"
 reject_fixed 'BAR_HEIGHT + SURFACE_MARGIN * 2,' "tools/bar/src/ui/surface.rs"
-require_fixed 'layerrule = no_anim on, match:namespace cockpit-control-center' "hypr/hyprland-config/base.conf"
+require_fixed 'layerrule = no_anim on, match:namespace vigil-control-center' "hypr/hyprland-config/base.conf"
 
 require_path "waybar/launch.sh"
 require_path "waybar/config"
 require_fixed 'git checkout 2187ecb^ -- setup.sh hypr/hyprland-config/startup.conf hypr/hyprland-config/base.conf niri/config.kdl tools/bar/README.md' "tools/bar/README.md"
-require_fixed 'rm -f systemd/user/cockpit-bar.service' "tools/bar/README.md"
+require_fixed 'rm -f systemd/user/vigil.service' "tools/bar/README.md"
 
 verify_managed_stale_binary_link_cleanup
+verify_legacy_cockpit_links_cleanup
 verify_luma_binary_link
 
 printf 'desktop contract ok\n'

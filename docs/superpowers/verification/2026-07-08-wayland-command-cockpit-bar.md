@@ -1,5 +1,9 @@
 # Wayland Command Cockpit Bar Verification
 
+> Naming update (2026-07-23): this system was subsequently renamed **Vigil**.
+> The identifiers below are preserved because they record the commands and
+> observations from the original verification run.
+
 Date: 2026-07-13
 Session tested: Hyprland
 

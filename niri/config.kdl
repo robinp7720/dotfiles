@@ -92,9 +92,9 @@ layer-rule {
     geometry-corner-radius 22
 }
 
-// Add a shadow for cockpit-bar.
+// Add a shadow for Vigil.
 layer-rule {
-    match namespace="^cockpit-bar$"
+    match namespace="^vigil$"
 
     shadow {
         on
@@ -339,7 +339,7 @@ layout {
 
 spawn-sh-at-startup "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
 spawn-sh-at-startup "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
-spawn-sh-at-startup "systemctl --user restart cockpit-bar.service"
+spawn-sh-at-startup "systemctl --user restart vigil.service"
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
 // spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"
