@@ -10,6 +10,68 @@
 @define-color on_primary #102027;
 @define-color tertiary #efc66f;
 @define-color error #ff8a80;
+@define-color success #83d6a3;
+
+@keyframes cockpit-enter {
+  0% { opacity: 0; transform: translate(0, -12px) scale(0.88); }
+  58% { opacity: 1; transform: translate(0, 2px) scale(1.025); }
+  78% { transform: translate(0, -1px) scale(0.992); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes context-arrive {
+  0% { opacity: 0; transform: translate(0, 8px) scale(0.9); }
+  56% { opacity: 1; transform: translate(0, -2px) scale(1.04); }
+  100% { transform: none; }
+}
+
+@keyframes workspace-arrive {
+  0% { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+  68% { opacity: 1; transform: scale(1.12) rotate(2deg); }
+  100% { transform: none; }
+}
+
+@keyframes workspace-activate {
+  0% { transform: scale(0.82); }
+  48% { transform: scale(1.18); }
+  74% { transform: scale(0.96); }
+  100% { transform: none; }
+}
+
+@keyframes state-pop {
+  0% { transform: scale(0.75) rotate(-8deg); }
+  62% { transform: scale(1.2) rotate(3deg); }
+  100% { transform: none; }
+}
+
+@keyframes meaningful-pulse {
+  0%, 100% { opacity: 0.72; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes critical-breathe {
+  0%, 100% { box-shadow: inset 0 0 alpha(@error, 0), 0 0 alpha(@error, 0); }
+  50% { box-shadow: inset 0 0 0 1px alpha(@error, 0.42), 0 0 14px alpha(@error, 0.22); }
+}
+
+@keyframes pending-pulse {
+  0%, 100% { opacity: 0.54; }
+  50% { opacity: 1; }
+}
+
+@keyframes success-pop {
+  0% { transform: scale(0.86); }
+  58% { transform: scale(1.13); }
+  100% { transform: none; }
+}
+
+@keyframes failure-shake {
+  0%, 100% { transform: none; }
+  20% { transform: translate(-4px, 0); }
+  40% { transform: translate(4px, 0); }
+  60% { transform: translate(-2px, 0); }
+  80% { transform: translate(2px, 0); }
+}
 
 window.bar-window {
   min-height: 44px;
@@ -26,6 +88,10 @@ window.bar-window image {
 
 .bar-root {
   padding: 0;
+}
+
+.bar-root.bar-entering .bar-island {
+  animation: cockpit-enter 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .bar-island {
@@ -85,9 +151,30 @@ button.system-module:hover {
   background: @cockpit_item_hover;
 }
 
+.workspace-button:active,
+.title-button:active,
+button.system-module:active,
+.suggestion-action:active {
+  transform: scale(0.92);
+}
+
 .workspace-button.active {
   color: @on_primary;
   background: @primary;
+}
+
+.workspace-button.workspace-new {
+  animation: workspace-arrive 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-button.workspace-activated {
+  animation: workspace-activate 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-button.urgent {
+  color: @error;
+  background: alpha(@error, 0.12);
+  animation: meaningful-pulse 1100ms ease-in-out infinite;
 }
 
 .title-button {
@@ -115,6 +202,107 @@ button.system-module:hover {
   font-feature-settings: "tnum";
 }
 
+.context-chip.context-arrived {
+  animation: context-arrive 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.context-chip.proactive {
+  padding-right: 5px;
+  background: linear-gradient(90deg, alpha(@primary, 0.055), alpha(@tertiary, 0.045));
+  border-radius: 10px;
+}
+
+.context-chip.suggestion {
+  color: mix(@primary, @cockpit_text, 0.34);
+}
+
+.suggestion-actions {
+  margin-left: 3px;
+}
+
+.suggestion-action {
+  min-height: 26px;
+  padding: 0 10px;
+  color: @on_primary;
+  background: @primary;
+  border: 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.suggestion-action:hover {
+  background: mix(@primary, @cockpit_text, 0.14);
+}
+
+.suggestion-dismiss {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  color: alpha(@cockpit_muted, 0.72);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.suggestion-dismiss:hover {
+  color: @cockpit_text;
+  background: @cockpit_item_hover;
+}
+
+.suggestion-action.is-pending,
+.suggestion-card.is-pending {
+  animation: pending-pulse 760ms ease-in-out infinite;
+}
+
+.suggestion-action.is-success,
+.suggestion-card.is-success {
+  color: @success;
+  box-shadow: inset 0 0 0 1px alpha(@success, 0.5);
+  animation: success-pop 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.suggestion-action.is-failure,
+.suggestion-card.is-failure {
+  color: @error;
+  box-shadow: inset 0 0 0 1px alpha(@error, 0.58);
+  animation: failure-shake 420ms ease-out both;
+}
+
+.context-chip.is-running .context-icon,
+.context-chip.is-playing .context-icon,
+button.system-module.charging image,
+.bluetooth-scan-spinner {
+  animation: meaningful-pulse 1250ms ease-in-out infinite;
+}
+
+.context-chip.critical,
+.warning-chip.critical {
+  animation: critical-breathe 1450ms ease-in-out infinite;
+}
+
+window.ambient-off .workspace-button.urgent,
+window.ambient-off .context-chip.is-running .context-icon,
+window.ambient-off .context-chip.is-playing .context-icon,
+window.ambient-off button.system-module.charging image,
+window.ambient-off .context-chip.critical,
+window.ambient-off .warning-chip.critical {
+  animation: none;
+}
+
+window.ambient-always .bar-island {
+  animation: critical-breathe 3200ms ease-in-out infinite;
+}
+
+window.motion-calm .workspace-button.workspace-new,
+window.motion-calm .workspace-button.workspace-activated,
+window.motion-calm button.system-module.state-changed,
+window.motion-calm .context-chip.context-arrived {
+  animation-duration: 220ms;
+}
+
 .context-icon {
   min-width: 16px;
 }
@@ -132,6 +320,10 @@ button.system-module.inactive,
 button.system-module.stale,
 button.system-module.disconnected {
   color: @cockpit_muted;
+}
+
+button.system-module.state-changed {
+  animation: state-pop 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .warning-chip.warning,
@@ -273,6 +465,30 @@ window.control-center-window scale:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bar-root.bar-entering .bar-island,
+  .workspace-button.workspace-new,
+  .workspace-button.workspace-activated,
+  .workspace-button.urgent,
+  button.system-module.state-changed,
+  .context-chip.context-arrived,
+  .context-chip.is-running .context-icon,
+  .context-chip.is-playing .context-icon,
+  button.system-module.charging image,
+  .bluetooth-scan-spinner,
+  .context-chip.critical,
+  .warning-chip.critical,
+  .suggestion-action.is-pending,
+  .suggestion-card.is-pending,
+  .suggestion-action.is-success,
+  .suggestion-card.is-success,
+  .suggestion-action.is-failure,
+  .suggestion-card.is-failure,
+  .control-error-slot.is-pending,
+  .control-error-slot.is-success,
+  .control-error-slot.has-error {
+    animation: none;
+  }
+
   .control-center-root.control-center-entering {
     animation: none;
   }
@@ -328,6 +544,61 @@ window.control-center-window scale:focus-visible {
 
 .control-page {
   border-spacing: 10px;
+}
+
+.suggestion-section,
+.suggestion-list {
+  border-spacing: 7px;
+}
+
+.suggestion-card {
+  min-height: 58px;
+  padding: 8px 8px 8px 10px;
+  color: @cockpit_text;
+  background: linear-gradient(115deg, alpha(@primary, 0.14), alpha(@tertiary, 0.055) 78%);
+  border-radius: 14px;
+  box-shadow: inset 3px 0 alpha(@primary, 0.62), inset 0 1px alpha(@cockpit_text, 0.05);
+}
+
+.suggestion-card-icon {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 7px;
+  color: @primary;
+  background: alpha(@primary, 0.13);
+  border-radius: 11px;
+}
+
+.suggestion-card-title {
+  color: @cockpit_text;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.suggestion-card-action {
+  min-height: 32px;
+  padding: 0 11px;
+  color: @on_primary;
+  background: @primary;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.suggestion-card-dismiss {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: alpha(@cockpit_muted, 0.72);
+  background: transparent;
+}
+
+.routine-controls {
+  min-height: 34px;
+  padding: 3px 6px 3px 10px;
+  color: @cockpit_muted;
+  background: alpha(@cockpit_text, 0.035);
+  border-radius: 11px;
 }
 
 .section-eyebrow {
@@ -1374,6 +1645,18 @@ window.control-center-window scale:focus-visible {
   color: @cockpit_muted;
   background: alpha(@cockpit_item, 0.72);
   border-color: transparent;
+  animation: pending-pulse 760ms ease-in-out infinite;
+}
+
+.control-error-slot.is-success {
+  color: @success;
+  background: alpha(@success, 0.10);
+  border-color: alpha(@success, 0.24);
+  animation: success-pop 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.control-error-slot.has-error {
+  animation: failure-shake 420ms ease-out both;
 }
 
 .control-footer {
@@ -1410,4 +1693,163 @@ window.control-center-window scale:focus-visible {
 .control-footer:hover .control-footer-arrow {
   color: @cockpit_text;
   transform: translateX(2px);
+}
+
+window.notification-window {
+  color: @cockpit_text;
+  background: transparent;
+  font-family: Cantarell, "Symbols Nerd Font", sans-serif;
+  font-size: 14px;
+}
+
+.notification-card {
+  padding: 12px 14px;
+  color: @cockpit_text;
+  background: linear-gradient(
+    145deg,
+    alpha(@cockpit_panel, 0.98),
+    alpha(@cockpit_shell, 0.96)
+  );
+  border: 1px solid @cockpit_border;
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px alpha(@cockpit_text, 0.055),
+    0 10px 32px alpha(black, 0.32);
+}
+
+.notification-toast {
+  min-width: 380px;
+  animation: cockpit-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.notification-card.urgency-low {
+  border-color: alpha(@cockpit_muted, 0.26);
+}
+
+.notification-card.urgency-normal {
+  border-color: alpha(@primary, 0.44);
+}
+
+.notification-card.urgency-critical {
+  border-color: alpha(@error, 0.78);
+  box-shadow:
+    inset 0 0 0 1px alpha(@error, 0.16),
+    0 10px 34px alpha(@error, 0.2);
+  animation:
+    cockpit-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    critical-breathe 1800ms ease-in-out 560ms infinite;
+}
+
+.notification-app {
+  color: @cockpit_muted;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.notification-summary {
+  color: @cockpit_text;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.notification-body {
+  color: alpha(@cockpit_text, 0.82);
+  line-height: 1.24;
+}
+
+.notification-image {
+  border-radius: 13px;
+  background: alpha(black, 0.18);
+}
+
+.notification-dismiss {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: @cockpit_muted;
+  background: alpha(@cockpit_text, 0.06);
+  border: 0;
+  border-radius: 10px;
+}
+
+.notification-dismiss:hover {
+  color: @cockpit_text;
+  background: alpha(@error, 0.16);
+}
+
+.notification-actions {
+  margin-top: 2px;
+}
+
+.notification-action {
+  min-height: 30px;
+  padding: 2px 12px;
+  color: @primary;
+  background: alpha(@primary, 0.1);
+  border: 0;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.notification-action:hover {
+  color: @on_primary;
+  background: @primary;
+}
+
+.notification-card progressbar trough {
+  min-height: 7px;
+  background: alpha(@cockpit_text, 0.09);
+  border-radius: 5px;
+}
+
+.notification-card progressbar progress {
+  min-height: 7px;
+  background: @primary;
+  border-radius: 5px;
+}
+
+.notification-controls {
+  min-height: 38px;
+  padding: 6px 9px;
+  background: alpha(@cockpit_text, 0.055);
+  border-radius: 12px;
+}
+
+.notification-list {
+  padding: 2px 3px 10px;
+}
+
+.notification-empty {
+  color: @cockpit_muted;
+}
+
+button.system-module.notifications.has-unread {
+  color: @primary;
+  background: alpha(@primary, 0.13);
+  animation: state-pop 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+button.system-module.notifications.is-dnd {
+  color: @cockpit_muted;
+  background: alpha(@cockpit_muted, 0.08);
+}
+
+.context-chip.notification-preview {
+  background: linear-gradient(
+    105deg,
+    alpha(@primary, 0.16),
+    alpha(@tertiary, 0.09)
+  );
+  border-color: alpha(@primary, 0.32);
+  animation: context-arrive 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-toast,
+  .notification-card.urgency-critical,
+  button.system-module.notifications.has-unread,
+  .context-chip.notification-preview {
+    animation: none;
+  }
 }

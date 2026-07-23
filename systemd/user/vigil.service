@@ -2,6 +2,7 @@
 Description=Vigil Wayland desktop cockpit
 After=graphical-session.target
 PartOf=graphical-session.target
+Conflicts=dunst.service
 
 [Service]
 Type=simple

@@ -19,6 +19,7 @@ full = [
   "network",
   "bluetooth_audio",
   "power",
+  "notifications",
   "clock",
 ]
 reduced = ["workspaces", "focused_title", "critical_warning", "clock"]
@@ -44,6 +45,28 @@ bluetooth_seconds = 8
 media_seconds = 8
 calendar_seconds = 30
 activity_seconds = 5
+
+[experience]
+motion = "bold"
+ambient_motion = "meaningful"
+suggestions = true
+
+[routines]
+enabled = true
+context = "rich"
+minimum_repetitions = 3
+retention_days = 30
+
+[notifications]
+enabled = true
+history_days = 7
+history_limit = 100
+visible_limit = 3
+dnd_queue_limit = 20
+preview_seconds = 8
+low_timeout_seconds = 10
+normal_timeout_seconds = 30
+sound = true
 
 [[command_activity.allowlist]]
 label = "Cargo build"

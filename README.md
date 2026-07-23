@@ -74,7 +74,9 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
 - **Luma launcher**: Press `Super+Space` in Hyprland, Niri, or bspwm to run `tools/launcher/target/release/Luma` directly. `Super+P` opens its password mode, and the Waybar logo/control-center launcher actions use the same release binary.
 - **Vigil**: Build it with `cargo build --manifest-path tools/bar/Cargo.toml
-  --release`, rerun `setup.sh`, then restart `vigil.service`.
+  --release`, rerun `setup.sh`, then restart `vigil.service`. Vigil owns the
+  desktop notification service while running; its systemd unit conflicts with
+  Dunst, which remains available as the rollback fallback.
 - **Session locking**: `scripts/session_lock.sh` is the shared entry point for keyboard shortcuts, the control center, and the power menu. It prefers `hyprlock` on Hyprland, otherwise falls back to the current logind session lock or a direct `hyprlock` invocation when available.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Codex self-improvement**: Hyprland, Niri, and bspwm startup now call `scripts/start_codex_self_improve_service.sh`, which imports the live session environment, ensures `codex-self-improve.service` is linked into `~/.config/systemd/user/`, and starts it. The service runs `scripts/codex_self_improve.sh` at most once per boot and no more than once per `CODEX_SELF_IMPROVE_COOLDOWN_HOURS` hours (24 by default), skips dirty worktrees, writes logs under `~/.local/state/codex-self-improve/`, and auto-commits successful changes with a `chore(self-improve): ...` message. Use `CODEX_SELF_IMPROVE_DISABLED=1` to turn it off, `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to keep successful changes uncommitted, or run `~/.dotfiles/scripts/codex_self_improve.sh --force` for a manual pass.
