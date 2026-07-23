@@ -16,7 +16,8 @@
       "Bash(awww kill)",
       "Bash(/home/robin/.dotfiles/scripts/awww_wallpaper_watcher.sh:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grim -o DP-5 /tmp/claude-1000/-home-robin--dotfiles-tools-bar/75dab5b3-ad1d-4741-9e5d-a39e73aa810c/scratchpad/after-ws.png)"
     ]
   }
 }
