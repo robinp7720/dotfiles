@@ -3,6 +3,7 @@ hypr/monitors.conf
 dunst/dunstrc
 colors.conf
 waybar/colors.css
+bar/colors.css
 colors.rasi
 hypr/colors.conf
 kitty/colors.conf
