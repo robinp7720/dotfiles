@@ -1758,6 +1758,30 @@ window.notification-window {
   line-height: 1.24;
 }
 
+.notification-main {
+  min-width: 0;
+}
+
+.notification-copy {
+  min-width: 0;
+}
+
+.notification-avatar-frame {
+  background: alpha(black, 0.18);
+  border: 1px solid alpha(@cockpit_text, 0.1);
+  border-radius: 14px;
+}
+
+.notification-avatar {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+.notification-toast .notification-avatar {
+  min-width: 48px;
+  min-height: 48px;
+}
+
 .notification-image {
   border-radius: 13px;
   background: alpha(black, 0.18);
