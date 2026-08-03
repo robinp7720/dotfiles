@@ -94,7 +94,9 @@ update_art() {
 
   case "$art_url" in
     file://*)
-      cp "${art_url#file://}" "$OUT" 2>/dev/null || rm -f "$OUT"
+      local art_path
+      art_path="$(decode_uri_path "${art_url#file://}")"
+      cp "$art_path" "$OUT" 2>/dev/null || rm -f "$OUT"
       ;;
     http://*|https://*)
       tmp=$(mktemp "$CACHE_DIR/artXXXX")
@@ -112,6 +114,28 @@ update_art() {
       fi
       ;;
   esac
+}
+
+decode_uri_path() {
+  local encoded="$1"
+  local decoded=""
+  local prefix=""
+
+  while [[ "$encoded" == *%* ]]; do
+    prefix="${encoded%%\%*}"
+    decoded+="$prefix"
+    encoded="${encoded#*\%}"
+
+    if [[ "$encoded" =~ ^([[:xdigit:]]{2})(.*)$ ]]; then
+      printf -v prefix '%b' "\\x${BASH_REMATCH[1]}"
+      decoded+="$prefix"
+      encoded="${BASH_REMATCH[2]}"
+    else
+      decoded+="%"
+    fi
+  done
+
+  printf '%s%s' "$decoded" "$encoded"
 }
 
 # Nothing to show
