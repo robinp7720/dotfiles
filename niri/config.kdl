@@ -340,6 +340,7 @@ layout {
 spawn-sh-at-startup "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
 spawn-sh-at-startup "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
 spawn-sh-at-startup "systemctl --user restart vigil.service"
+spawn-sh-at-startup "systemctl --user restart hypridle.service"
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
 // spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"
@@ -440,7 +441,7 @@ binds {
     Mod+B hotkey-overlay-title="Open Control Center" { spawn "~/.dotfiles/scripts/control_center.sh" "toggle"; }
     Mod+Space hotkey-overlay-title="Run Luma" { spawn "~/.dotfiles/tools/launcher/target/release/Luma"; }
     Mod+P hotkey-overlay-title="Passwords: Luma" { spawn "~/.dotfiles/tools/launcher/target/release/Luma" "--mode" "pass"; }
-    Super+L hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
+    Super+L allow-when-locked=true allow-inhibiting=false hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument. It's passed verbatim to `sh -c`.
@@ -454,6 +455,10 @@ binds {
     XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
     XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
     XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    XF86AudioPlay        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--toggle"; }
+    XF86AudioPause       allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--toggle"; }
+    XF86AudioPrev        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--previous"; }
+    XF86AudioNext        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--next"; }
 
     // Example brightness key mappings for brightnessctl.
     // You can use regular spawn with multiple arguments too (to avoid going through "sh"),

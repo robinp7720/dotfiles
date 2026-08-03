@@ -1,36 +1,57 @@
 #!/usr/bin/env bash
-# Lock the current session with compositor-aware fallbacks.
+# Lock the current Wayland session through the shared Hyprlock surface.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$SCRIPT_DIR/session_common.sh"
+HYPRLOCK_BIN="${HYPRLOCK_BIN-$(command -v hyprlock || true)}"
+SWAYLOCK_BIN="${SWAYLOCK_BIN-$(command -v swaylock || true)}"
+VIGIL_BIN="${VIGIL_BIN-$(command -v vigil || true)}"
+RENDER_CONFIG_BIN="${RENDER_CONFIG_BIN:-$SCRIPT_DIR/render_hyprlock_config.sh}"
+ALBUM_ART_UPDATE_BIN="${ALBUM_ART_UPDATE_BIN:-$SCRIPT_DIR/update_album_art.sh}"
+LEGACY_CONTROL_CENTER_BIN="${LEGACY_CONTROL_CENTER_BIN:-$SCRIPT_DIR/control_center.sh}"
+RUNTIME_CONFIG=""
 
-HYPRLOCK_BIN="${HYPRLOCK_BIN:-$(command -v hyprlock || true)}"
-
-run_hyprlock() {
-  if [[ -z "${HYPRLOCK_BIN:-}" ]]; then
-    return 1
-  fi
-
-  # Avoid stacking multiple lock screens if a lock is already active.
-  if pgrep -u "$UID" -x hyprlock >/dev/null 2>&1; then
-    return 0
-  fi
-
-  "$SCRIPT_DIR/update_album_art.sh"
-  exec "$HYPRLOCK_BIN" "$@"
+locker_running() {
+  pgrep -u "$(id -u)" -x hyprlock >/dev/null 2>&1 ||
+    pgrep -u "$(id -u)" -x swaylock >/dev/null 2>&1
 }
 
-if is_hyprland_session; then
-  run_hyprlock "$@" && exit 0
-fi
+close_transient_surfaces() {
+  if [[ -n "$VIGIL_BIN" ]]; then
+    "$VIGIL_BIN" control-center close >/dev/null 2>&1 || true
+  fi
 
-if lock_current_logind_session; then
+  "$LEGACY_CONTROL_CENTER_BIN" close >/dev/null 2>&1 || true
+}
+
+if locker_running; then
   exit 0
 fi
 
-run_hyprlock "$@" && exit 0
+close_transient_surfaces
+
+# Cached personal context must never delay acquisition of the security surface.
+"$ALBUM_ART_UPDATE_BIN" >/dev/null 2>&1 &
+
+if [[ -n "$HYPRLOCK_BIN" ]]; then
+  RUNTIME_CONFIG="$($RENDER_CONFIG_BIN 2>/dev/null || true)"
+  if [[ -z "$RUNTIME_CONFIG" ]]; then
+    RUNTIME_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hyprlock.conf"
+  fi
+
+  if "$HYPRLOCK_BIN" \
+    --config "$RUNTIME_CONFIG" \
+    --immediate-render \
+    --no-fade-in \
+    "$@"; then
+    exit 0
+  fi
+fi
+
+if [[ -n "$SWAYLOCK_BIN" ]]; then
+  exec "$SWAYLOCK_BIN" --daemonize
+fi
 
 printf 'No lock command is available for the current session.\n' >&2
 exit 1

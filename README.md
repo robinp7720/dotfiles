@@ -5,7 +5,7 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 ## Highlights
 - **Hyprland setup** with shared configuration, multi-monitor layouts (`hypr/monitor_layouts`), and scripts for switching between default, game, and external display modes. Cursor theme is enforced via env vars to avoid the Hypr logo pointer.
 - **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, `cairo-dock`, `nitrogen`, and `superpaper`.
-- **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Waybar, Kitty (with an automatic USR1 reload hook), Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello from a single template directory.
+- **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Hyprlock, Waybar, Kitty (with an automatic USR1 reload hook), Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello from a single template directory.
 - **Vigil desktop cockpit**: the native Wayland bar keeps urgent context visible,
   provides quick settings, and delegates deeper workflows to Luma. Its source is
   tracked as the `tools/bar` submodule.
@@ -18,7 +18,7 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 ## Requirements
 These dotfiles assume an Arch Linux (or derivative) system with the following core packages available:
 
-- Window managers and daemons: `hyprland`, `hypridle`, `hyprpaper`, `hyprsunset`, `bspwm`, `sxhkd`, `nitrogen`
+- Window managers and daemons: `hyprland`, `hypridle`, `hyprlock`, `hyprpaper`, `hyprsunset`, `bspwm`, `sxhkd`, `nitrogen`
 - Greeter: `greetd`, `nwg-hello`
 - Bars and launchers: `polybar`, `waybar`, `dunst`, `anyrun`, `eww`, `cairo-dock`
 - Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `playerctl`, `xclip`, `dmenu`, `dunstify`, `bluetoothctl`, `powerprofilesctl`, `pactl`
@@ -64,12 +64,15 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `bash tests/codex_self_improve_test.sh` – Exercises the Codex self-improvement wrapper with fake Codex binaries in temporary git repositories.
 - `bash tests/vigil_desktop_contract.sh` – Verifies Vigil’s setup, service,
   compositor, theme, and Luma integration contracts.
+- `bash tests/session_lock_test.sh` – Exercises focused-output lockscreen
+  rendering, shared lock fallback behavior, compositor DPMS routing, and the
+  privacy-bounded Vigil context formatter using isolated command doubles.
 
 ## Customization Notes
 - **Monitor naming**: Update `hypr/hyprland-config/desktop.conf` and the files under `hypr/monitor_layouts/` or `bspwm/modes/` if your outputs differ (`DP-5`, `DVI-D-2`, `HDMI-0`, etc.).
 - **Hyprland modes**: Run the scripts from `hypr/scripts/modes/` to swap monitor layouts (`default.sh`, `game.sh`, `game_external.sh`). Each overwrites `~/.config/hypr/monitors.conf`.
 - **BSPWM modes**: Trigger the scripts in `bspwm/modes/` (e.g. `all_monitors.sh`, `external_only.sh`) to adjust workspace assignments, padding, and Polybar/Nitrogen behavior.
-- **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Kitty, Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
+- **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Hyprlock, Kitty, Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
 - **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
 - **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
 - **Luma launcher**: Press `Super+Space` in Hyprland, Niri, or bspwm to run `tools/launcher/target/release/Luma` directly. `Super+P` opens its password mode, and the Waybar logo/control-center launcher actions use the same release binary.
@@ -77,7 +80,14 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
   --release`, rerun `setup.sh`, then restart `vigil.service`. Vigil owns the
   desktop notification service while running; its systemd unit conflicts with
   Dunst, which remains available as the rollback fallback.
-- **Session locking**: `scripts/session_lock.sh` is the shared entry point for keyboard shortcuts, the control center, and the power menu. It prefers `hyprlock` on Hyprland, otherwise falls back to the current logind session lock or a direct `hyprlock` invocation when available.
+- **Session locking**: `scripts/session_lock.sh` is the shared Hyprlock entry
+  point for Hyprland, Niri, Vigil, and Luma. It closes the control center,
+  renders the dashboard onto the currently focused output, and leaves the
+  other outputs in the ambient clock layout. The dashboard shows only
+  lock-safe context: the next event, active timer, media controls, network,
+  power, and unread-notification count; notification contents are never
+  exposed. `swaylock` is an optional emergency fallback. Hypridle owns the
+  lock-before-suspend handshake and waits for a session lock before sleep.
 - **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
 - **Codex self-improvement**: Hyprland, Niri, and bspwm startup now call `scripts/start_codex_self_improve_service.sh`, which imports the live session environment, ensures `codex-self-improve.service` is linked into `~/.config/systemd/user/`, and starts it. The service runs `scripts/codex_self_improve.sh` at most once per boot and no more than once per `CODEX_SELF_IMPROVE_COOLDOWN_HOURS` hours (24 by default), skips dirty worktrees, writes logs under `~/.local/state/codex-self-improve/`, and auto-commits successful changes with a `chore(self-improve): ...` message. Use `CODEX_SELF_IMPROVE_DISABLED=1` to turn it off, `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to keep successful changes uncommitted, or run `~/.dotfiles/scripts/codex_self_improve.sh --force` for a manual pass.
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.

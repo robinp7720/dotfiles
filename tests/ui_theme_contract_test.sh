@@ -56,6 +56,12 @@ assert_contains hypr/hyprland-config/base.conf \
   'layerrule = blur on, match:namespace waybar'
 assert_contains hypr/hyprland-config/base.conf \
   'layerrule = ignore_alpha 0.20, match:namespace waybar'
+assert_contains hypr/hyprlock.conf \
+  'source = ~/.config/hypr/hyprlock-colors.conf'
+assert_contains matugen/config.toml \
+  "input_path = '~/.config/matugen/templates/hyprlock-colors.conf'"
+assert_contains matugen/templates/hyprlock-colors.conf \
+  '$lock_error = rgb({{colors.error.default.hex_stripped}})'
 
 assert_contains matugen/templates/luma.css \
   'font-family: "Cantarell", sans-serif;'
@@ -65,10 +71,20 @@ assert_contains eww/eww.scss \
   'font-family: "Cantarell", sans-serif;'
 assert_contains matugen/templates/dunstrc \
   'font = Cantarell 11'
-assert_count hypr/hyprlock.conf 5 \
+assert_count hypr/hyprlock.conf 11 \
   'font_family = Cantarell'
 assert_contains hypr/hyprlock.conf \
   'font_family = Cantarell ExtraBold'
+assert_count hypr/hyprlock.conf 11 \
+  'monitor = # @dashboard-monitor@'
+assert_not_contains hypr/hyprlock.conf \
+  'shape {'
+assert_contains hypr/hyprlock.conf \
+  'text = cmd[update:1000] ~/.dotfiles/scripts/lockscreen_context.sh timer'
+assert_contains hypr/hyprlock.conf \
+  'text = cmd[update:5000] ~/.dotfiles/scripts/lockscreen_context.sh summary'
+assert_contains hypr/hyprlock.conf \
+  'onclick = ~/.dotfiles/scripts/now_playing.sh --toggle'
 assert_contains matugen/templates/greetd.css \
   'font-family: "Cantarell", sans-serif;'
 assert_contains matugen/UI_STYLE.md \
