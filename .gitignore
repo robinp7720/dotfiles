@@ -4,6 +4,7 @@ dunst/dunstrc
 colors.conf
 waybar/colors.css
 bar/colors.css
+tv-mode/colors.css
 colors.rasi
 hypr/colors.conf
 hypr/hyprlock-colors.conf

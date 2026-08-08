@@ -1,0 +1,116 @@
+@define-color tv_background #10140f;
+@define-color tv_surface #1c211b;
+@define-color tv_surface_bright #30362e;
+@define-color tv_text #f4f7ef;
+@define-color tv_muted #b8c2b4;
+@define-color primary #a2d399;
+@define-color on_primary #0b390f;
+@define-color secondary #baccb3;
+@define-color tertiary #bcebf0;
+@define-color error #ffb4ab;
+
+.tv-shell,
+.tv-root {
+  background: radial-gradient(circle at 20% 20%, alpha(@primary, 0.18), transparent 38%),
+              radial-gradient(circle at 86% 80%, alpha(@tertiary, 0.14), transparent 42%),
+              @tv_background;
+  color: @tv_text;
+  font-family: "Inter", "Noto Sans", sans-serif;
+}
+
+.tv-eyebrow {
+  color: @primary;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.tv-title {
+  color: @tv_text;
+  font-size: 52px;
+  font-weight: 900;
+}
+
+.tv-clock {
+  color: @tv_text;
+  font-size: 46px;
+  font-weight: 800;
+}
+
+button.hero,
+button.utility {
+  color: @tv_text;
+  background: alpha(@tv_surface, 0.94);
+  border: 3px solid alpha(@tv_text, 0.10);
+  border-radius: 28px;
+  box-shadow: 0 18px 40px alpha(black, 0.30);
+  transition: 180ms ease;
+}
+
+button.hero {
+  min-height: 330px;
+  min-width: 560px;
+  padding: 44px;
+}
+
+button.utility {
+  min-height: 130px;
+  min-width: 280px;
+  padding: 24px 28px;
+}
+
+button.steam {
+  background: linear-gradient(135deg, alpha(#17345b, 0.98), alpha(#101d35, 0.98));
+}
+
+button.jellyfin {
+  background: linear-gradient(135deg, alpha(#5a2e91, 0.98), alpha(#20113d, 0.98));
+}
+
+button.exit {
+  background: alpha(@primary, 0.12);
+}
+
+button.danger {
+  color: @error;
+}
+
+button.hero:focus,
+button.utility:focus {
+  color: @tv_text;
+  border-color: @primary;
+  box-shadow: 0 0 0 6px alpha(@primary, 0.28), 0 26px 56px alpha(black, 0.42);
+  transform: scale(1.035);
+}
+
+.tile-icon {
+  font-family: "Symbols Nerd Font", "Symbols Nerd Font Mono";
+  font-size: 58px;
+  color: @primary;
+}
+
+.hero .tile-title {
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.utility .tile-title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.tile-subtitle,
+.tv-status,
+.tv-controller {
+  color: @tv_muted;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.reduced-motion button.hero,
+.reduced-motion button.utility,
+.reduced-motion button.hero:focus,
+.reduced-motion button.utility:focus {
+  transition: none;
+  transform: none;
+}

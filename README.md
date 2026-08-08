@@ -13,7 +13,8 @@ Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) d
 - **Codex self-improvement**: on login, a guarded user service can let Codex pick one small dotfiles improvement, apply it, auto-commit it, and send a desktop notification with the summary.
 - **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
 - **Native tools** under `tools/`: `session-manager` for hardware-aware display
-  profiles, plus the Vigil and Luma submodules.
+  profiles, `tv-mode` for controller-first couch sessions, plus the Vigil and
+  Luma submodules.
 
 ## Requirements
 These dotfiles assume an Arch Linux (or derivative) system with the following core packages available:
@@ -25,6 +26,8 @@ These dotfiles assume an Arch Linux (or derivative) system with the following co
 - Theming and helpers: `matugen`, `swww`/`awww` wallpaper tooling, `superpaper`, `sgpt` (for clipboard-to-GPT helpers)
 - Optional automation: `codex` (required only for the login-time self-improvement flow)
 - Optional Rust toolchain: required only if you want to rebuild binaries in `tools/`
+- TV mode: `libudev`, Steam, Jellyfin Desktop, PipeWire Pulse tools, and a
+  standard gamepad are required for the full couch workflow
 
 Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).
 
@@ -56,7 +59,7 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - `scripts/` – Utility scripts such as `now_playing.sh` (current track for Hyprlock), session locking, and Bluetooth/wallpaper helpers.
 - `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
 - `tools/` – Rust utilities, including the Vigil (`bar`) and Luma (`launcher`)
-  submodules.
+  submodules, session manager, and the controller-first TV mode shell.
 - `tools/self-improve/` – Prompt assets for the login-time Codex automation.
 - `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
 
@@ -93,6 +96,10 @@ Adjust the list as needed for your distro (some scripts expect Wayland- or X11-s
 - **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
 - **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
 - **Session manager**: Build `tools/session-manager` if you want to save and reapply monitor profiles across X11, Hyprland, and Niri sessions.
+- **TV mode**: Build `tools/tv-mode` in release mode, rerun `setup.sh`, then
+  search for `tv` in Luma or press `Super+T`. It uses runtime Hyprland monitor
+  commands, so the tracked monitor configuration remains unchanged. See
+  `tools/tv-mode/README.md` for controls and recovery.
 
 ## License
 No explicit license has been provided. Treat the contents as personal reference unless you have permission to reuse them.

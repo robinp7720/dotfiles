@@ -1,0 +1,10 @@
+[Unit]
+Description=Controller-first TV session shell
+After=vigil.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/tv-mode run
+ExecStopPost=%h/.local/bin/tv-mode recover
+Restart=no
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin

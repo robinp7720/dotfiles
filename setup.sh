@@ -117,6 +117,7 @@ directories=(
   "nwg-hello"
   "greetd"
   "anyrun"
+  "tv-mode"
 )
 
 for dir in "${directories[@]}"; do
@@ -164,6 +165,14 @@ else
   warn "skipping Vigil binary link because tools/bar/target/release/vigil is missing"
 fi
 remove_managed_symlink "$HOME/.local/bin/cockpit-bar" "$DIR/tools/bar/target/release/cockpit-bar"
+
+if [[ -x "$DIR/tools/tv-mode/target/release/tv-mode" ]]; then
+  link_path "$DIR/tools/tv-mode/target/release/tv-mode" "$HOME/.local/bin/tv-mode"
+  echo "Linked $HOME/.local/bin/tv-mode -> $DIR/tools/tv-mode/target/release/tv-mode"
+else
+  remove_managed_symlink "$HOME/.local/bin/tv-mode" "$DIR/tools/tv-mode/target/release/tv-mode"
+  warn "skipping tv-mode binary link because tools/tv-mode/target/release/tv-mode is missing"
+fi
 
 remove_managed_symlink "$HOME/.local/bin/rofi" "$DIR/scripts/rofi_wrapper.sh"
 

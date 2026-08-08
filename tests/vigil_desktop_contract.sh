@@ -65,6 +65,7 @@ make_setup_fixture() {
     "$repo_root/systemd/user" \
     "$repo_root/tools/bar/target/release" \
     "$repo_root/tools/launcher/target/release" \
+    "$repo_root/tools/tv-mode/target/release" \
     "$repo_root/nwg-hello" \
     "$repo_root/hypr/hyprland-config" \
     "$repo_root/hypr/monitor_layouts" \
@@ -84,7 +85,7 @@ make_setup_fixture() {
   chmod +x "$repo_root/tools/launcher/target/release/Luma"
 
   local dir
-  for dir in bspwm cairo-dock dunst hypr kitty matugen eww niri nvim polybar sxhkd waybar nwg-hello greetd anyrun bar; do
+  for dir in bspwm cairo-dock dunst hypr kitty matugen eww niri nvim polybar sxhkd waybar nwg-hello greetd anyrun bar tv-mode; do
     mkdir -p "$repo_root/$dir"
   done
 }
@@ -263,6 +264,8 @@ require_fixed 'ControlRequest::ContextExecute' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::ControlCenterOpen' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::ControlCenterClose' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::LockscreenGet' "tools/bar/src/ui/mod.rs"
+require_fixed 'ControlRequest::PresentationGet' "tools/bar/src/ui/mod.rs"
+require_fixed 'ControlRequest::PresentationSet' "tools/bar/src/ui/mod.rs"
 require_fixed 'lockscreen_snapshot(runtime.store.snapshot())' "tools/bar/src/ui/mod.rs"
 require_fixed 'intent_for_context_action(runtime.store.snapshot(), action)' "tools/bar/src/ui/mod.rs"
 require_fixed '"--context"' "tools/bar/src/actions.rs"

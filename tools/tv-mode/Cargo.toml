@@ -1,0 +1,20 @@
+[package]
+name = "tv-mode"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.54", features = ["derive"] }
+dirs = "6.0.0"
+gilrs = "0.11.1"
+gtk4 = { version = "0.10.1", features = ["v4_20"] }
+gtk4-layer-shell = "0.7.1"
+libc = "0.2.177"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+toml = "0.9.11"
+vigil = { path = "../bar" }
+
+[dev-dependencies]
+tempfile = "3.24.0"
