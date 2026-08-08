@@ -7,7 +7,9 @@ Conflicts=dunst.service
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/vigil
-Restart=on-failure
+# A compositor can report no usable outputs during early session startup,
+# causing Vigil to exit cleanly before its layer windows are created.
+Restart=always
 RestartSec=2
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
 Environment=XDG_CONFIG_HOME=%h/.config
