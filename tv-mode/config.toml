@@ -16,9 +16,9 @@ tv_sink = "alsa_output.pci-0000_06_00.1.hdmi-stereo"
 program = "steam"
 args = ["steam://open/bigpicture"]
 
-[apps.jellyfin]
-program = "/home/robin/.local/bin/jellyfin-desktop"
-args = ["--fullscreen", "--tv"]
+[apps.kodi]
+program = "/usr/bin/kodi"
+args = ["-fs", "--windowing=wayland"]
 
 [power]
 home = "balanced"

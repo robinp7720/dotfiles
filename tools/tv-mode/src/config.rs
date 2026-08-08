@@ -34,7 +34,7 @@ pub struct AudioConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct AppCommands {
     pub steam: CommandSpec,
-    pub jellyfin: CommandSpec,
+    pub kodi: CommandSpec,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -99,7 +99,7 @@ impl Config {
             ("TV audio profile", &self.audio.tv_profile),
             ("TV audio sink", &self.audio.tv_sink),
             ("Steam program", &self.apps.steam.program),
-            ("Jellyfin program", &self.apps.jellyfin.program),
+            ("Kodi program", &self.apps.kodi.program),
             ("home power profile", &self.power.home),
             ("gaming power profile", &self.power.gaming),
             ("media power profile", &self.power.media),
@@ -169,9 +169,9 @@ mod tests {
                     program: "steam".to_string(),
                     args: vec!["steam://open/bigpicture".to_string()],
                 },
-                jellyfin: CommandSpec {
-                    program: "jellyfin-desktop".to_string(),
-                    args: vec!["--fullscreen".to_string(), "--tv".to_string()],
+                kodi: CommandSpec {
+                    program: "kodi".to_string(),
+                    args: vec!["-fs".to_string(), "--windowing=wayland".to_string()],
                 },
             },
             power: PowerProfiles::default(),

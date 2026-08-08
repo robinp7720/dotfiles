@@ -26,7 +26,7 @@ These dotfiles assume an Arch Linux (or derivative) system with the following co
 - Theming and helpers: `matugen`, `swww`/`awww` wallpaper tooling, `superpaper`, `sgpt` (for clipboard-to-GPT helpers)
 - Optional automation: `codex` (required only for the login-time self-improvement flow)
 - Optional Rust toolchain: required only if you want to rebuild binaries in `tools/`
-- TV mode: `libudev`, Steam, Jellyfin Desktop, PipeWire Pulse tools, and a
+- TV mode: `libudev`, Steam, Kodi, PipeWire Pulse tools, and a
   standard gamepad are required for the full couch workflow
 
 Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).

@@ -24,13 +24,13 @@ use crate::session::{Profile, Session};
 
 const POWER_HOLD: Duration = Duration::from_secs(2);
 const GUIDE_HOLD: Duration = Duration::from_millis(1500);
-const APP_START_GRACE: Duration = Duration::from_secs(15);
-const APP_EXIT_STABLE: Duration = Duration::from_secs(2);
+const APP_START_GRACE: Duration = Duration::from_secs(30);
+const APP_EXIT_STABLE: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AppKind {
     Steam,
-    Jellyfin,
+    Kodi,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,7 +57,7 @@ enum UiEvent {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Tile {
     Steam,
-    Jellyfin,
+    Kodi,
     Sleep,
     Shutdown,
     Exit,
@@ -66,7 +66,7 @@ enum Tile {
 impl Tile {
     const ALL: [Self; 5] = [
         Self::Steam,
-        Self::Jellyfin,
+        Self::Kodi,
         Self::Sleep,
         Self::Shutdown,
         Self::Exit,
@@ -205,7 +205,7 @@ fn build_ui(
     hero.set_valign(gtk::Align::Center);
 
     let steam = tile_button("", "Steam", "Big Picture • 1080p 120 Hz", "hero steam");
-    let jellyfin = tile_button("󰚺", "Jellyfin", "TV interface • 4K 60 Hz", "hero jellyfin");
+    let kodi = tile_button("󰟴", "Kodi", "Media center • 4K 60 Hz", "hero kodi");
     let sleep = tile_button("󰒲", "Sleep", "Hold to lock and suspend", "utility");
     let shutdown = tile_button("󰐥", "Shut down", "Hold to power off", "utility danger");
     let exit = tile_button(
@@ -215,7 +215,7 @@ fn build_ui(
         "utility exit",
     );
     hero.attach(&steam, 0, 0, 1, 1);
-    hero.attach(&jellyfin, 1, 0, 1, 1);
+    hero.attach(&kodi, 1, 0, 1, 1);
     hero.attach(&sleep, 0, 1, 1, 1);
     hero.attach(&shutdown, 1, 1, 1, 1);
     hero.attach(&exit, 2, 1, 1, 1);
@@ -234,7 +234,7 @@ fn build_ui(
     root.append(&footer);
     window.set_child(Some(&root));
 
-    let buttons = vec![steam, jellyfin, sleep, shutdown, exit];
+    let buttons = vec![steam, kodi, sleep, shutdown, exit];
     let state = Rc::new(UiState {
         app: app.clone(),
         window,
@@ -396,7 +396,7 @@ fn handle_event(state: &Rc<UiState>, event: UiEvent) {
 fn activate_tile(state: &Rc<UiState>, tile: Tile) {
     match tile {
         Tile::Steam => launch_app(state, AppKind::Steam),
-        Tile::Jellyfin => launch_app(state, AppKind::Jellyfin),
+        Tile::Kodi => launch_app(state, AppKind::Kodi),
         Tile::Exit => request_exit(state),
         Tile::Sleep | Tile::Shutdown => state
             .status
@@ -422,10 +422,10 @@ fn launch_app(state: &Rc<UiState>, kind: AppKind) {
                 session.config().apps.steam.clone(),
                 "Steam • 1080p 120 Hz • performance",
             ),
-            AppKind::Jellyfin => (
+            AppKind::Kodi => (
                 Profile::Media,
-                session.config().apps.jellyfin.clone(),
-                "Jellyfin • 4K 60 Hz • balanced",
+                session.config().apps.kodi.clone(),
+                "Kodi • 4K 60 Hz • balanced",
             ),
         };
         if let Err(error) = session.apply_profile(profile) {
@@ -442,7 +442,7 @@ fn launch_app(state: &Rc<UiState>, kind: AppKind) {
             state.status.set_text(label);
             state.window.set_visible(false);
             match kind {
-                AppKind::Jellyfin => spawn_child_waiter(child, kind, state.events.clone()),
+                AppKind::Kodi => spawn_child_waiter(child, kind, state.events.clone()),
                 AppKind::Steam => {
                     drop(child);
                     spawn_steam_monitor(workspace, state.events.clone());
@@ -459,7 +459,7 @@ fn launch_app(state: &Rc<UiState>, kind: AppKind) {
 }
 
 fn request_exit(state: &Rc<UiState>) {
-    if state.active_app.get().is_some() || fullscreen_on_tv_workspace(state) {
+    if state.active_app.get().is_some() || app_on_tv_workspace(state) {
         state
             .status
             .set_text("Exit is locked while an entertainment app is active");
@@ -533,38 +533,61 @@ fn spawn_child_waiter(mut child: Child, kind: AppKind, sender: Sender<UiEvent>) 
 fn spawn_steam_monitor(workspace: String, sender: Sender<UiEvent>) {
     thread::spawn(move || {
         let started = Instant::now();
-        let mut seen_fullscreen = false;
+        let mut seen_client = false;
         let mut absent_since: Option<Instant> = None;
         loop {
-            let fullscreen = fullscreen_clients_on_workspace(&workspace).unwrap_or(false);
-            if fullscreen {
-                seen_fullscreen = true;
-                absent_since = None;
-            } else if seen_fullscreen {
-                let since = absent_since.get_or_insert_with(Instant::now);
-                if since.elapsed() >= APP_EXIT_STABLE {
+            match steam_client_state(&workspace) {
+                Ok(state) if state.session_active => {
+                    for address in state.games_needing_fullscreen {
+                        if let Err(error) = enforce_game_fullscreen(&address) {
+                            eprintln!("failed to keep Steam game {address} fullscreen: {error:#}");
+                        }
+                    }
+                    seen_client = true;
+                    absent_since = None;
+                }
+                Ok(_) if seen_client => {
+                    let since = absent_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= APP_EXIT_STABLE {
+                        let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
+                        return;
+                    }
+                }
+                Ok(_) if started.elapsed() >= APP_START_GRACE => {
+                    let _ = sender.send(UiEvent::Error(
+                        "Steam did not open a window on the TV workspace".to_string(),
+                    ));
                     let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
                     return;
                 }
-            } else if started.elapsed() >= APP_START_GRACE {
-                let _ = sender.send(UiEvent::Error(
-                    "Steam did not open a fullscreen window".to_string(),
-                ));
-                let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
-                return;
+                Ok(_) => {}
+                Err(_) => {
+                    // A compositor query failure is not evidence that Steam exited.
+                    absent_since = None;
+                }
             }
             thread::sleep(Duration::from_millis(250));
         }
     });
 }
 
-fn fullscreen_on_tv_workspace(state: &UiState) -> bool {
+fn app_on_tv_workspace(state: &UiState) -> bool {
     state.session.borrow().as_ref().is_some_and(|session| {
-        fullscreen_clients_on_workspace(&session.config().workspace).unwrap_or(false)
+        mapped_clients_on_workspace(&session.config().workspace).unwrap_or(true)
     })
 }
 
-fn fullscreen_clients_on_workspace(workspace: &str) -> Result<bool> {
+fn mapped_clients_on_workspace(workspace: &str) -> Result<bool> {
+    let clients = hyprland_clients()?;
+    Ok(has_mapped_client_on_workspace(&clients, workspace))
+}
+
+fn steam_client_state(workspace: &str) -> Result<SteamClientState> {
+    let clients = hyprland_clients()?;
+    Ok(steam_client_state_from_json(&clients, workspace))
+}
+
+fn hyprland_clients() -> Result<Value> {
     let output = Command::new("hyprctl")
         .args(["clients", "-j"])
         .output()
@@ -572,8 +595,11 @@ fn fullscreen_clients_on_workspace(workspace: &str) -> Result<bool> {
     if !output.status.success() {
         bail!("hyprctl clients failed");
     }
-    let clients: Value = serde_json::from_slice(&output.stdout)?;
-    Ok(clients.as_array().is_some_and(|clients| {
+    serde_json::from_slice(&output.stdout).context("failed to parse Hyprland clients")
+}
+
+fn has_mapped_client_on_workspace(clients: &Value, workspace: &str) -> bool {
+    clients.as_array().is_some_and(|clients| {
         clients.iter().any(|client| {
             client
                 .get("workspace")
@@ -581,12 +607,75 @@ fn fullscreen_clients_on_workspace(workspace: &str) -> Result<bool> {
                 .and_then(Value::as_str)
                 == Some(workspace)
                 && client
-                    .get("fullscreen")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0)
-                    != 0
+                    .get("mapped")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true)
         })
-    }))
+    })
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+struct SteamClientState {
+    session_active: bool,
+    games_needing_fullscreen: Vec<String>,
+}
+
+fn steam_client_state_from_json(clients: &Value, workspace: &str) -> SteamClientState {
+    let mut state = SteamClientState::default();
+    let Some(clients) = clients.as_array() else {
+        return state;
+    };
+    for client in clients {
+        if !client
+            .get("mapped")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        {
+            continue;
+        }
+        let on_tv_workspace = client
+            .get("workspace")
+            .and_then(|workspace| workspace.get("name"))
+            .and_then(Value::as_str)
+            == Some(workspace);
+        let class = client
+            .get("class")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let initial_class = client
+            .get("initialClass")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let is_game = class.starts_with("steam_app_") || initial_class.starts_with("steam_app_");
+        state.session_active |= on_tv_workspace || is_game;
+        if is_game
+            && (client.get("fullscreen").and_then(Value::as_i64) != Some(2)
+                || client.get("fullscreenClient").and_then(Value::as_i64) != Some(2))
+            && let Some(address) = client.get("address").and_then(Value::as_str)
+        {
+            state.games_needing_fullscreen.push(address.to_string());
+        }
+    }
+    state
+}
+
+fn enforce_game_fullscreen(address: &str) -> Result<()> {
+    hyprland_dispatch("focuswindow", &format!("address:{address}"))?;
+    hyprland_dispatch("fullscreenstate", "2 2")
+}
+
+fn hyprland_dispatch(dispatcher: &str, argument: &str) -> Result<()> {
+    let output = Command::new("hyprctl")
+        .args(["dispatch", dispatcher, argument])
+        .output()
+        .with_context(|| format!("failed to dispatch Hyprland {dispatcher}"))?;
+    if !output.status.success() {
+        bail!(
+            "hyprctl dispatch {dispatcher} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
 }
 
 fn navigate(state: &UiState, direction: NavDirection) {
@@ -787,5 +876,56 @@ mod tests {
         assert!(Tile::Sleep.is_power());
         assert!(Tile::Shutdown.is_power());
         assert!(!Tile::Exit.is_power());
+    }
+
+    #[test]
+    fn borderless_game_on_another_workspace_stays_active_and_requests_fullscreen() {
+        let clients = serde_json::json!([{
+            "address": "0xgame",
+            "class": "steam_app_252950",
+            "initialClass": "steam_app_252950",
+            "workspace": { "name": "3" },
+            "mapped": true,
+            "fullscreen": 1,
+            "fullscreenClient": 1
+        }]);
+
+        assert_eq!(
+            steam_client_state_from_json(&clients, "tv"),
+            SteamClientState {
+                session_active: true,
+                games_needing_fullscreen: vec!["0xgame".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn true_fullscreen_game_needs_no_correction() {
+        let clients = serde_json::json!([{
+            "address": "0xgame",
+            "class": "steam_app_252950",
+            "workspace": { "name": "3" },
+            "mapped": true,
+            "fullscreen": 2,
+            "fullscreenClient": 2
+        }]);
+
+        assert_eq!(
+            steam_client_state_from_json(&clients, "tv"),
+            SteamClientState {
+                session_active: true,
+                games_needing_fullscreen: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn unmapped_or_other_workspace_clients_do_not_keep_session_active() {
+        let clients = serde_json::json!([
+            { "workspace": { "name": "tv" }, "mapped": false },
+            { "workspace": { "name": "3" }, "mapped": true }
+        ]);
+
+        assert!(!has_mapped_client_on_workspace(&clients, "tv"));
     }
 }

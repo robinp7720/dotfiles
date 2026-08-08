@@ -2,7 +2,7 @@
 
 `tv-mode` is a controller-first Hyprland session for the LG TV on
 `HDMI-A-2`. It temporarily makes the TV the only active output, switches HDMI
-audio, and presents Steam and Jellyfin from a fullscreen couch interface.
+audio, and presents Steam and Kodi from a fullscreen couch interface.
 
 ## Build and install
 
@@ -23,13 +23,13 @@ tv-mode start
 ```
 
 The home screen uses 4K60. Steam switches to 1080p120 and the performance
-power profile; Jellyfin uses 4K60 and balanced. D-pad or the left stick moves
+power profile; Kodi uses 4K60 and balanced. D-pad or the left stick moves
 focus, A selects, B returns to the active app, and holding Guide for 1.5
 seconds reopens the home screen. Arrow keys, Enter, and Escape are available
 as keyboard fallbacks.
 
 Sleep and shutdown require a two-second hold. Sleep uses the shared lock flow
-before suspending. Exit remains unavailable while Jellyfin or a fullscreen
+before suspending. Exit remains unavailable while Kodi or a fullscreen
 Steam/game window is active.
 
 ## Recovery
