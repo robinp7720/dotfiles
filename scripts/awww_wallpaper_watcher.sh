@@ -10,6 +10,7 @@ DEFAULT_WALLPAPER_FALLBACK="${AWWW_DEFAULT_WALLPAPER:-$HOME/.wallpaper.png}"
 THEME_WALLPAPER_OVERRIDE="${AWWW_THEME_WALLPAPER:-}"
 RUN_MATUGEN=true
 WATCH=true
+MATUGEN_PREFER="${AWWW_MATUGEN_PREFER:-saturation}"
 WAYLAND_DISPLAY_NAME="${WAYLAND_DISPLAY:-wayland-0}"
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/awww-wallpaper-${WAYLAND_DISPLAY_NAME}.lock"
 
@@ -139,22 +140,7 @@ resolve_wallpapers() {
   fi
 }
 
-ensure_daemon() {
-  if awww query >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local runtime_dir
-  local wayland_display
-  runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-  wayland_display="${WAYLAND_DISPLAY:-wayland-0}"
-  rm -f \
-    "$runtime_dir/${wayland_display}-awww-daemon.sock" \
-    "$runtime_dir/${wayland_display}-awww-daemon.socket" \
-    "$runtime_dir/${wayland_display}-awww-daemon..sock" \
-    "$runtime_dir/${wayland_display}-awww-daemon..socket"
-  awww-daemon -q >"$runtime_dir/awww-daemon-${wayland_display}.log" 2>&1 &
-
+wait_for_daemon() {
   local i
   for i in {1..20}; do
     if awww query >/dev/null 2>&1; then
@@ -167,7 +153,7 @@ ensure_daemon() {
 }
 
 apply_wallpaper() {
-  if ! ensure_daemon; then
+  if ! wait_for_daemon; then
     return 1
   fi
 
@@ -207,7 +193,12 @@ run_matugen() {
     return 0
   fi
 
-  matugen image "$THEME_WALLPAPER" -c "$HOME/.config/matugen/config.toml" >/dev/null 2>&1 || true
+  if ! matugen image "$THEME_WALLPAPER" \
+    --prefer "$MATUGEN_PREFER" \
+    -c "$HOME/.config/matugen/config.toml" \
+    >/dev/null; then
+    printf 'Matugen theme generation failed for %s\n' "$THEME_WALLPAPER" >&2
+  fi
 }
 
 get_niri_outputs_sorted() {
@@ -338,8 +329,9 @@ watch_hypr() {
 load_config
 resolve_wallpapers
 
-if ! ensure_daemon; then
-  exit 0
+if ! wait_for_daemon; then
+  printf 'awww daemon is unavailable on %s\n' "$WAYLAND_DISPLAY_NAME" >&2
+  exit 1
 fi
 
 apply_wallpaper

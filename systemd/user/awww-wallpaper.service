@@ -1,0 +1,15 @@
+[Unit]
+Description=Apply wallpapers and follow output changes
+After=awww-daemon.service
+Requires=awww-daemon.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.dotfiles/scripts/awww_wallpaper_watcher.sh --watch
+Restart=on-failure
+RestartSec=2
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+
+[Install]
+WantedBy=graphical-session.target

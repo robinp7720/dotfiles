@@ -1,0 +1,13 @@
+[Unit]
+Description=Wayland wallpaper daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/awww-daemon -q
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
