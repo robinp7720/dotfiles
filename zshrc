@@ -51,8 +51,6 @@ if [[ -r "$HOME/.config/vigil/shell-integration.zsh" ]]; then
   source "$HOME/.config/vigil/shell-integration.zsh"
 fi
 
-#source /opt/esp-idf/export.sh
-
 if [[ -n $VIRTUAL_ENV && -e "${VIRTUAL_ENV}/bin/activate" ]]; then
   source "${VIRTUAL_ENV}/bin/activate"
 fi
@@ -76,14 +74,6 @@ alias yay=$AURHELPER
 alias rrm="/usr/bin/rm"
 alias rm='trash'
 
-# Aliases to navigate to common directories
-alias uni="cd $UNIVERSITY"
-alias moodle="cd $HOME/Documents/MoodleSync/21ws"
-
-alias malo="cd $UNIVERSITY/22ss/Malo/Hausaufgaben"
-alias datkom="cd $UNIVERSITY/Datkom/"
-alias dsal="cd $UNIVERSITY/Daten\ Strukturen/4\ Semester/"
-
 # libqcalculate is a far better calculator 
 alias calc=qalc
 
@@ -101,72 +91,44 @@ alias dig='dog'
 alias df='duf'
 alias du='dust'
 
-#alias ssh="kitten ssh"
-
-# Use eza instead of ls on native host only
-
-    # eza commands
-    # general use
-    alias ls='eza -lbF --git --icons --header'                                                # list, size, type, git
-    alias ll='eza -lbGF --git --icons --header'                                             # long list
-    alias llm='eza -lbGd --git --sort=modified --icons --header'                            # long list, modified date sort
-    alias la='eza -lbhHigUmuSa --time-style=long-iso --git --color-scale --icons'  # all list
-    alias lx='eza -lbhHigUmuSa@ --time-style=long-iso --git --color-scale --icons' # all + extended list
+# eza commands
+alias ls='eza -lbF --git --icons --header'
+alias ll='eza -lbGF --git --icons --header'
+alias llm='eza -lbGd --git --sort=modified --icons --header'
+alias la='eza -lbhHigUmuSa --time-style=long-iso --git --color-scale --icons'
+alias lx='eza -lbhHigUmuSa@ --time-style=long-iso --git --color-scale --icons'
 
 # Setup the path
 # ---------------------
-export PATH=$HOME/.scripts:$PATH
-export PATH=/usr/local/bin:$PATH
-export PATH=$HOME/.gem/ruby/3.0.0/bin:$PATH
-export PATH=$HOME/.cargo/bin:$PATH
-export PATH=$HOME/.local/bin:$PATH
+typeset -U path PATH
+path=(
+  "$HOME/.local/bin"
+  "$HOME/.cargo/bin"
+  "/usr/local/bin"
+  "$HOME/.scripts"
+  $path
+)
 if command -v go >/dev/null 2>&1; then
-    __go_bin="$(go env GOBIN 2>/dev/null)"
-    __go_path="$(go env GOPATH 2>/dev/null)"
-    if [[ -n "$__go_bin" ]]; then
-        export PATH="$PATH:$__go_bin"
-    fi
-    if [[ -n "$__go_path" ]]; then
-        export PATH="$PATH:$__go_path/bin"
-    fi
-    unset __go_bin __go_path
+  __go_bin="$(go env GOBIN 2>/dev/null)"
+  __go_path="$(go env GOPATH 2>/dev/null)"
+  if [[ -n "$__go_bin" ]]; then
+    path+=("$__go_bin")
+  fi
+  if [[ -n "$__go_path" ]]; then
+    path+=("$__go_path/bin")
+  fi
+  unset __go_bin __go_path
 fi
-export PATH="/opt/xpack-arm-none-eabi-gcc-12.2.1-1.2/bin:$PATH"
 
 # Setup android dev tools
 export ANDROID_SDK_ROOT=/opt/android-sdk
 
-export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
-export PATH=$PATH:$ANDROID_SDK_ROOT/emulator
+path+=("$ANDROID_SDK_ROOT/tools/bin" "$ANDROID_SDK_ROOT/emulator")
 
 # Configs for FZF
 # ---------------------
 
 export FZF_CTRL_T_OPTS="--preview 'preview {}'"
-
-# Because my uni uses extremely outdated microchips for the PSP course
-# ---------------------
-initavr() {
-    export AVR="$HOME/.avr-toolchain"
-    export PATH=$AVR/bin:$PATH
-
-    export CPATH=$AVR/avr/include/
-
-    echo -ne "[\e[34mSUC\e[0m]"
-    echo ": Initialized avr toolchain."
-    avr-gcc --version
-}
-
-# Function to connect to the PCPOOL
-rdp() {
-    bspc config top_padding 0;
-    xfreerdp /u:yp302595 /p:$(pass Uni/RWTH | head -n1) /v:$1 /workarea;
-    bspc config top_padding 40;
-}
-
-ba() {
-    . ~/.scripts/start_ba_env.sh
-}
 
 # Show a nice greeting when opening a terminal
 # ---------------------
@@ -174,19 +136,6 @@ greeting() {
     printf "\e[91m"
     fortune stargate science startrek
     echo
-    #printf "\e[36m"
-    #figlet "Recent Moodle"
-    #printf "\e[37m"
-    #find ~/Documents/MoodleSync/22ss -type f -exec stat --format '%W %w %n' "{}" \; | sort -nr | cut -d ' ' -f2,6- | head -n 10 | sed 's/  (für Maschinenbauer u. Wirt-Ing. 1. Sem.)//g' | sed 's/ für Materialwissenschaftler und Informatiker//g'
-
-    #printf "\e[36m"
-    #figlet "TODO:"
-    #printf "\e[37m"
-    #task next
 }
 
 greeting
-
-
-# Added by Antigravity CLI installer
-export PATH="/home/robin/.local/bin:$PATH"
