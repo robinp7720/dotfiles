@@ -33,10 +33,6 @@ is_niri_session() {
   [[ -n "${NIRI_SOCKET:-}" ]] || desktop_matches "niri"
 }
 
-is_bspwm_session() {
-  [[ -n "${BSPWM_SOCKET:-}" ]] || desktop_matches "bspwm"
-}
-
 current_logind_session_id() {
   local session_id=""
   local login_user="${USER:-$(id -un)}"

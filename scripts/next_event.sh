@@ -14,10 +14,6 @@ QUERY_TO=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --waybar)
-      OUTPUT_MODE="waybar"
-      shift
-      ;;
     --json)
       OUTPUT_MODE="json"
       shift
@@ -124,18 +120,13 @@ empty = bool(record.get("empty"))
 text = record.get("text") or no_event_text
 
 if not healthy or empty:
-    if mode == "waybar":
-        print(json.dumps({"text": "", "tooltip": "", "class": "hidden"}, separators=(",", ":")))
-    elif blank_when_empty:
+    if blank_when_empty:
         print("")
     else:
         print(no_event_text)
     raise SystemExit(0)
 
-if mode == "waybar":
-    print(json.dumps({"text": f"  {text}", "tooltip": text, "class": "has-event"}, separators=(",", ":")))
-else:
-    print(text)
+print(text)
 PY
   exit 0
 }

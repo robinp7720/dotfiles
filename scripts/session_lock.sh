@@ -9,7 +9,6 @@ SWAYLOCK_BIN="${SWAYLOCK_BIN-$(command -v swaylock || true)}"
 VIGIL_BIN="${VIGIL_BIN-$(command -v vigil || true)}"
 RENDER_CONFIG_BIN="${RENDER_CONFIG_BIN:-$SCRIPT_DIR/render_hyprlock_config.sh}"
 ALBUM_ART_UPDATE_BIN="${ALBUM_ART_UPDATE_BIN:-$SCRIPT_DIR/update_album_art.sh}"
-LEGACY_CONTROL_CENTER_BIN="${LEGACY_CONTROL_CENTER_BIN:-$SCRIPT_DIR/control_center.sh}"
 RUNTIME_CONFIG=""
 
 locker_running() {
@@ -21,8 +20,6 @@ close_transient_surfaces() {
   if [[ -n "$VIGIL_BIN" ]]; then
     "$VIGIL_BIN" control-center close >/dev/null 2>&1 || true
   fi
-
-  "$LEGACY_CONTROL_CENTER_BIN" close >/dev/null 2>&1 || true
 }
 
 if locker_running; then

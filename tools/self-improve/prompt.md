@@ -13,7 +13,7 @@ Constraints:
 - Work only inside this repository.
 - Do not use sudo, do not edit files outside the repo, and do not add new external package requirements.
 - Avoid destructive or high-risk changes, large refactors, or changes that would interrupt the current session.
-- Do not edit generated theme outputs such as `waybar/colors.css` or `polybar/colors.ini`; edit the source templates or code instead.
+- Do not edit generated theme outputs such as `bar/colors.css`; edit the Matugen source templates or code instead.
 - Prefer touching a small number of files.
 - Do not send notifications and do not create git commits; the wrapper handles that.
 

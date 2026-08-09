@@ -1,8 +1,6 @@
 hypr/hyprland.conf
 hypr/monitors.conf
-dunst/dunstrc
 colors.conf
-waybar/colors.css
 bar/colors.css
 tv-mode/colors.css
 colors.rasi
@@ -10,12 +8,7 @@ hypr/colors.conf
 hypr/hyprlock-colors.conf
 kitty/colors.conf
 rofi/colors.rasi
-eww/colors.scss
 niri/colors.kdl
-polybar/colors.ini
-cairo-dock/current_theme/cairo-dock.conf
-cairo-dock/current_theme/images/bg.svg
-cairo-dock/.cairo-dock-need-save
 
 # Local workspace metadata
 AGENTS.md

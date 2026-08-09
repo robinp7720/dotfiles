@@ -1,105 +1,101 @@
 # Robin's Dotfiles
 
-Personal configuration files for both Wayland (Hyprland, Niri) and X11 (bspwm) desktops. The repo bundles monitor layouts, status bars, launchers, terminal themes, helper scripts, and a small Rust tool for session-aware monitor profile switching.
+Personal configuration for a Wayland desktop built around Hyprland and Niri. The repository installs compositor configuration, a generated visual theme, lock and login surfaces, helper scripts, and three native tools: Vigil, Luma, and TV mode.
 
 ## Highlights
-- **Hyprland setup** with shared configuration, multi-monitor layouts (`hypr/monitor_layouts`), and scripts for switching between default, game, and external display modes. Cursor theme is enforced via env vars to avoid the Hypr logo pointer.
-- **BSPWM workflow** including focus automation, per-mode screenlayout scripts, and integration with `sxhkd`, `polybar`, `cairo-dock`, `nitrogen`, and `superpaper`.
-- **Dynamic theming via Matugen** that renders matched color palettes for Hyprland, Hyprlock, Waybar, Kitty (with an automatic USR1 reload hook), Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello from a single template directory.
-- **Vigil desktop cockpit**: the native Wayland bar keeps urgent context visible,
-  provides quick settings, and delegates deeper workflows to Luma. Its source is
-  tracked as the `tools/bar` submodule.
-- **Control center overlay**: Eww provides a toggleable quick-actions panel for calendar context, media, Bluetooth, power profile, and session actions across Hyprland and Niri.
-- **Codex self-improvement**: on login, a guarded user service can let Codex pick one small dotfiles improvement, apply it, auto-commit it, and send a desktop notification with the summary.
-- **Shell environment** built on Oh-My-Zsh with curated aliases (eza, bat, dust, devour, etc.), `fortune` greeting, and helper functions for toolchains.
-- **Native tools** under `tools/`: `session-manager` for hardware-aware display
-  profiles, `tv-mode` for controller-first couch sessions, plus the Vigil and
-  Luma submodules.
+
+- **Hyprland and Niri** share the same launch, lock, wallpaper, and cockpit workflows.
+- **Vigil** is the always-visible desktop cockpit and notification server. It provides workspaces, urgent context, quick settings, timers, media, notifications, and monitor-aware control-center placement.
+- **Luma** is the command palette for applications, files, windows, passwords, system controls, and Vigil handoffs.
+- **Dynamic Matugen themes** cover Vigil, Luma, Hyprland, Hyprlock, Niri, Kitty, TV mode, greetd, and nwg-hello.
+- **Focused-output locking** renders a privacy-bounded Hyprlock dashboard with calendar, timer, media, network, power, and notification-count context.
+- **Controller-first TV mode** temporarily moves the session to the TV and restores the previous monitor and service state afterwards.
 
 ## Requirements
-These dotfiles assume an Arch Linux (or derivative) system with the following core packages available:
 
-- Window managers and daemons: `hyprland`, `hypridle`, `hyprlock`, `hyprpaper`, `hyprsunset`, `bspwm`, `sxhkd`, `nitrogen`
-- Greeter: `greetd`, `nwg-hello`
-- Bars and launchers: `polybar`, `waybar`, `dunst`, `anyrun`, `eww`, `cairo-dock`
-- Terminals and utilities: `kitty`, `picom`, `redshift`, `thunar`, `mpd-notification`, `playerctl`, `xclip`, `dmenu`, `dunstify`, `bluetoothctl`, `powerprofilesctl`, `pactl`
-- Theming and helpers: `matugen`, `swww`/`awww` wallpaper tooling, `superpaper`, `sgpt` (for clipboard-to-GPT helpers)
-- Optional automation: `codex` (required only for the login-time self-improvement flow)
-- Optional Rust toolchain: required only if you want to rebuild binaries in `tools/`
-- TV mode: `libudev`, Steam, Kodi, PipeWire Pulse tools, and a
-  standard gamepad are required for the full couch workflow
+The configuration targets Arch Linux or a derivative. Core runtime dependencies are:
 
-Adjust the list as needed for your distro (some scripts expect Wayland- or X11-specific binaries, or NVIDIA monitor names such as `DP-5` / `DVI-D-2`).
+- Desktop: `hyprland`, `niri`, `hypridle`, `hyprlock`, `hyprsunset`, `kitty`
+- Login: `greetd`, `nwg-hello`
+- Desktop services: `pipewire`, `wireplumber`, `networkmanager`, `bluez`, `power-profiles-daemon`, `polkit-gnome`
+- Helpers: `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`
+- Theming and wallpaper: `matugen`, `awww`
+- Builds: a Rust toolchain for Vigil, Luma, and TV mode
 
-## Getting Started
-1. **Clone the repo**
-   ```bash
-   git clone --recurse-submodules https://github.com/robinp7720/dotfiles.git ~/.dotfiles
-   cd ~/.dotfiles
-   ```
-   For an existing checkout, run `git submodule update --init --recursive`.
-2. **Back up existing config** – `setup.sh` replaces conflicting files or directories with timestamped backups before linking. Review anything already living under `~/.config` if you care about preserving it.
-3. **Run the linker**
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-   The script links `zshrc` to `~/.zshrc`, symlinks the configured directories into `~/.config/`, links user `systemd` units, and reloads the user daemon. If `sudo` is available and `/etc/{nwg-hello,greetd}` exist, it also installs the greetd + nwg-hello files and links CSS to Matugen’s cache.
-4. **Restart your session** or reload individual applications (e.g. `polybar`, `waybar`, `hyprland reload`) to pick up the new configuration.
+Optional integrations include `khal` or `gcalcli` for calendar context, `pass` for passwords, Steam and Kodi for TV mode, Spotify for Bluetooth auto-launch, and Codex for self-improvement automation.
 
-## Repo Layout
-- `hypr/` – Hyprland configuration split into `hyprland-config/`, monitor layouts, colors, idle/lock settings, and helper scripts.
-- `bspwm/` – Window manager config with per-mode scripts (`modes/`), helpers, and the main `bspwmrc`.
-- `polybar/` – Shared colors, modules, and scripts (including the clipboard-to-GPT helper and update notifications).
-- `cairo-dock/` – Tracked Classic Dock Studio theme for the bspwm/Xorg session. Matugen generates the runtime dock config and background from `matugen/templates/`.
-- `waybar/` – Waybar configuration and CSS theme generated via Matugen, with launcher and power buttons wired to Luma.
-- `eww/` – Optional control-center and glance widgets, including the toggleable `control_center` panel plus agenda / next-event / now-playing surfaces.
-- `matugen/` – Template files and `config.toml` describing how colors propagate across Hyprland, Waybar, Kitty (auto-reloads via USR1), Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello.
-- `kitty/`, `dunst/` – Application-specific themes.
-- `scripts/` – Utility scripts such as `now_playing.sh` (current track for Hyprlock), session locking, and Bluetooth/wallpaper helpers.
-- `greetd/`, `nwg-hello/` – Login screen configuration; Matugen generates `greetd.css` into `/var/cache/matugen/`, setup links it into `/etc/nwg-hello`, and installs a shared `base.conf` there for Hypr parity.
-- `tools/` – Rust utilities, including the Vigil (`bar`) and Luma (`launcher`)
-  submodules, session manager, and the controller-first TV mode shell.
-- `tools/self-improve/` – Prompt assets for the login-time Codex automation.
-- `zshrc` – Oh-My-Zsh setup, aliases, toolchain initializers, and environment sourcing.
+## Installation
 
-## Testing
-- `bash tests/codex_self_improve_test.sh` – Exercises the Codex self-improvement wrapper with fake Codex binaries in temporary git repositories.
-- `bash tests/vigil_desktop_contract.sh` – Verifies Vigil’s setup, service,
-  compositor, theme, and Luma integration contracts.
-- `bash tests/session_lock_test.sh` – Exercises focused-output lockscreen
-  rendering, shared lock fallback behavior, compositor DPMS routing, and the
-  privacy-bounded Vigil context formatter using isolated command doubles.
+```bash
+git clone --recurse-submodules https://github.com/robinp7720/dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+cargo build --release --manifest-path tools/bar/Cargo.toml
+cargo build --release --manifest-path tools/launcher/Cargo.toml --bin Luma
+cargo build --release --manifest-path tools/tv-mode/Cargo.toml
+./setup.sh
+```
 
-## Customization Notes
-- **Monitor naming**: Update `hypr/hyprland-config/desktop.conf` and the files under `hypr/monitor_layouts/` or `bspwm/modes/` if your outputs differ (`DP-5`, `DVI-D-2`, `HDMI-0`, etc.).
-- **Hyprland modes**: Run the scripts from `hypr/scripts/modes/` to swap monitor layouts (`default.sh`, `game.sh`, `game_external.sh`). Each overwrites `~/.config/hypr/monitors.conf`.
-- **BSPWM modes**: Trigger the scripts in `bspwm/modes/` (e.g. `all_monitors.sh`, `external_only.sh`) to adjust workspace assignments, padding, and Polybar/Nitrogen behavior.
-- **Theme generation**: After installing Matugen, run it to regenerate color schemes across Waybar, Hyprland, Hyprlock, Kitty, Polybar, Cairo-Dock, Dunst, and greetd/nwg-hello using the templates in `matugen/templates/`. Kitty reloads automatically via a USR1 signal once its colors file is written.
-- **Greetd/NWG-Hello**: `setup.sh` links `greetd/config.toml`, installs `nwg-hello/hyprland.conf`, installs `hypr/hyprland-config/base.conf` to `/etc/nwg-hello/base.conf`, and symlinks `/etc/nwg-hello/nwg-hello.css` to the Matugen-generated cache at `/var/cache/matugen/greetd.css`. Backups of existing files are created with timestamps.
-- **Control center**: Toggle it manually with `scripts/control_center.sh toggle`. The panel is backed by `scripts/control_center.sh` and the status polls in `eww/scripts/control_center_status.sh`.
-- **Luma launcher**: Press `Super+Space` in Hyprland, Niri, or bspwm to run `tools/launcher/target/release/Luma` directly. `Super+P` opens its password mode, and the Waybar logo/control-center launcher actions use the same release binary.
-- **Vigil**: Build it with `cargo build --manifest-path tools/bar/Cargo.toml
-  --release`, rerun `setup.sh`, then restart `vigil.service`. Vigil owns the
-  desktop notification service while running; its systemd unit conflicts with
-  Dunst, which remains available as the rollback fallback.
-- **Session locking**: `scripts/session_lock.sh` is the shared Hyprlock entry
-  point for Hyprland, Niri, Vigil, and Luma. It closes the control center,
-  renders the dashboard onto the currently focused output, and leaves the
-  other outputs in the ambient clock layout. The dashboard shows only
-  lock-safe context: the next event, active timer, media controls, network,
-  power, and unread-notification count; notification contents are never
-  exposed. `swaylock` is an optional emergency fallback. Hypridle owns the
-  lock-before-suspend handshake and waits for a session lock before sleep.
-- **Optional Spotify service**: `setup.sh` links `systemd/user/auto-spotify.service` and enables it only when `spotify` and `pactl` are available. Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` before running `setup.sh` to skip that step.
-- **Codex self-improvement**: Hyprland, Niri, and bspwm startup now call `scripts/start_codex_self_improve_service.sh`, which imports the live session environment, ensures `codex-self-improve.service` is linked into `~/.config/systemd/user/`, and starts it. The service runs `scripts/codex_self_improve.sh` at most once per boot and no more than once per `CODEX_SELF_IMPROVE_COOLDOWN_HOURS` hours (24 by default), skips dirty worktrees, writes logs under `~/.local/state/codex-self-improve/`, and auto-commits successful changes with a `chore(self-improve): ...` message. Use `CODEX_SELF_IMPROVE_DISABLED=1` to turn it off, `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to keep successful changes uncommitted, or run `~/.dotfiles/scripts/codex_self_improve.sh --force` for a manual pass.
-- **Shell tweaks**: Edit `AURHELPER` and plugin lists directly in `zshrc`; aliases assume tools such as `eza`, `bat`, `dust`, and `devour` are installed.
-- **Polybar GPT module**: Requires `sgpt` and `xclip`. Send `USR1` to the module’s process (e.g. clicking the Polybar module) to transform clipboard prompts and return generated text.
-- **Session manager**: Build `tools/session-manager` if you want to save and reapply monitor profiles across X11, Hyprland, and Niri sessions.
-- **TV mode**: Build `tools/tv-mode` in release mode, rerun `setup.sh`, then
-  search for `tv` in Luma or press `Super+T`. It uses runtime Hyprland monitor
-  commands, so the tracked monitor configuration remains unchanged. See
-  `tools/tv-mode/README.md` for controls and recovery.
+`setup.sh` links supported configuration under `~/.config`, exposes built binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs greetd/nwg-hello files when `sudo` is available. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
+
+Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update greetd/nwg-hello under `/etc`.
+
+Restart the session after initial installation. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
+
+## Repository Layout
+
+- `hypr/`, `niri/` — compositor configuration and monitor layouts
+- `bar/` — tracked Vigil runtime configuration and CSS
+- `kitty/` — terminal configuration
+- `matugen/` — theme source templates; generated outputs should not be edited directly
+- `greetd/`, `nwg-hello/` — login screen configuration
+- `scripts/` — wallpaper, lockscreen, calendar, media, and session helpers
+- `systemd/user/` — Vigil, wallpaper, TV-mode, Spotify, and Codex units
+- `tools/bar`, `tools/launcher` — Vigil and Luma Git submodules
+- `tools/tv-mode` — controller-first couch-session tool
+- `tv-mode/` — TV-mode configuration and theme
+- `tests/` — desktop, theme, lock, wallpaper, and service contracts
+
+## Everyday Controls
+
+- `Super+Space` — open Luma
+- `Super+P` — open Luma password mode
+- `Super+B` — open Vigil quick settings on the focused output
+- `Super+L` — lock through the shared session-lock lifecycle
+- `Super+T` — start TV mode
+
+Vigil's control center is also available from the command line:
+
+```bash
+vigil control-center open
+vigil control-center open --context notifications --output DP-5
+vigil control-center close
+```
+
+## Configuration Notes
+
+- Monitor layouts live in `hypr/monitor_layouts/`, `hypr/monitors.lua`, and `niri/outputs.kdl`. Update connector names when hardware changes.
+- `scripts/awww_wallpapers.conf` maps wallpapers to outputs. `awww-daemon.service` owns the sole wallpaper daemon; `awww-wallpaper.service` applies images and follows output changes.
+- Matugen writes generated palettes to ignored runtime paths. Run `matugen image <wallpaper> -c ~/.config/matugen/config.toml` to refresh them.
+- `scripts/session_lock.sh` closes transient Vigil UI, refreshes lock-safe context, and uses `swaylock` only as an emergency fallback.
+- Vigil owns `org.freedesktop.Notifications`; normal notification clients such as `notify-send` continue to work.
+- Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` while running setup to skip the optional Bluetooth Spotify service.
+- Set `CODEX_SELF_IMPROVE_DISABLED=1` to disable login-time self-improvement or `CODEX_SELF_IMPROVE_AUTO_COMMIT=0` to retain successful changes without committing them.
+
+## Validation
+
+```bash
+bash -n setup.sh scripts/*.sh hypr/scripts/modes/*.sh
+for test_file in tests/*.sh scripts/tests/*.sh; do bash "$test_file"; done
+niri validate -c niri/config.kdl
+Hyprland --config hypr/hyprland-config/desktop.conf --verify-config
+Hyprland --config hypr/hyprland-config/laptop.conf --verify-config
+cargo test --manifest-path tools/bar/Cargo.toml
+cargo test --manifest-path tools/launcher/Cargo.toml
+cargo test --manifest-path tools/tv-mode/Cargo.toml
+```
+
+Visible changes should also be checked with screenshots on the primary and reduced outputs. Long-session changes should verify that Vigil retains one audio subscriber and that awww owns one wallpaper layer per output.
 
 ## License
+
 No explicit license has been provided. Treat the contents as personal reference unless you have permission to reuse them.

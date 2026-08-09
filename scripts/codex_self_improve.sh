@@ -72,16 +72,6 @@ send_notification() {
   local title="$2"
   local body="$3"
 
-  if command -v dunstify >/dev/null 2>&1; then
-    dunstify \
-      -a "Codex Self Improve" \
-      -u "$urgency" \
-      -h string:x-dunst-stack-tag:codex-self-improve \
-      "$title" \
-      "$body" >/dev/null 2>&1 || true
-    return 0
-  fi
-
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a "Codex Self Improve" -u "$urgency" "$title" "$body" >/dev/null 2>&1 || true
   fi

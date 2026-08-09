@@ -102,28 +102,40 @@ link_path "$DIR/zshrc" "$HOME/.zshrc"
 mkdir -p "$HOME/.config"
 
 directories=(
-  "bspwm"
-  "cairo-dock"
-  "dunst"
   "hypr"
   "kitty"
   "matugen"
-  "eww"
   "niri"
   "nvim"
-  "polybar"
-  "sxhkd"
-  "waybar"
   "nwg-hello"
   "greetd"
-  "anyrun"
   "tv-mode"
 )
 
 for dir in "${directories[@]}"; do
+  if [[ ! -d "$DIR/$dir" ]]; then
+    warn "skipping missing configuration source: $DIR/$dir"
+    continue
+  fi
   echo "Linking $dir configuration"
   target="$HOME/.config/$dir"
   link_path "$DIR/$dir" "$target"
+done
+
+# Remove links created by older versions without touching independently
+# managed configuration at the same paths.
+legacy_directories=(
+  "anyrun"
+  "bspwm"
+  "cairo-dock"
+  "dunst"
+  "eww"
+  "polybar"
+  "sxhkd"
+  "waybar"
+)
+for dir in "${legacy_directories[@]}"; do
+  remove_managed_symlink "$HOME/.config/$dir" "$DIR/$dir"
 done
 echo "Linking Vigil configuration"
 link_path "$DIR/bar" "$HOME/.config/vigil"
@@ -202,8 +214,9 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
-# Configure greetd/nwg-hello CSS to point at matugen output (requires sudo)
-if command -v sudo >/dev/null 2>&1; then
+# Configure greetd/nwg-hello CSS to point at matugen output (requires sudo).
+# Set INSTALL_SYSTEM_CONFIG=0 for an entirely user-scoped setup pass.
+if [[ "${INSTALL_SYSTEM_CONFIG:-1}" == "1" ]] && command -v sudo >/dev/null 2>&1; then
   if sudo install -d -m 755 /etc/nwg-hello; then
     cache_dir="/var/cache/matugen"
     cache_css="${cache_dir}/greetd.css"
@@ -254,11 +267,11 @@ if command -v sudo >/dev/null 2>&1; then
     warn "failed to create /etc/nwg-hello; skipping greetd CSS and Hyprland config"
   fi
 else
-  echo "Skipping greetd CSS link (sudo unavailable)"
+  echo "Skipping greetd CSS and Hyprland config (disabled or sudo unavailable)"
 fi
 
 # Install greetd daemon config
-if command -v sudo >/dev/null 2>&1; then
+if [[ "${INSTALL_SYSTEM_CONFIG:-1}" == "1" ]] && command -v sudo >/dev/null 2>&1; then
   if sudo install -d -m 755 /etc/greetd; then
     target_greetd_cfg="/etc/greetd/config.toml"
     sudo_install_file "$DIR/greetd/config.toml" "$target_greetd_cfg"
@@ -267,5 +280,5 @@ if command -v sudo >/dev/null 2>&1; then
     warn "failed to create /etc/greetd; skipping greetd config"
   fi
 else
-  echo "Skipping greetd config (sudo unavailable)"
+  echo "Skipping greetd config (disabled or sudo unavailable)"
 fi

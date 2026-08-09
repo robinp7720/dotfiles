@@ -85,9 +85,38 @@ make_setup_fixture() {
   chmod +x "$repo_root/tools/launcher/target/release/Luma"
 
   local dir
-  for dir in bspwm cairo-dock dunst hypr kitty matugen eww niri nvim polybar sxhkd waybar nwg-hello greetd anyrun bar tv-mode; do
+  for dir in hypr kitty matugen niri nvim nwg-hello greetd bar tv-mode; do
     mkdir -p "$repo_root/$dir"
   done
+}
+
+verify_legacy_desktop_links_cleanup() {
+  local temp_root fixture_root stub_root managed_home foreign_home dir
+
+  temp_root="$(mktemp -d)"
+  trap 'rm -rf -- "$temp_root"' RETURN
+  fixture_root="$temp_root/repo"
+  stub_root="$temp_root/stubs"
+  managed_home="$temp_root/home-managed"
+  foreign_home="$temp_root/home-foreign"
+
+  make_setup_fixture "$fixture_root"
+  make_stub_commands "$stub_root"
+  mkdir -p "$managed_home/.config" "$foreign_home/.config"
+  for dir in anyrun bspwm cairo-dock dunst eww polybar sxhkd waybar; do
+    ln -s "$fixture_root/$dir" "$managed_home/.config/$dir"
+  done
+  ln -s /tmp/external-waybar "$foreign_home/.config/waybar"
+
+  PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  for dir in anyrun bspwm cairo-dock dunst eww polybar sxhkd waybar; do
+    [[ ! -L "$managed_home/.config/$dir" ]] \
+      || { printf 'managed legacy link should be removed: %s\n' "$dir" >&2; exit 1; }
+  done
+
+  PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  [[ -L "$foreign_home/.config/waybar" ]] \
+    || { printf 'foreign desktop link should be preserved\n' >&2; exit 1; }
 }
 
 verify_luma_binary_link() {
@@ -132,6 +161,35 @@ exit 1
 EOF
 
   chmod +x "$stub_root/systemctl" "$stub_root/sudo"
+}
+
+verify_user_only_setup_skips_sudo() {
+  local temp_root fixture_root stub_root test_home
+
+  temp_root="$(mktemp -d)"
+  trap 'rm -rf -- "$temp_root"' RETURN
+  fixture_root="$temp_root/repo"
+  stub_root="$temp_root/stubs"
+  test_home="$temp_root/home"
+
+  make_setup_fixture "$fixture_root"
+  make_stub_commands "$stub_root"
+  mkdir -p "$test_home"
+  cat >"$stub_root/sudo" <<'EOF'
+#!/usr/bin/env bash
+touch "$SUDO_MARKER"
+exit 1
+EOF
+  chmod +x "$stub_root/sudo"
+
+  SUDO_MARKER="$temp_root/sudo-called" \
+  INSTALL_SYSTEM_CONFIG=0 \
+  PATH="$stub_root:/usr/bin:/bin" \
+  HOME="$test_home" \
+    bash "$fixture_root/setup.sh" >/dev/null 2>&1
+
+  [[ ! -e "$temp_root/sudo-called" ]] \
+    || { printf 'user-only setup should never invoke sudo\n' >&2; exit 1; }
 }
 
 verify_managed_stale_binary_link_cleanup() {
@@ -228,22 +286,33 @@ require_fixed 'After=graphical-session.target' "systemd/user/vigil.service"
 require_fixed 'PartOf=graphical-session.target' "systemd/user/vigil.service"
 require_fixed 'WantedBy=graphical-session.target' "systemd/user/vigil.service"
 
-require_fixed '# exec = ~/.config/waybar/launch.sh --replace &' "hypr/hyprland-config/startup.conf"
+require_path "systemd/user/awww-daemon.service"
+require_path "systemd/user/awww-wallpaper.service"
+require_fixed 'ExecStart=/usr/bin/awww-daemon -q' "systemd/user/awww-daemon.service"
+require_fixed 'Requires=awww-daemon.service' "systemd/user/awww-wallpaper.service"
+require_fixed 'ExecStart=%h/.dotfiles/scripts/awww_wallpaper_watcher.sh --watch' "systemd/user/awww-wallpaper.service"
+reject_fixed 'awww-daemon -q' "scripts/awww_wallpaper_watcher.sh"
+reject_fixed 'awww-daemon.sock' "scripts/awww_wallpaper_watcher.sh"
+
 require_fixed 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
+require_fixed 'exec-once = systemctl --user restart awww-daemon.service awww-wallpaper.service' "hypr/hyprland-config/startup.conf"
 require_fixed 'exec-once = systemctl --user restart hypridle.service' "hypr/hyprland-config/startup.conf"
 require_order 'exec-once = dbus-update-activation-environment --all' 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
 require_fixed 'layerrule = blur on, match:namespace vigil' "hypr/hyprland-config/base.conf"
 require_fixed 'layerrule = ignore_alpha 0.20, match:namespace vigil' "hypr/hyprland-config/base.conf"
 
-require_fixed '// spawn-at-startup "sh" "-lc" "~/.config/waybar/launch.sh --replace"' "niri/config.kdl"
 require_fixed 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' "niri/config.kdl"
 require_fixed 'systemctl --user restart vigil.service' "niri/config.kdl"
+require_fixed 'systemctl --user restart awww-daemon.service awww-wallpaper.service' "niri/config.kdl"
 require_fixed 'systemctl --user restart hypridle.service' "niri/config.kdl"
 require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart vigil.service' "niri/config.kdl"
 require_fixed 'match namespace="^vigil$"' "niri/config.kdl"
+require_fixed 'Mod+B hotkey-overlay-title="Open Control Center" { spawn "vigil" "control-center" "open"; }' "niri/config.kdl"
+require_fixed 'bind = $mainMod, B, exec, vigil control-center open' "hypr/hyprland-config/bindings.conf"
 
 require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
-require_fixed 'center_slot.set_size_request(CENTER_SLOT_MIN_WIDTH, -1);' "tools/bar/src/ui/surface.rs"
+reject_fixed 'CENTER_SLOT_MIN_WIDTH' "tools/bar/src/ui/surface.rs"
+require_fixed 'context_row.set_accessible_role(gtk::AccessibleRole::Button);' "tools/bar/src/ui/surface.rs"
 require_fixed 'context_stack.set_hhomogeneous(false);' "tools/bar/src/ui/surface.rs"
 require_fixed 'context_label.set_xalign(0.5);' "tools/bar/src/ui/surface.rs"
 require_fixed 'root.set_center_widget(Some(&center_slot));' "tools/bar/src/ui/surface.rs"
@@ -263,6 +332,8 @@ require_fixed 'ControlRequest::ContextGet' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::ContextExecute' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::ControlCenterOpen' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::ControlCenterClose' "tools/bar/src/ui/mod.rs"
+require_fixed 'ControlCenterCommand::Open { context, output }' "tools/bar/src/main.rs"
+require_fixed 'pub fn set_monitor(&self, monitor: &gtk::gdk::Monitor)' "tools/bar/src/ui/control_center.rs"
 require_fixed 'ControlRequest::LockscreenGet' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::PresentationGet' "tools/bar/src/ui/mod.rs"
 require_fixed 'ControlRequest::PresentationSet' "tools/bar/src/ui/mod.rs"
@@ -398,13 +469,14 @@ require_fixed 'window.set_margin(Edge::Top, top_margin);' "tools/bar/src/ui/cont
 reject_fixed 'BAR_HEIGHT + SURFACE_MARGIN * 2,' "tools/bar/src/ui/surface.rs"
 require_fixed 'layerrule = no_anim on, match:namespace vigil-control-center' "hypr/hyprland-config/base.conf"
 
-require_path "waybar/launch.sh"
-require_path "waybar/config"
-require_fixed 'git checkout 2187ecb^ -- setup.sh hypr/hyprland-config/startup.conf hypr/hyprland-config/base.conf niri/config.kdl tools/bar/README.md' "tools/bar/README.md"
-require_fixed 'rm -f systemd/user/vigil.service' "tools/bar/README.md"
+reject_fixed 'waybar' "hypr/hyprland-config/startup.conf"
+reject_fixed 'waybar' "niri/config.kdl"
+reject_fixed 'anyrun' "hypr/hyprland-config/startup.conf"
 
 verify_managed_stale_binary_link_cleanup
 verify_legacy_cockpit_links_cleanup
+verify_legacy_desktop_links_cleanup
 verify_luma_binary_link
+verify_user_only_setup_skips_sudo
 
 printf 'desktop contract ok\n'

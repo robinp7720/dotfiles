@@ -109,7 +109,7 @@ window.bar-window image {
 }
 
 .context-island {
-  min-width: 360px;
+  padding: 0 4px;
 }
 
 .app-label {
@@ -272,8 +272,6 @@ button.system-module:active,
 }
 
 .context-chip.is-running .context-icon,
-.context-chip.is-playing .context-icon,
-button.system-module.charging image,
 .bluetooth-scan-spinner {
   animation: meaningful-pulse 1250ms ease-in-out infinite;
 }
@@ -285,8 +283,6 @@ button.system-module.charging image,
 
 window.ambient-off .workspace-button.urgent,
 window.ambient-off .context-chip.is-running .context-icon,
-window.ambient-off .context-chip.is-playing .context-icon,
-window.ambient-off button.system-module.charging image,
 window.ambient-off .context-chip.critical,
 window.ambient-off .warning-chip.critical {
   animation: none;
@@ -472,8 +468,6 @@ window.control-center-window scale:focus-visible {
   button.system-module.state-changed,
   .context-chip.context-arrived,
   .context-chip.is-running .context-icon,
-  .context-chip.is-playing .context-icon,
-  button.system-module.charging image,
   .bluetooth-scan-spinner,
   .context-chip.critical,
   .warning-chip.critical,

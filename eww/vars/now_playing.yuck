@@ -1,5 +1,0 @@
-;; Now playing poll (uses existing script with emoji/icon prefix).
-
-(defpoll album_art_path
-  :interval "2s"
-  "~/.config/eww/scripts/album_art_path.sh")

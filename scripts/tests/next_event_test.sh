@@ -45,26 +45,6 @@ if value is not expected:
 PY
 }
 
-assert_waybar_payload() {
-  local json="$1"
-  local expected_text="$2"
-
-  CALENDAR_JSON="$json" python3 - "$expected_text" <<'PY'
-import json
-import os
-import sys
-
-expected_text = sys.argv[1]
-payload = json.loads(os.environ["CALENDAR_JSON"])
-if payload.get("class") != "has-event":
-    raise SystemExit(f"expected class has-event, got {payload.get('class')!r}")
-if payload.get("text") != expected_text:
-    raise SystemExit(f"expected text {expected_text!r}, got {payload.get('text')!r}")
-if payload.get("tooltip") != expected_text.removeprefix("  "):
-    raise SystemExit(f"expected tooltip {expected_text.removeprefix('  ')!r}, got {payload.get('tooltip')!r}")
-PY
-}
-
 run_script() {
   local workdir="$1"
   local backend="$2"
@@ -79,10 +59,10 @@ run_script() {
     "$SCRIPT_UNDER_TEST" "$@"
 }
 
-test_gcalcli_json_and_waybar_contract() {
+test_gcalcli_json_contract() {
   local workdir="$1"
   local fake_gcalcli="$workdir/bin/gcalcli"
-  local json_output waybar_output cache_file
+  local json_output cache_file
 
   mkdir -p "$workdir/bin" "$workdir/home"
   cat >"$fake_gcalcli" <<'FAKE_GCALCLI'
@@ -105,9 +85,6 @@ FAKE_GCALCLI
   cache_file="$workdir/cache/next-event/next_event.json"
   [[ -f "$cache_file" ]] || fail "expected calendar cache to be written"
   assert_json_field "$(cat "$cache_file")" "title" "Design review"
-
-  waybar_output="$(run_script "$workdir" gcalcli --waybar)"
-  assert_waybar_payload "$waybar_output" "  Design review in 10 mins at Room 2"
 }
 
 test_auto_falls_back_after_khal_parse_failure() {
@@ -196,7 +173,7 @@ FAKE_GCALCLI
 
 test_date_only_gcalcli_rows_preserve_legacy_rendering() {
   local workdir="$1"
-  local text_output blank_output waybar_output json_output
+  local text_output blank_output json_output
 
   mkdir -p "$workdir/bin" "$workdir/home"
   cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
@@ -211,10 +188,6 @@ FAKE_GCALCLI
 
   blank_output="$(run_script "$workdir" gcalcli --blank-when-empty)"
   [[ "$blank_output" == "Company holiday at HQ Atrium" ]] || fail "expected blank-when-empty to keep event text, got: $blank_output"
-
-  waybar_output="$(run_script "$workdir" gcalcli --waybar)"
-  assert_waybar_payload "$waybar_output" "  Company holiday at HQ Atrium"
-
   json_output="$(run_script "$workdir" gcalcli --json)"
   assert_json_field "$json_output" "title" "Company holiday"
   assert_json_field "$json_output" "location" "HQ Atrium"
@@ -305,7 +278,7 @@ main() {
 
   case "${1:-all}" in
     gcalcli-contract)
-      test_gcalcli_json_and_waybar_contract "$tmpdir/gcalcli-contract"
+      test_gcalcli_json_contract "$tmpdir/gcalcli-contract"
       ;;
     khal-fallback)
       test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
@@ -326,7 +299,7 @@ main() {
       test_agenda_json_returns_sorted_deduplicated_events "$tmpdir/agenda-json"
       ;;
     all)
-      test_gcalcli_json_and_waybar_contract "$tmpdir/gcalcli-contract"
+      test_gcalcli_json_contract "$tmpdir/gcalcli-contract"
       test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
       test_khal_all_day_event_uses_explicit_format "$tmpdir/khal-all-day"
       test_missing_backend_end_normalizes_to_start "$tmpdir/missing-end"

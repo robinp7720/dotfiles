@@ -1,6 +1,0 @@
-;; Now playing art-only widget.
-
-(defwidget now-playing []
-  (image :class "now-art-only"
-         :path album_art_path
-         :width 120 :height 120 :keep-aspect true))

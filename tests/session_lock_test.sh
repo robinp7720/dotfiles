@@ -139,7 +139,6 @@ test_shared_lock_launcher() {
   VIGIL_BIN="$bin_dir/vigil" \
   RENDER_CONFIG_BIN="$bin_dir/render" \
   ALBUM_ART_UPDATE_BIN="$bin_dir/noop" \
-  LEGACY_CONTROL_CENTER_BIN="$bin_dir/noop" \
     "$ROOT_DIR/scripts/session_lock.sh"
 
   assert_contains "$log" 'vigil control-center close'
@@ -156,7 +155,6 @@ test_shared_lock_launcher() {
   VIGIL_BIN="" \
   RENDER_CONFIG_BIN="$bin_dir/render" \
   ALBUM_ART_UPDATE_BIN="$bin_dir/noop" \
-  LEGACY_CONTROL_CENTER_BIN="$bin_dir/noop" \
     "$ROOT_DIR/scripts/session_lock.sh"
   assert_contains "$log" 'swaylock --daemonize'
 
@@ -171,7 +169,6 @@ test_shared_lock_launcher() {
   VIGIL_BIN="$bin_dir/vigil" \
   RENDER_CONFIG_BIN="$bin_dir/render" \
   ALBUM_ART_UPDATE_BIN="$bin_dir/noop" \
-  LEGACY_CONTROL_CENTER_BIN="$bin_dir/noop" \
     "$ROOT_DIR/scripts/session_lock.sh"
   [[ ! -s "$log" ]] || fail "active locker should make the launcher a no-op"
 }

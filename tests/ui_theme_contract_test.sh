@@ -44,18 +44,6 @@ assert_contains matugen/templates/luma.css \
   'background-color: alpha(@luma_surface_highest, 0.66);'
 assert_count matugen/templates/luma.css 3 \
   'background-color: transparent;'
-assert_contains waybar/style.css \
-  '@define-color bar_bg alpha(@surface_container_lowest, 0.58);'
-assert_contains waybar/style.css \
-  '@define-color module_bg alpha(@surface_container, 0.52);'
-assert_contains waybar/style.css \
-  '@define-color module_bg_alt alpha(@surface_container_high, 0.60);'
-assert_count waybar/style.css 2 \
-  'padding: 4.5px 12px;'
-assert_contains hypr/hyprland-config/base.conf \
-  'layerrule = blur on, match:namespace waybar'
-assert_contains hypr/hyprland-config/base.conf \
-  'layerrule = ignore_alpha 0.20, match:namespace waybar'
 assert_contains hypr/hyprlock.conf \
   'source = ~/.config/hypr/hyprlock-colors.conf'
 assert_contains matugen/config.toml \
@@ -65,12 +53,6 @@ assert_contains matugen/templates/hyprlock-colors.conf \
 
 assert_contains matugen/templates/luma.css \
   'font-family: "Cantarell", sans-serif;'
-assert_contains waybar/style.css \
-  'font-family: "Cantarell", "Symbols Nerd Font", sans-serif;'
-assert_contains eww/eww.scss \
-  'font-family: "Cantarell", sans-serif;'
-assert_contains matugen/templates/dunstrc \
-  'font = Cantarell 11'
 assert_count hypr/hyprlock.conf 11 \
   'font_family = Cantarell'
 assert_contains hypr/hyprlock.conf \
@@ -91,9 +73,6 @@ assert_contains matugen/UI_STYLE.md \
   'Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback'
 
 assert_not_contains matugen/templates/luma.css 'JetBrains Mono'
-assert_not_contains waybar/style.css 'JetBrainsMono Nerd Font'
-assert_not_contains eww/eww.scss 'JetBrains Mono'
-assert_not_contains matugen/templates/dunstrc 'JetBrainsMono Nerd Font'
 assert_not_contains hypr/hyprlock.conf 'JetBrains Mono'
 assert_not_contains matugen/templates/greetd.css 'JetBrains Mono'
 
@@ -109,6 +88,14 @@ assert_contains bar/style.css \
   'background: transparent;'
 assert_contains bar/style.css \
   '.bar-island {'
+assert_contains bar/style.css \
+  '.context-island {'
+assert_not_contains bar/style.css \
+  'min-width: 360px;'
+assert_not_contains bar/style.css \
+  '.context-chip.is-playing .context-icon,'
+assert_not_contains bar/style.css \
+  'button.system-module.charging image,'
 assert_contains bar/style.css \
   'popover.control-center contents {'
 assert_contains bar/style.css \
