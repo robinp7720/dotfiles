@@ -646,8 +646,10 @@ fn steam_client_state_from_json(clients: &Value, workspace: &str) -> SteamClient
             .get("initialClass")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        let is_steam =
+            class.eq_ignore_ascii_case("steam") || initial_class.eq_ignore_ascii_case("steam");
         let is_game = class.starts_with("steam_app_") || initial_class.starts_with("steam_app_");
-        state.session_active |= on_tv_workspace || is_game;
+        state.session_active |= on_tv_workspace || is_steam || is_game;
         if is_game
             && (client.get("fullscreen").and_then(Value::as_i64) != Some(2)
                 || client.get("fullscreenClient").and_then(Value::as_i64) != Some(2))
@@ -905,6 +907,28 @@ mod tests {
             "address": "0xgame",
             "class": "steam_app_252950",
             "workspace": { "name": "3" },
+            "mapped": true,
+            "fullscreen": 2,
+            "fullscreenClient": 2
+        }]);
+
+        assert_eq!(
+            steam_client_state_from_json(&clients, "tv"),
+            SteamClientState {
+                session_active: true,
+                games_needing_fullscreen: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn steam_window_on_another_workspace_keeps_session_active() {
+        let clients = serde_json::json!([{
+            "address": "0xsteam",
+            "class": "steam",
+            "initialClass": "steam",
+            "title": "Steam Big Picture Mode",
+            "workspace": { "name": "5" },
             "mapped": true,
             "fullscreen": 2,
             "fullscreenClient": 2
