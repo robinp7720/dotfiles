@@ -31,7 +31,7 @@ if [[ "${1:-}" == "-l" ]]; then
 fi
 
 if [[ "${1:-}" == "--player=test-player" && "${2:-}" == "metadata" ]]; then
-  printf 'Playing|Test Artist|Test Title|%s\n' "$FAKE_ART_URI"
+  printf 'Playing\x1fTest Artist\x1fTest Title\x1f%s\n' "$FAKE_ART_URI"
   exit 0
 fi
 
@@ -52,12 +52,43 @@ FAKE_PLAYERCTL
   cmp -s "$source_art" "$cached_art" || fail "cached album art differs from the source"
 }
 
+test_preserves_pipe_characters_in_metadata() {
+  local workdir="$1"
+  local fake_bin="$workdir/bin"
+  local output=""
+
+  mkdir -p "$fake_bin" "$workdir/home"
+
+  cat >"$fake_bin/playerctl" <<'FAKE_PLAYERCTL'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "-l" ]]; then
+  printf 'test-player\n'
+  exit 0
+fi
+
+if [[ "${1:-}" == "--player=test-player" && "${2:-}" == "metadata" ]]; then
+  printf 'Playing\x1fOne | Two\x1fLeft | Right\x1f\n'
+  exit 0
+fi
+
+exit 1
+FAKE_PLAYERCTL
+  chmod +x "$fake_bin/playerctl"
+
+  output="$(HOME="$workdir/home" PATH="$fake_bin:$PATH" "$SCRIPT_UNDER_TEST")"
+  [[ "$output" == '🎵 One | Two — Left | Right' ]] \
+    || fail "pipe characters in media metadata were not preserved: $output"
+}
+
 main() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   trap "rm -rf '$tmpdir'" EXIT
 
   test_decodes_local_album_art_uri "$tmpdir/encoded-art"
+  test_preserves_pipe_characters_in_metadata "$tmpdir/pipe-metadata"
 
   printf 'ok - now playing tests passed\n'
 }

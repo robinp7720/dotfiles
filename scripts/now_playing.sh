@@ -48,16 +48,13 @@ chosen_artist=""
 chosen_title=""
 chosen_art_url=""
 chosen_player=""
+metadata_separator=$'\x1f'
 
 while IFS= read -r player; do
-  # metadata --format is cheaper than separate calls
-  info=$(playerctl --player="$player" metadata --format '{{status}}|{{artist}}|{{title}}|{{mpris:artUrl}}' 2>/dev/null || true)
-  status=${info%%|*}
-  rest=${info#*|}
-  artist=${rest%%|*}
-  rest=${rest#*|}
-  title=${rest%%|*}
-  art_url=${rest#*|}
+  # Use a control-character separator so ordinary metadata punctuation cannot
+  # shift fields and corrupt the displayed title or album-art URL.
+  info=$(playerctl --player="$player" metadata --format "{{status}}${metadata_separator}{{artist}}${metadata_separator}{{title}}${metadata_separator}{{mpris:artUrl}}" 2>/dev/null || true)
+  IFS="$metadata_separator" read -r status artist title art_url <<< "$info"
 
   # Skip if no title (nothing meaningful to show)
   if [[ -z "$title" ]]; then
