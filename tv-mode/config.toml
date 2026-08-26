@@ -1,16 +1,16 @@
-output = "HDMI-A-2"
+output = "Unknown-2"
 workspace = "tv"
 
 [modes]
-home = "3840x2160@60.0"
+home = "3840x2160@30.0"
 gaming = "1920x1080@119.88"
-media = "3840x2160@60.0"
+media = "3840x2160@30.0"
 scale = 1.0
 
 [audio]
-card = "alsa_card.pci-0000_06_00.1"
-tv_profile = "output:hdmi-stereo"
-tv_sink = "alsa_output.pci-0000_06_00.1.hdmi-stereo"
+card = "alsa_card.pci-0000_05_00.1"
+tv_profile = "output:hdmi-stereo-extra2"
+tv_sink = "alsa_output.pci-0000_05_00.1.hdmi-stereo-extra2"
 
 [apps.steam]
 program = "steam"

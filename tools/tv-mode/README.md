@@ -1,7 +1,7 @@
 # TV Mode
 
 `tv-mode` is a controller-first Hyprland session for the LG TV on
-`HDMI-A-2`. It temporarily makes the TV the only active output, switches HDMI
+`Unknown-2`. It temporarily makes the TV the only active output, switches HDMI
 audio, and presents Steam and Kodi from a fullscreen couch interface.
 
 ## Build and install
@@ -22,8 +22,8 @@ Open Luma and search for `tv`, press `Super+T`, or run:
 tv-mode start
 ```
 
-The home screen uses 4K60. Steam switches to 1080p120 and the performance
-power profile; Kodi uses 4K60 and balanced. D-pad or the left stick moves
+The home screen uses 4K30. Steam switches to 1080p120 and the performance
+power profile; Kodi uses 4K30 and balanced. D-pad or the left stick moves
 focus, A selects, B returns to the active app, and holding Guide for 1.5
 seconds reopens the home screen. Arrow keys, Enter, and Escape are available
 as keyboard fallbacks.
