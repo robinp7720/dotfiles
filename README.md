@@ -67,7 +67,7 @@ Vigil's control center is also available from the command line:
 
 ```bash
 vigil control-center open
-vigil control-center open --context notifications --output DP-5
+vigil control-center open --context notifications --output DP-3
 vigil control-center close
 ```
 

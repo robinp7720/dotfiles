@@ -1,21 +1,21 @@
 // Keep this layout aligned with hypr/monitors.conf.
-output "DP-4" {
+output "DP-2" {
     mode "3840x2160@60.000"
     scale 1
     transform "90"
     position x=0 y=0
 }
 
-output "DP-5" {
+output "DP-3" {
     mode "3840x2160@60.000"
     scale 1
     transform "normal"
-    position x=2160 y=675
+    position x=2160 y=1092
 }
 
-output "HDMI-A-2" {
-    mode "3840x2160@60.000"
+output "Unknown-2" {
+    mode "1920x1080@119.880"
     scale 1
     transform "normal"
-    position x=6000 y=675
+    position x=6000 y=1092
 }
