@@ -1,4 +1,4 @@
-primary_output = "DP-5"
+primary_output = "DP-3"
 
 [thresholds]
 calendar_soon_minutes = 15
