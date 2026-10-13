@@ -308,7 +308,7 @@ require_fixed 'systemctl --user restart hypridle.service' "niri/config.kdl"
 require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart vigil.service' "niri/config.kdl"
 require_fixed 'match namespace="^vigil$"' "niri/config.kdl"
 require_fixed 'Mod+B hotkey-overlay-title="Open Control Center" { spawn "vigil" "control-center" "open"; }' "niri/config.kdl"
-require_fixed 'bind = $mainMod, B, exec, vigil control-center open' "hypr/hyprland-config/bindings.conf"
+require_fixed 'bindd = $mainMod, B, Toggle quick settings, exec, vigil control-center toggle' "hypr/hyprland-config/bindings.conf"
 
 require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
 reject_fixed 'CENTER_SLOT_MIN_WIDTH' "tools/bar/src/ui/surface.rs"

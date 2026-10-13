@@ -39,7 +39,7 @@ assert_not_contains() {
 }
 
 assert_contains matugen/templates/luma.css \
-  'background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.72), alpha(@luma_surface, 0.68));'
+  'background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.94), alpha(@luma_surface, 0.96));'
 assert_contains matugen/templates/luma.css \
   'background-color: alpha(@luma_surface_highest, 0.66);'
 assert_count matugen/templates/luma.css 3 \

@@ -57,16 +57,43 @@ Restart the session after initial installation. Individual changes can be applie
 
 ## Everyday Controls
 
-- `Super+Space` — open Luma
-- `Super+P` — open Luma password mode
-- `Super+B` — open Vigil quick settings on the focused output
-- `Super+L` — lock through the shared session-lock lifecycle
-- `Super+T` — start TV mode
+| Shortcut | Action |
+| --- | --- |
+| `Super+Space` | Toggle Luma search |
+| `Super+Tab` | Toggle open-window search |
+| `Super+Shift+Space` | Toggle desktop controls in Luma |
+| `Super+P` | Toggle password search |
+| `Super+B` | Toggle quick settings on the focused output |
+| `Super+Shift+N` | Toggle the notification inbox |
+| `Super+L` | Lock through the shared session-lock lifecycle |
+| `Super+T` | Start TV mode |
+| `Super+Arrow` | Focus a neighboring window |
+| `Super+Shift+Arrow` | Move a window in that direction |
+| `Super+Ctrl+Arrow` | Resize the current split |
+| `Super+grave` | Return to the previous workspace |
+
+The search button on every bar opens Luma on that monitor; right-click it for
+windows. Luma's All, Apps, Windows, Controls, and Files filters preserve the search
+text and are also available with `Ctrl+1` through `Ctrl+5`. Use the arrow keys and
+Enter to select a result, or Escape to close. Repeating a shortcut closes its
+surface; requesting a different mode or settings page switches to it.
+
+Luma's Controls filter includes Vigil's live settings and actions. Opening Luma
+closes an open quick-settings panel, and selecting a settings result hands control
+back to Vigil. Matching windows appear in the initial search ranking beside apps.
+Status checks have time limits and run off the UI thread.
+
+Luma stays ready for 30 seconds after closing for faster repeat openings, then
+exits automatically. Adjust `ui.idle_timeout_seconds` in
+`~/.config/Luma/config.json` (`0` exits immediately). Closed windows release their
+search state and stop polling. Vigil wakes immediately for launcher and settings
+requests; live status updates reuse existing search results.
 
 Vigil's control center is also available from the command line:
 
 ```bash
 vigil control-center open
+vigil control-center toggle
 vigil control-center open --context notifications --output DP-3
 vigil control-center close
 ```
@@ -76,6 +103,7 @@ vigil control-center close
 - Monitor layouts live in `hypr/monitor_layouts/`, `hypr/monitors.lua`, and `niri/outputs.kdl`. Update connector names when hardware changes.
 - `scripts/awww_wallpapers.conf` maps wallpapers to outputs. `awww-daemon.service` owns the sole wallpaper daemon; `awww-wallpaper.service` applies images and follows output changes.
 - Matugen writes generated palettes to ignored runtime paths. Run `matugen image <wallpaper> -c ~/.config/matugen/config.toml` to refresh them.
+- Colors, geometry, motion, and reduced-motion options are documented in [the desktop design contract](matugen/UI_STYLE.md). Vigil reloads its theme automatically after Matugen generation.
 - `scripts/session_lock.sh` closes transient Vigil UI, refreshes lock-safe context, and uses `swaylock` only as an emergency fallback.
 - Vigil owns `org.freedesktop.Notifications`; normal notification clients such as `notify-send` continue to work.
 - Set `AUTO_ENABLE_SPOTIFY_SERVICE=0` while running setup to skip the optional Bluetooth Spotify service.

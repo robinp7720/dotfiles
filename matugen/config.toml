@@ -28,6 +28,7 @@ output_path = '~/.config/Luma/theme.css'
 [templates.bar]
 input_path = '~/.config/matugen/templates/bar-colors.css'
 output_path = '~/.config/vigil/colors.css'
+post_hook = 'pkill -HUP -x vigil || true'
 
 [templates.tv_mode]
 input_path = '~/.config/matugen/templates/tv-mode.css'

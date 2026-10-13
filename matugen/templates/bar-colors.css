@@ -5,3 +5,12 @@
 <* for name, value in colors *>
 @define-color {{name}} {{value.default.hex}};
 <* endfor *>
+
+/* Match Luma's wallpaper-derived surfaces, with opaque enough text backplates. */
+@define-color cockpit_shell alpha(@surface_container, 0.86);
+@define-color cockpit_panel alpha(@surface, 0.96);
+@define-color cockpit_item alpha(@on_surface, 0.06);
+@define-color cockpit_item_hover alpha(@on_surface, 0.11);
+@define-color cockpit_border alpha(@outline_variant, 0.64);
+@define-color cockpit_text @on_surface;
+@define-color cockpit_muted @on_surface_variant;
