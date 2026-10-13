@@ -662,13 +662,18 @@ fn steam_client_state_from_json(clients: &Value, workspace: &str) -> SteamClient
 }
 
 fn enforce_game_fullscreen(address: &str) -> Result<()> {
-    hyprland_dispatch("focuswindow", &format!("address:{address}"))?;
-    hyprland_dispatch("fullscreenstate", "2 2")
+    hyprland_dispatch(&format!(
+        "hl.dsp.focus({{ window = {:?} }})",
+        format!("address:{address}")
+    ))?;
+    hyprland_dispatch(
+        "hl.dsp.window.fullscreen_state({ internal = 2, client = 2, action = \"set\" })",
+    )
 }
 
-fn hyprland_dispatch(dispatcher: &str, argument: &str) -> Result<()> {
+fn hyprland_dispatch(dispatcher: &str) -> Result<()> {
     let output = Command::new("hyprctl")
-        .args(["dispatch", dispatcher, argument])
+        .args(["dispatch", dispatcher])
         .output()
         .with_context(|| format!("failed to dispatch Hyprland {dispatcher}"))?;
     if !output.status.success() {

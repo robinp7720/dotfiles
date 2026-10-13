@@ -140,21 +140,32 @@ impl Session {
         set_monitor_mode(&self.config, &self.config.modes.home)?;
         run(
             "hyprctl",
-            &["dispatch", "focusmonitor", &self.config.output],
+            &[
+                "dispatch",
+                &format!("hl.dsp.focus({{ monitor = {:?} }})", self.config.output),
+            ],
         )?;
         run(
             "hyprctl",
             &[
                 "dispatch",
-                "workspace",
-                &format!("name:{}", self.config.workspace),
+                &format!(
+                    "hl.dsp.focus({{ workspace = {:?} }})",
+                    format!("name:{}", self.config.workspace)
+                ),
             ],
         )?;
         for monitor in &self.snapshot.monitors {
             if monitor.name != self.config.output {
                 run(
                     "hyprctl",
-                    &["keyword", "monitor", &format!("{},disable", monitor.name)],
+                    &[
+                        "eval",
+                        &format!(
+                            "hl.monitor({{ output = {:?}, disabled = true }})",
+                            monitor.name
+                        ),
+                    ],
                 )?;
             }
         }
@@ -351,6 +362,18 @@ fn parse_monitor(value: &Value) -> Result<MonitorSnapshot> {
     })
 }
 
+fn restore_monitor_command(monitor: &MonitorSnapshot) -> String {
+    let mode = format!(
+        "{}x{}@{:.3}",
+        monitor.width, monitor.height, monitor.refresh_rate
+    );
+    let position = format!("{}x{}", monitor.x, monitor.y);
+    format!(
+        "hl.monitor({{ output = {:?}, mode = {mode:?}, position = {position:?}, scale = {}, transform = {}, disabled = false }})",
+        monitor.name, monitor.scale, monitor.transform
+    )
+}
+
 fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
     let mut errors = Vec::new();
     let same_hyprland_instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE")
@@ -359,30 +382,8 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
 
     if same_hyprland_instance {
         for monitor in &snapshot.monitors {
-            let mode = format!(
-                "{},{}x{}@{:.3},{}x{},{:.3}",
-                monitor.name,
-                monitor.width,
-                monitor.height,
-                monitor.refresh_rate,
-                monitor.x,
-                monitor.y,
-                monitor.scale
-            );
-            collect_error(&mut errors, run("hyprctl", &["keyword", "monitor", &mode]));
-            if monitor.transform > 0 {
-                collect_error(
-                    &mut errors,
-                    run(
-                        "hyprctl",
-                        &[
-                            "keyword",
-                            "monitor",
-                            &format!("{},transform,{}", monitor.name, monitor.transform),
-                        ],
-                    ),
-                );
-            }
+            let command = restore_monitor_command(monitor);
+            collect_error(&mut errors, run("hyprctl", &["eval", &command]));
         }
         thread::sleep(Duration::from_millis(350));
         for workspace in &snapshot.workspaces {
@@ -392,9 +393,10 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
                     "hyprctl",
                     &[
                         "dispatch",
-                        "moveworkspacetomonitor",
-                        &workspace.name,
-                        &workspace.monitor,
+                        &format!(
+                            "hl.dsp.workspace.move({{ workspace = {:?}, monitor = {:?} }})",
+                            workspace.name, workspace.monitor
+                        ),
                     ],
                 ),
             );
@@ -402,13 +404,25 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
         if let Some(monitor) = &snapshot.focused_monitor {
             collect_error(
                 &mut errors,
-                run("hyprctl", &["dispatch", "focusmonitor", monitor]),
+                run(
+                    "hyprctl",
+                    &[
+                        "dispatch",
+                        &format!("hl.dsp.focus({{ monitor = {monitor:?} }})"),
+                    ],
+                ),
             );
         }
         if let Some(workspace) = &snapshot.focused_workspace {
             collect_error(
                 &mut errors,
-                run("hyprctl", &["dispatch", "workspace", workspace]),
+                run(
+                    "hyprctl",
+                    &[
+                        "dispatch",
+                        &format!("hl.dsp.focus({{ workspace = {workspace:?} }})"),
+                    ],
+                ),
             );
         }
     }
@@ -471,9 +485,11 @@ fn set_monitor_mode(config: &Config, mode: &str) -> Result<()> {
     run(
         "hyprctl",
         &[
-            "keyword",
-            "monitor",
-            &format!("{},{},0x0,{}", config.output, mode, config.modes.scale),
+            "eval",
+            &format!(
+                "hl.monitor({{ output = {:?}, mode = {mode:?}, position = \"0x0\", scale = {}, disabled = false }})",
+                config.output, config.modes.scale
+            ),
         ],
     )
 }
@@ -703,6 +719,24 @@ mod tests {
         assert_eq!(monitor.name, "HDMI-A-2");
         assert_eq!(monitor.width, 3840);
         assert_eq!(monitor.x, 6000);
+    }
+
+    #[test]
+    fn monitor_restore_reenables_output_and_clears_tv_transform() {
+        let monitor = MonitorSnapshot {
+            name: "DP-3".into(),
+            width: 3840,
+            height: 2160,
+            refresh_rate: 60.0,
+            x: -2160,
+            y: 1092,
+            scale: 1.25,
+            transform: 0,
+        };
+        assert_eq!(
+            restore_monitor_command(&monitor),
+            r#"hl.monitor({ output = "DP-3", mode = "3840x2160@60.000", position = "-2160x1092", scale = 1.25, transform = 0, disabled = false })"#
+        );
     }
 
     #[test]
