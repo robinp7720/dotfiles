@@ -181,7 +181,7 @@ test_compositor_dpms_and_context() {
 
   PATH="$bin_dir:/usr/bin:/bin" TEST_LOG="$log" TEST_COMPOSITOR=hyprland \
     "$ROOT_DIR/scripts/session_display.sh" off
-  assert_contains "$log" 'dispatch dpms off'
+  assert_contains "$log" 'dispatch hl.dsp.dpms({ action = "off" })'
 
   : > "$log"
   PATH="$bin_dir:/usr/bin:/bin" TEST_LOG="$log" TEST_COMPOSITOR=niri \

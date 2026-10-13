@@ -221,15 +221,15 @@ if [[ "${INSTALL_SYSTEM_CONFIG:-1}" == "1" ]] && command -v sudo >/dev/null 2>&1
     cache_dir="/var/cache/matugen"
     cache_css="${cache_dir}/greetd.css"
     target_css="/etc/nwg-hello/nwg-hello.css"
-    target_hypr="/etc/nwg-hello/hyprland.conf"
-    target_base="/etc/nwg-hello/base.conf"
-    target_monitors="/etc/nwg-hello/monitors.conf"
-    source_hypr="$DIR/nwg-hello/hyprland.conf"
-    source_base="$DIR/hypr/hyprland-config/base.conf"
-    source_monitors="$DIR/hypr/monitors.conf"
+    target_hypr="/etc/nwg-hello/hyprland.lua"
+    target_base="/etc/nwg-hello/base.lua"
+    target_monitors="/etc/nwg-hello/monitors.lua"
+    source_hypr="$DIR/nwg-hello/hyprland.lua"
+    source_base="$DIR/hypr/hyprland-config/base.lua"
+    source_monitors="$DIR/hypr/monitors.lua"
 
     if [[ ! -e "$source_monitors" ]]; then
-      source_monitors="$DIR/hypr/monitor_layouts/default.conf"
+      source_monitors="$DIR/hypr/monitor_layouts/default.lua"
     fi
 
     sudo mkdir -p "$cache_dir"

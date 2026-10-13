@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 lock_file="${XDG_RUNTIME_DIR:-/tmp}/center-tws-login.lock"
 exec 9>"$lock_file" || exit 0
@@ -26,13 +28,16 @@ center_tws_login() {
              .address' |
         while IFS= read -r address; do
             [ -n "$address" ] || continue
-            hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" >/dev/null
-            hyprctl dispatch focuswindow "address:$address" >/dev/null
-            hyprctl dispatch centerwindow >/dev/null
+            [[ "$address" =~ ^0x[[:xdigit:]]+$ ]] || continue
+            # Encode the workspace as codepoints so names cannot inject Lua code.
+            workspace_lua="$(printf '%s' "$workspace" | jq -Rrs '"utf8.char(" + (explode | map(tostring) | join(",")) + ")"')"
+            hyprctl dispatch "hl.dsp.window.move({ workspace = $workspace_lua, window = \"address:$address\", follow = false })" >/dev/null
+            hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null
+            hyprctl dispatch 'hl.dsp.window.center()' >/dev/null
         done
 }
 
 while :; do
-    center_tws_login
+    center_tws_login || true
     sleep 1
 done

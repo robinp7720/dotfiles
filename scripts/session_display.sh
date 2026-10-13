@@ -13,7 +13,7 @@ case "$action" in
 esac
 
 if command -v hyprctl >/dev/null 2>&1 && hyprctl monitors >/dev/null 2>&1; then
-  hyprctl dispatch dpms "$action" >/dev/null
+  hyprctl dispatch "hl.dsp.dpms({ action = \"$action\" })" >/dev/null
 elif command -v niri >/dev/null 2>&1 && niri msg outputs >/dev/null 2>&1; then
   if [[ "$action" == "on" ]]; then
     niri msg action power-on-monitors >/dev/null

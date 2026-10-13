@@ -76,9 +76,9 @@ make_setup_fixture() {
     "$repo_root/scripts/launch_kitty.sh" \
     "$repo_root/systemd/user/example.service" \
     "$repo_root/tools/launcher/target/release/Luma" \
-    "$repo_root/nwg-hello/hyprland.conf" \
-    "$repo_root/hypr/hyprland-config/base.conf" \
-    "$repo_root/hypr/monitor_layouts/default.conf" \
+    "$repo_root/nwg-hello/hyprland.lua" \
+    "$repo_root/hypr/hyprland-config/base.lua" \
+    "$repo_root/hypr/monitor_layouts/default.lua" \
     "$repo_root/matugen/templates/greetd.css" \
     "$repo_root/greetd/config.toml"
 
@@ -294,12 +294,12 @@ require_fixed 'ExecStart=%h/.dotfiles/scripts/awww_wallpaper_watcher.sh --watch'
 reject_fixed 'awww-daemon -q' "scripts/awww_wallpaper_watcher.sh"
 reject_fixed 'awww-daemon.sock' "scripts/awww_wallpaper_watcher.sh"
 
-require_fixed 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
-require_fixed 'exec-once = systemctl --user restart awww-daemon.service awww-wallpaper.service' "hypr/hyprland-config/startup.conf"
-require_fixed 'exec-once = systemctl --user restart hypridle.service' "hypr/hyprland-config/startup.conf"
-require_order 'exec-once = dbus-update-activation-environment --all' 'exec-once = systemctl --user restart vigil.service' "hypr/hyprland-config/startup.conf"
-require_fixed 'layerrule = blur on, match:namespace vigil' "hypr/hyprland-config/base.conf"
-require_fixed 'layerrule = ignore_alpha 0.20, match:namespace vigil' "hypr/hyprland-config/base.conf"
+require_fixed 'hl.exec_cmd("systemctl --user restart vigil.service")' "hypr/hyprland-config/startup.lua"
+require_fixed 'hl.exec_cmd("systemctl --user restart awww-daemon.service awww-wallpaper.service")' "hypr/hyprland-config/startup.lua"
+require_fixed 'hl.exec_cmd("systemctl --user restart hypridle.service")' "hypr/hyprland-config/startup.lua"
+require_order 'hl.exec_cmd("dbus-update-activation-environment --all")' 'hl.exec_cmd("systemctl --user restart vigil.service")' "hypr/hyprland-config/startup.lua"
+require_fixed 'name = "vigil-blur", match = { namespace = "vigil" }, blur = true' "hypr/hyprland-config/base.lua"
+require_fixed 'name = "vigil-ignore_alpha", match = { namespace = "vigil" }, ignore_alpha = 0.20' "hypr/hyprland-config/base.lua"
 
 require_fixed 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' "niri/config.kdl"
 require_fixed 'systemctl --user restart vigil.service' "niri/config.kdl"
@@ -308,7 +308,7 @@ require_fixed 'systemctl --user restart hypridle.service' "niri/config.kdl"
 require_order 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' 'systemctl --user restart vigil.service' "niri/config.kdl"
 require_fixed 'match namespace="^vigil$"' "niri/config.kdl"
 require_fixed 'Mod+B hotkey-overlay-title="Open Control Center" { spawn "vigil" "control-center" "open"; }' "niri/config.kdl"
-require_fixed 'bindd = $mainMod, B, Toggle quick settings, exec, vigil control-center toggle' "hypr/hyprland-config/bindings.conf"
+require_fixed 'hl.bind("SUPER + B", hl.dsp.exec_cmd("vigil control-center toggle"), { description = "Toggle quick settings" })' "hypr/hyprland-config/bindings.lua"
 
 require_fixed 'let root = gtk::CenterBox::new();' "tools/bar/src/ui/surface.rs"
 reject_fixed 'CENTER_SLOT_MIN_WIDTH' "tools/bar/src/ui/surface.rs"
@@ -467,11 +467,11 @@ require_fixed 'ControlCenterMotionEvent::Dismiss' "tools/bar/src/ui/control_cent
 reject_fixed 'surface.dismiss_popovers();' "tools/bar/src/ui/surface.rs"
 require_fixed 'window.set_margin(Edge::Top, top_margin);' "tools/bar/src/ui/control_center.rs"
 reject_fixed 'BAR_HEIGHT + SURFACE_MARGIN * 2,' "tools/bar/src/ui/surface.rs"
-require_fixed 'layerrule = no_anim on, match:namespace vigil-control-center' "hypr/hyprland-config/base.conf"
+require_fixed 'name = "vigil-control-center-no_anim", match = { namespace = "vigil-control-center" }, no_anim = true' "hypr/hyprland-config/base.lua"
 
-reject_fixed 'waybar' "hypr/hyprland-config/startup.conf"
+reject_fixed 'waybar' "hypr/hyprland-config/startup.lua"
 reject_fixed 'waybar' "niri/config.kdl"
-reject_fixed 'anyrun' "hypr/hyprland-config/startup.conf"
+reject_fixed 'anyrun' "hypr/hyprland-config/startup.lua"
 
 verify_managed_stale_binary_link_cleanup
 verify_legacy_cockpit_links_cleanup

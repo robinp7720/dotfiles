@@ -34,7 +34,7 @@ Hyprland owns Luma's layer entry and exit. Vigil owns its bar and quick-settings
 animations, with compositor animation disabled for those two namespaces. This
 avoids applying two entrance transforms to one surface. GTK controls respect
 reduced motion; compositor motion can separately be disabled with
-`animations.enabled = no` in `hypr/hyprland-config/base.conf`. Vigil also offers
+`animations = { enabled = false }` in `hypr/hyprland-config/base.lua`. Vigil also offers
 `experience.motion = "calm"` and `experience.ambient_motion = "off"`.
 
 Every monitor has a visible search button. Left-click opens Luma there;

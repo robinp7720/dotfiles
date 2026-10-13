@@ -39,7 +39,7 @@ cargo build --release --manifest-path tools/tv-mode/Cargo.toml
 
 Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update greetd/nwg-hello under `/etc`.
 
-Restart the session after initial installation. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
+Restart the session after initial installation. When migrating an existing Hyprland session from `.conf` to Lua, use `hyprctl reload full-reset` once to switch parsers. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
 
 ## Repository Layout
 
@@ -100,6 +100,7 @@ vigil control-center close
 
 ## Configuration Notes
 
+- Hyprland loads `hypr/hyprland.lua` and native Lua modules in `hypr/hyprland-config/` (Hyprland 0.55+). Desktop is the default; set `HYPRLAND_PROFILE=laptop` before starting Hyprland, or use `--config ~/.config/hypr/hyprland-config/laptop.lua`. Matugen generates `hypr/colors.lua` and reloads the palette. Vigil, Luma, TV mode, and display helpers use the Lua IPC API; rebuild the tools when migrating.
 - Monitor layouts live in `hypr/monitor_layouts/`, `hypr/monitors.lua`, and `niri/outputs.kdl`. Update connector names when hardware changes.
 - `scripts/awww_wallpapers.conf` maps wallpapers to outputs. `awww-daemon.service` owns the sole wallpaper daemon; `awww-wallpaper.service` applies images and follows output changes.
 - Matugen writes generated palettes to ignored runtime paths. Run `matugen image <wallpaper> -c ~/.config/matugen/config.toml` to refresh them.
@@ -115,8 +116,8 @@ vigil control-center close
 bash -n setup.sh scripts/*.sh hypr/scripts/modes/*.sh
 for test_file in tests/*.sh scripts/tests/*.sh; do bash "$test_file"; done
 niri validate -c niri/config.kdl
-Hyprland --config hypr/hyprland-config/desktop.conf --verify-config
-Hyprland --config hypr/hyprland-config/laptop.conf --verify-config
+Hyprland --config hypr/hyprland-config/desktop.lua --verify-config
+Hyprland --config hypr/hyprland-config/laptop.lua --verify-config
 cargo test --manifest-path tools/bar/Cargo.toml
 cargo test --manifest-path tools/launcher/Cargo.toml
 cargo test --manifest-path tools/tv-mode/Cargo.toml

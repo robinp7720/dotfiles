@@ -23,3 +23,6 @@ tools/*/target/
 nvim/.netrwhist
 nvim/.tags
 nvim/.stfolder/
+
+# Generated Hyprland Lua palette
+hypr/colors.lua
