@@ -327,6 +327,8 @@ require_fixed 'window.set_exclusive_zone(-1);' "tools/bar/src/ui/control_center.
 require_fixed 'panel_morph.set_child(Some(&root));' "tools/bar/src/ui/control_center.rs"
 require_fixed 'stage::track_input(&window' "tools/bar/src/ui/control_center.rs"
 require_fixed 'stack.set_hhomogeneous(true);' "tools/bar/src/ui/control_center.rs"
+require_fixed 'page_morph.set_child(Some(&stack));' "tools/bar/src/ui/control_center.rs"
+reject_fixed 'gtk::StackTransitionType::SlideLeft' "tools/bar/src/ui/control_center.rs"
 require_fixed 'Self::Bluetooth => "bluetooth"' "tools/bar/src/ui/control_center.rs"
 require_fixed 'nav_for_back.navigate(ControlCenterFocus::Overview, true);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'Open {} in Luma' "tools/bar/src/ui/control_center.rs"
