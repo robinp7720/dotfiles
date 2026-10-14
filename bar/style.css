@@ -520,48 +520,6 @@ window.control-center-window {
   background: transparent;
 }
 
-@keyframes control-center-enter {
-  0% {
-    opacity: 0;
-    transform: translate(24px, -20px) scale(0.88);
-  }
-
-  54% {
-    opacity: 1;
-    transform: translate(-4px, 4px) scale(1);
-  }
-
-  72% {
-    transform: translate(2px, -2px) scale(0.975);
-  }
-
-  88% {
-    transform: translate(-1px, 1px) scale(0.995);
-  }
-
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes control-center-exit {
-  0% {
-    opacity: 1;
-    transform: none;
-  }
-
-  18% {
-    opacity: 1;
-    transform: translate(-2px, 2px) scale(0.985);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(14px, -14px) scale(0.96);
-  }
-}
-
 popover contents label,
 popover contents image,
 window.control-center-window label,
@@ -607,15 +565,6 @@ window.control-center-window scale:focus-visible {
   border-radius: 18px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.44);
   border-spacing: 12px;
-  transform-origin: 100% 0;
-}
-
-.control-center-root.control-center-entering {
-  animation: control-center-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.control-center-root.control-center-exiting {
-  animation: control-center-exit 180ms cubic-bezier(0.55, 0, 0.8, 0.3) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -644,15 +593,6 @@ window.control-center-window scale:focus-visible {
   .control-error-slot.is-pending,
   .control-error-slot.is-success,
   .control-error-slot.has-error {
-    animation: none;
-  }
-
-  .control-center-root.control-center-entering {
-    animation: none;
-  }
-
-  .control-center-root.control-center-exiting {
-    opacity: 0;
     animation: none;
   }
 }
