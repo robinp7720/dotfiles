@@ -19,6 +19,7 @@
 - `vigil control-center close` must hide the panel immediately without animation (used by `scripts/session_lock.sh`).
 - Layer namespaces stay `vigil`, `vigil-control-center`, `vigil-notifications`.
 - Shell/CSS/Rust style per `AGENTS.md`; `cargo fmt`; Conventional Commits with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- `tools/bar` is the Vigil git submodule. Rust/README changes are committed inside `tools/bar` on its branch `feat/vigil-morphing-transitions`; `bar/style.css`, `tests/`, and `docs/` are committed in the dotfiles root repo on its branch `feat/vigil-morphing-transitions`. A task touching both makes one commit in each repo. Commit trailers use the Co-Authored-By line from your own harness attribution reminder.
 - All cargo commands run from `tools/bar`. CSS lives in `bar/style.css` (symlinked to `~/.config/vigil/style.css`).
 
 ## File Map
