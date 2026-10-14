@@ -473,6 +473,7 @@ reject_fixed 'surface.dismiss_popovers();' "tools/bar/src/ui/surface.rs"
 require_fixed 'window.set_margin(Edge::Top, top_margin);' "tools/bar/src/ui/control_center.rs"
 reject_fixed 'BAR_HEIGHT + SURFACE_MARGIN * 2,' "tools/bar/src/ui/surface.rs"
 require_fixed 'name = "vigil-control-center-no_anim", match = { namespace = "vigil-control-center" }, no_anim = true' "hypr/hyprland-config/base.lua"
+require_fixed 'name = "vigil-notifications-no_anim", match = { namespace = "vigil-notifications" }, no_anim = true' "hypr/hyprland-config/base.lua"
 
 reject_fixed 'waybar' "hypr/hyprland-config/startup.lua"
 reject_fixed 'waybar' "niri/config.kdl"

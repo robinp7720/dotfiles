@@ -78,9 +78,10 @@ hl.animation({ leaf = "borderangle", enabled = false })
 hl.layer_rule({ name = "Luma-blur", match = { namespace = "Luma" }, blur = true })
 hl.layer_rule({ name = "kitty-quick-access-blur", match = { namespace = "kitty-quick-access" }, blur = true })
 hl.layer_rule({ name = "vigil-blur", match = { namespace = "vigil" }, blur = true })
--- Vigil owns the bar and quick-settings entrance animations.
+-- Vigil owns the bar, quick-settings, and toast entrance animations.
 hl.layer_rule({ name = "vigil-no_anim", match = { namespace = "vigil" }, no_anim = true })
 hl.layer_rule({ name = "vigil-control-center-no_anim", match = { namespace = "vigil-control-center" }, no_anim = true })
+hl.layer_rule({ name = "vigil-notifications-no_anim", match = { namespace = "vigil-notifications" }, no_anim = true })
 hl.layer_rule({ name = "tv-mode-no_anim", match = { namespace = "tv-mode" }, no_anim = true })
 hl.layer_rule({ name = "vigil-control-center-blur", match = { namespace = "vigil-control-center" }, blur = true })
 hl.layer_rule({ name = "vigil-notifications-blur", match = { namespace = "vigil-notifications" }, blur = true })
