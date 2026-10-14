@@ -1822,7 +1822,6 @@ window.notification-window {
 
 .notification-toast {
   min-width: 0;
-  animation: cockpit-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .notification-inbox-card {
