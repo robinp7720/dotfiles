@@ -53,9 +53,11 @@ content.
   full panel, and on close springs back into the same button.
 - The control-center window uses `exclusive_zone(-1)` and computes its own top
   margin (`SURFACE_MARGIN + BAR_HEIGHT + gap`) so it can overlap the bar.
-- While morphing, the layer surface is sized to the union of the origin and
-  final rectangles; `gdk::Surface::set_input_region` restricts input to the
-  current morph shape. On settle, the surface shrinks to the panel.
+- The layer surface is a transparent full-height stage anchored top/right/
+  bottom, wide enough (set before each open) to contain both the origin and
+  the panel, so no surface resizes happen during a morph or page change.
+  `gdk::Surface::set_input_region` is reapplied on every frame-clock paint to
+  restrict input to the current visible shape.
 - Origin fallback order: requesting button bounds, then the right status
   cluster bounds, then a centered rectangle at 0.92 scale of the panel.
 - Replaces `ControlCenterMotion`'s fixed 320/180ms timers and the
@@ -78,8 +80,9 @@ crossfade.
 - Rows are reconciled by notification id instead of rebuilt. An inserted toast
   morphs out of the island's rectangle; a removed toast collapses upward and
   fades; remaining rows spring their heights to reflow.
-- The same transient surface enlargement and input-region rule as the control
-  center applies during arrival.
+- The toast window is the same kind of full-height transparent stage
+  (horizontally centered), with input limited to the visible cards. Outputs
+  without a center island (reduced bars) use a top-center pill as the origin.
 - Hover-pause, critical persistence, and DND behavior are unchanged.
 
 ## Edge Cases
