@@ -18,9 +18,9 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use serde_json::Value;
 
-use crate::config::{CommandSpec, Config};
+use crate::config::{CommandSpec, Config, mode_label};
 use crate::control::{self, ControlCommand};
-use crate::session::{Profile, Session};
+use crate::session::{Profile, Session, hyprland_dispatch};
 
 const POWER_HOLD: Duration = Duration::from_secs(2);
 const GUIDE_HOLD: Duration = Duration::from_millis(1500);
@@ -166,7 +166,7 @@ fn build_ui(
     window.set_anchor(Edge::Right, true);
     window.set_anchor(Edge::Bottom, true);
     window.set_anchor(Edge::Left, true);
-    window.set_exclusive_zone(0);
+    window.set_exclusive_zone(-1);
     window.set_keyboard_mode(KeyboardMode::Exclusive);
     window.add_css_class("tv-shell");
 
@@ -204,8 +204,18 @@ fn build_ui(
     hero.set_vexpand(true);
     hero.set_valign(gtk::Align::Center);
 
-    let steam = tile_button("", "Steam", "Big Picture • 1080p 120 Hz", "hero steam");
-    let kodi = tile_button("󰟴", "Kodi", "Media center • 4K 60 Hz", "hero kodi");
+    let steam = tile_button(
+        "",
+        "Steam",
+        &format!("Big Picture • {}", mode_label(&config.modes.gaming)),
+        "hero steam",
+    );
+    let kodi = tile_button(
+        "󰟴",
+        "Kodi",
+        &format!("Media center • {}", mode_label(&config.modes.media)),
+        "hero kodi",
+    );
     let sleep = tile_button("󰒲", "Sleep", "Hold to lock and suspend", "utility");
     let shutdown = tile_button("󰐥", "Shut down", "Hold to power off", "utility danger");
     let exit = tile_button(
@@ -222,7 +232,10 @@ fn build_ui(
     root.append(&hero);
 
     let footer = gtk::Box::new(gtk::Orientation::Horizontal, 20);
-    let status = gtk::Label::new(Some("TV audio • 4K 60 Hz"));
+    let status = gtk::Label::new(Some(&format!(
+        "TV audio • {}",
+        mode_label(&config.modes.home)
+    )));
     status.add_css_class("tv-status");
     status.set_xalign(0.0);
     status.set_hexpand(true);
@@ -374,14 +387,17 @@ fn handle_event(state: &Rc<UiState>, event: UiEvent) {
         UiEvent::ExitRequested => request_exit(state),
         UiEvent::AppExited(kind) if state.active_app.get() == Some(kind) => {
             state.active_app.set(None);
-            if let Some(session) = state.session.borrow().as_ref()
-                && let Err(error) = session.apply_profile(Profile::Home)
-            {
-                state
-                    .status
-                    .set_text(&format!("Failed to restore home profile: {error}"));
+            if let Some(session) = state.session.borrow().as_ref() {
+                match session.apply_profile(Profile::Home) {
+                    Ok(()) => state.status.set_text(&format!(
+                        "TV audio • {}",
+                        mode_label(&session.config().modes.home)
+                    )),
+                    Err(error) => state
+                        .status
+                        .set_text(&format!("Failed to restore home profile: {error}")),
+                }
             }
-            state.status.set_text("TV audio • 4K 60 Hz");
             state.window.present();
             state.buttons[0].grab_focus();
         }
@@ -420,12 +436,20 @@ fn launch_app(state: &Rc<UiState>, kind: AppKind) {
             AppKind::Steam => (
                 Profile::Gaming,
                 session.config().apps.steam.clone(),
-                "Steam • 1080p 120 Hz • performance",
+                format!(
+                    "Steam • {} • {}",
+                    mode_label(&session.config().modes.gaming),
+                    session.config().power.gaming
+                ),
             ),
             AppKind::Kodi => (
                 Profile::Media,
                 session.config().apps.kodi.clone(),
-                "Kodi • 4K 60 Hz • balanced",
+                format!(
+                    "Kodi • {} • {}",
+                    mode_label(&session.config().modes.media),
+                    session.config().power.media
+                ),
             ),
         };
         if let Err(error) = session.apply_profile(profile) {
@@ -439,13 +463,12 @@ fn launch_app(state: &Rc<UiState>, kind: AppKind) {
     match spawn_command(&command) {
         Ok(child) => {
             state.active_app.set(Some(kind));
-            state.status.set_text(label);
+            state.status.set_text(&label);
             state.window.set_visible(false);
             match kind {
                 AppKind::Kodi => spawn_child_waiter(child, kind, state.events.clone()),
                 AppKind::Steam => {
-                    drop(child);
-                    spawn_steam_monitor(workspace, state.events.clone());
+                    spawn_steam_monitor(child, workspace, state.events.clone());
                 }
             }
         }
@@ -519,23 +542,84 @@ fn spawn_command(spec: &CommandSpec) -> Result<Child> {
 }
 
 fn spawn_child_waiter(mut child: Child, kind: AppKind, sender: Sender<UiEvent>) {
-    thread::spawn(move || match child.wait() {
-        Ok(_) => {
-            let _ = sender.send(UiEvent::AppExited(kind));
-        }
-        Err(error) => {
-            let _ = sender.send(UiEvent::Error(format!("App monitor failed: {error}")));
-            let _ = sender.send(UiEvent::AppExited(kind));
+    thread::spawn(move || {
+        let mut seen_window = false;
+        let mut absent_since = None;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let _ = sender.send(UiEvent::AppExited(kind));
+                    if !status.success() {
+                        let _ =
+                            sender.send(UiEvent::Error(format!("{kind:?} exited with {status}")));
+                    }
+                    return;
+                }
+                Err(error) => {
+                    let _ = sender.send(UiEvent::AppExited(kind));
+                    let _ = sender.send(UiEvent::Error(format!("App monitor failed: {error}")));
+                    return;
+                }
+                Ok(None) => {}
+            }
+            match hyprland_clients() {
+                Ok(clients) if has_app_window(&clients, kind) => {
+                    seen_window = true;
+                    absent_since = None;
+                }
+                Ok(_) if seen_window => {
+                    let since = absent_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= APP_EXIT_STABLE {
+                        // Kodi's shell wrapper can spend minutes generating a crash
+                        // report after the window is gone. Restore home while it
+                        // finishes, and reap it without emitting a second exit event.
+                        let _ = sender.send(UiEvent::AppExited(kind));
+                        let _ = child.wait();
+                        return;
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => absent_since = None,
+            }
+            thread::sleep(Duration::from_millis(250));
         }
     });
 }
 
-fn spawn_steam_monitor(workspace: String, sender: Sender<UiEvent>) {
+fn has_app_window(clients: &Value, kind: AppKind) -> bool {
+    let class = match kind {
+        AppKind::Kodi => "kodi",
+        AppKind::Steam => "steam",
+    };
+    clients.as_array().is_some_and(|clients| {
+        clients.iter().any(|client| {
+            client
+                .get("mapped")
+                .and_then(Value::as_bool)
+                .unwrap_or(true)
+                && ["class", "initialClass"].iter().any(|key| {
+                    client
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value.eq_ignore_ascii_case(class))
+                })
+        })
+    })
+}
+
+fn spawn_steam_monitor(mut child: Child, workspace: String, sender: Sender<UiEvent>) {
+    let (launcher_tx, launcher_rx) = mpsc::channel();
     thread::spawn(move || {
-        let started = Instant::now();
-        let mut seen_client = false;
+        let _ = launcher_tx.send(child.wait());
+    });
+    thread::spawn(move || {
+        let mut launcher_finished_at: Option<Instant> = None;
+        let mut seen_ready_client = false;
         let mut absent_since: Option<Instant> = None;
         loop {
+            if launcher_finished_at.is_none() && launcher_rx.try_recv().is_ok() {
+                launcher_finished_at = Some(Instant::now());
+            }
             match steam_client_state(&workspace) {
                 Ok(state) if state.session_active => {
                     for address in state.games_needing_fullscreen {
@@ -543,21 +627,26 @@ fn spawn_steam_monitor(workspace: String, sender: Sender<UiEvent>) {
                             eprintln!("failed to keep Steam game {address} fullscreen: {error:#}");
                         }
                     }
-                    seen_client = true;
+                    seen_ready_client |= state.session_ready;
                     absent_since = None;
                 }
-                Ok(_) if seen_client => {
+                Ok(_) if seen_ready_client => {
                     let since = absent_since.get_or_insert_with(Instant::now);
                     if since.elapsed() >= APP_EXIT_STABLE {
                         let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
                         return;
                     }
                 }
-                Ok(_) if started.elapsed() >= APP_START_GRACE => {
-                    let _ = sender.send(UiEvent::Error(
-                        "Steam did not open a window on the TV workspace".to_string(),
-                    ));
+                // Steam can spend longer than the grace period updating before
+                // Big Picture appears. Only time out after its launcher exits.
+                Ok(_)
+                    if launcher_finished_at
+                        .is_some_and(|finished| finished.elapsed() >= APP_START_GRACE) =>
+                {
                     let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
+                    let _ = sender.send(UiEvent::Error(
+                        "Steam exited without opening an entertainment window".to_string(),
+                    ));
                     return;
                 }
                 Ok(_) => {}
@@ -617,6 +706,7 @@ fn has_mapped_client_on_workspace(clients: &Value, workspace: &str) -> bool {
 #[derive(Debug, Default, Eq, PartialEq)]
 struct SteamClientState {
     session_active: bool,
+    session_ready: bool,
     games_needing_fullscreen: Vec<String>,
 }
 
@@ -650,6 +740,9 @@ fn steam_client_state_from_json(clients: &Value, workspace: &str) -> SteamClient
             class.eq_ignore_ascii_case("steam") || initial_class.eq_ignore_ascii_case("steam");
         let is_game = class.starts_with("steam_app_") || initial_class.starts_with("steam_app_");
         state.session_active |= on_tv_workspace || is_steam || is_game;
+        // Update/login windows may close well before Big Picture is ready.
+        state.session_ready |=
+            is_game || (is_steam && client.get("fullscreen").and_then(Value::as_i64) == Some(2));
         if is_game
             && (client.get("fullscreen").and_then(Value::as_i64) != Some(2)
                 || client.get("fullscreenClient").and_then(Value::as_i64) != Some(2))
@@ -669,20 +762,6 @@ fn enforce_game_fullscreen(address: &str) -> Result<()> {
     hyprland_dispatch(
         "hl.dsp.window.fullscreen_state({ internal = 2, client = 2, action = \"set\" })",
     )
-}
-
-fn hyprland_dispatch(dispatcher: &str) -> Result<()> {
-    let output = Command::new("hyprctl")
-        .args(["dispatch", dispatcher])
-        .output()
-        .with_context(|| format!("failed to dispatch Hyprland {dispatcher}"))?;
-    if !output.status.success() {
-        bail!(
-            "hyprctl dispatch {dispatcher} failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    Ok(())
 }
 
 fn navigate(state: &UiState, direction: NavDirection) {
@@ -871,6 +950,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn kodi_window_monitor_tracks_visible_app_across_workspaces() {
+        let mut clients = serde_json::json!([{
+            "class": "Kodi", "workspace": { "name": "5" }, "mapped": true
+        }]);
+        assert!(has_app_window(&clients, AppKind::Kodi));
+        clients[0]["mapped"] = Value::Bool(false);
+        assert!(!has_app_window(&clients, AppKind::Kodi));
+        assert!(!has_app_window(&serde_json::json!([]), AppKind::Kodi));
+    }
+
+    #[test]
+    fn steam_updater_is_not_a_ready_entertainment_session() {
+        let clients = serde_json::json!([{
+            "class": "steam", "title": "Updating Steam",
+            "workspace": { "name": "tv" }, "mapped": true, "fullscreen": 0
+        }]);
+        let state = steam_client_state_from_json(&clients, "tv");
+        assert!(state.session_active);
+        assert!(!state.session_ready);
+    }
+
+    #[test]
     fn stick_threshold_requires_release_before_repeating() {
         assert_eq!(axis_bucket(-1.0), -1);
         assert_eq!(axis_bucket(1.0), 1);
@@ -901,6 +1002,7 @@ mod tests {
             steam_client_state_from_json(&clients, "tv"),
             SteamClientState {
                 session_active: true,
+                session_ready: true,
                 games_needing_fullscreen: vec!["0xgame".to_string()],
             }
         );
@@ -921,6 +1023,7 @@ mod tests {
             steam_client_state_from_json(&clients, "tv"),
             SteamClientState {
                 session_active: true,
+                session_ready: true,
                 games_needing_fullscreen: Vec::new(),
             }
         );
@@ -943,6 +1046,7 @@ mod tests {
             steam_client_state_from_json(&clients, "tv"),
             SteamClientState {
                 session_active: true,
+                session_ready: true,
                 games_needing_fullscreen: Vec::new(),
             }
         );

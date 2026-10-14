@@ -90,7 +90,7 @@ impl Config {
             ("media", &self.modes.media),
         ] {
             ensure!(
-                valid_mode(mode),
+                DisplayMode::parse(mode).is_some(),
                 "{label} display mode must look like WIDTHxHEIGHT@REFRESH"
             );
         }
@@ -117,16 +117,37 @@ pub fn default_config_path() -> PathBuf {
         .join("config.toml")
 }
 
-fn valid_mode(mode: &str) -> bool {
-    let Some((size, refresh)) = mode.split_once('@') else {
-        return false;
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayMode {
+    pub width: u32,
+    pub height: u32,
+    pub refresh: f64,
+}
+
+impl DisplayMode {
+    pub fn parse(mode: &str) -> Option<Self> {
+        let (size, refresh) = mode.split_once('@')?;
+        let (width, height) = size.split_once('x')?;
+        let mode = Self {
+            width: width.parse().ok()?,
+            height: height.parse().ok()?,
+            refresh: refresh.trim_end_matches("Hz").parse().ok()?,
+        };
+        (mode.width > 0 && mode.height > 0 && mode.refresh.is_finite() && mode.refresh > 0.0)
+            .then_some(mode)
+    }
+}
+
+pub fn mode_label(mode: &str) -> String {
+    let Some(parsed) = DisplayMode::parse(mode) else {
+        return mode.to_string();
     };
-    let Some((width, height)) = size.split_once('x') else {
-        return false;
+    let resolution = match (parsed.width, parsed.height) {
+        (3840, 2160) => "4K".to_string(),
+        (1920, 1080) => "1080p".to_string(),
+        (width, height) => format!("{width}×{height}"),
     };
-    width.parse::<u32>().is_ok()
-        && height.parse::<u32>().is_ok()
-        && refresh.trim_end_matches("Hz").parse::<f64>().is_ok()
+    format!("{resolution} {} Hz", parsed.refresh)
 }
 
 fn default_workspace() -> String {
@@ -186,8 +207,18 @@ mod tests {
     #[test]
     fn rejects_invalid_display_mode() {
         let mut config = fixture();
-        config.modes.gaming = "fast".to_string();
-        assert!(config.validate().is_err());
+        for mode in [
+            "fast",
+            "0x1080@60",
+            "1920x0@60",
+            "1920x1080@0",
+            "1920x1080@-1",
+            "1920x1080@NaN",
+            "1920x1080@inf",
+        ] {
+            config.modes.gaming = mode.to_string();
+            assert!(config.validate().is_err(), "accepted {mode}");
+        }
     }
 
     #[test]

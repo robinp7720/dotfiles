@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::config::Config;
+use crate::config::{Config, DisplayMode};
 
 const SINK_WAIT: Duration = Duration::from_secs(3);
 
@@ -42,6 +42,8 @@ pub struct MonitorSnapshot {
     pub y: i32,
     pub scale: f64,
     pub transform: u8,
+    #[serde(default)]
+    pub active_workspace: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -65,7 +67,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn enter(config: Config) -> Result<Self> {
+    pub fn enter(mut config: Config) -> Result<Self> {
         let runtime_dir = runtime_dir()?;
         fs::create_dir_all(&runtime_dir)
             .with_context(|| format!("failed to create {}", runtime_dir.display()))?;
@@ -79,7 +81,7 @@ impl Session {
             );
         }
 
-        preflight(&config)?;
+        preflight(&mut config)?;
         let snapshot = capture_snapshot(&config)?;
         write_snapshot(&state_path, &snapshot)?;
 
@@ -137,7 +139,6 @@ impl Session {
         }
         switch_audio_to_tv(&self.config)?;
         set_power_profile(&self.config.power.home)?;
-        set_monitor_mode(&self.config, &self.config.modes.home)?;
         run(
             "hyprctl",
             &[
@@ -169,7 +170,8 @@ impl Session {
                 )?;
             }
         }
-        Ok(())
+        // Move the TV to the origin only after the desk outputs are disabled.
+        set_monitor_mode(&self.config, &self.config.modes.home)
     }
 }
 
@@ -213,7 +215,7 @@ pub fn state_path() -> Result<PathBuf> {
     Ok(runtime_dir()?.join("state.json"))
 }
 
-fn preflight(config: &Config) -> Result<()> {
+fn preflight(config: &mut Config) -> Result<()> {
     ensure!(
         std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some(),
         "TV mode requires a running Hyprland session"
@@ -250,20 +252,23 @@ fn preflight(config: &Config) -> Result<()> {
         .cloned()
         .unwrap_or_default();
     for mode in [
-        &config.modes.home,
-        &config.modes.gaming,
-        &config.modes.media,
+        &mut config.modes.home,
+        &mut config.modes.gaming,
+        &mut config.modes.media,
     ] {
-        let normalized = mode.trim_end_matches("Hz");
-        ensure!(
-            available.iter().filter_map(Value::as_str).any(|candidate| {
-                candidate.trim_end_matches("Hz").starts_with(normalized)
-                    || normalized.starts_with(candidate.trim_end_matches("Hz"))
-            }),
-            "TV output {} does not advertise mode {}",
-            config.output,
-            mode
-        );
+        let resolved = resolve_mode(mode, &available).ok_or_else(|| {
+            anyhow!(
+                "TV output {} does not advertise mode {} (available: {})",
+                config.output,
+                mode,
+                available
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+        *mode = resolved.to_string();
     }
 
     let cards = output("pactl", &["list", "cards"])?;
@@ -280,6 +285,25 @@ fn preflight(config: &Config) -> Result<()> {
         config.audio.card
     );
     Ok(())
+}
+
+fn resolve_mode<'a>(requested: &str, available: &'a [Value]) -> Option<&'a str> {
+    let requested = DisplayMode::parse(requested)?;
+    available
+        .iter()
+        .filter_map(Value::as_str)
+        .filter_map(|candidate| {
+            let mode = DisplayMode::parse(candidate)?;
+            let difference = (mode.refresh - requested.refresh).abs();
+            // EDID modes often use fractional timings (29.97/59.94/119.88).
+            // Keep the resolution exact and accept only near-equivalent refresh rates.
+            (mode.width == requested.width
+                && mode.height == requested.height
+                && difference <= requested.refresh * 0.002)
+                .then_some((candidate.trim_end_matches("Hz"), difference))
+        })
+        .min_by(|(_, left), (_, right)| left.total_cmp(right))
+        .map(|(mode, _)| mode)
 }
 
 fn capture_snapshot(config: &Config) -> Result<SessionSnapshot> {
@@ -359,6 +383,10 @@ fn parse_monitor(value: &Value) -> Result<MonitorSnapshot> {
             .and_then(Value::as_f64)
             .ok_or_else(|| anyhow!("monitor scale is missing"))?,
         transform: required_u64(value, "transform")? as u8,
+        active_workspace: value
+            .get("activeWorkspace")
+            .and_then(|workspace| string(workspace, "name"))
+            .map(str::to_string),
     })
 }
 
@@ -381,12 +409,39 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
         .is_some_and(|current| current == snapshot.hyprland_instance);
 
     if same_hyprland_instance {
-        for monitor in &snapshot.monitors {
+        // Move the TV out of the desk outputs' space before re-enabling them.
+        for monitor in snapshot
+            .monitors
+            .iter()
+            .filter(|monitor| monitor.name == config.output)
+            .chain(
+                snapshot
+                    .monitors
+                    .iter()
+                    .filter(|monitor| monitor.name != config.output),
+            )
+        {
             let command = restore_monitor_command(monitor);
             collect_error(&mut errors, run("hyprctl", &["eval", &command]));
         }
         thread::sleep(Duration::from_millis(350));
+        let workspaces = match hypr_json("workspaces") {
+            Ok(workspaces) => workspaces,
+            Err(error) => {
+                errors.push(error);
+                Value::Null
+            }
+        };
         for workspace in &snapshot.workspaces {
+            // Empty workspaces disappear when their output is disabled. Their
+            // visible replacements are recreated from the monitor snapshots below.
+            if !workspaces.as_array().is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| string(item, "name") == Some(workspace.name.as_str()))
+            }) {
+                continue;
+            }
             collect_error(
                 &mut errors,
                 run(
@@ -395,11 +450,27 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
                         "dispatch",
                         &format!(
                             "hl.dsp.workspace.move({{ workspace = {:?}, monitor = {:?} }})",
-                            workspace.name, workspace.monitor
+                            workspace_selector(&workspace.name),
+                            workspace.monitor
                         ),
                     ],
                 ),
             );
+        }
+        for monitor in &snapshot.monitors {
+            if let Some(workspace) = &monitor.active_workspace {
+                collect_error(
+                    &mut errors,
+                    hyprland_dispatch(&format!("hl.dsp.focus({{ monitor = {:?} }})", monitor.name)),
+                );
+                collect_error(
+                    &mut errors,
+                    hyprland_dispatch(&format!(
+                        "hl.dsp.focus({{ workspace = {:?} }})",
+                        workspace_selector(workspace)
+                    )),
+                );
+            }
         }
         if let Some(monitor) = &snapshot.focused_monitor {
             collect_error(
@@ -420,7 +491,10 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
                     "hyprctl",
                     &[
                         "dispatch",
-                        &format!("hl.dsp.focus({{ workspace = {workspace:?} }})"),
+                        &format!(
+                            "hl.dsp.focus({{ workspace = {:?} }})",
+                            workspace_selector(workspace)
+                        ),
                     ],
                 ),
             );
@@ -478,6 +552,14 @@ fn restore_snapshot(config: &Config, snapshot: &SessionSnapshot) -> Result<()> {
             .collect::<Vec<_>>()
             .join("; ");
         bail!("TV mode restoration was incomplete: {details}")
+    }
+}
+
+fn workspace_selector(name: &str) -> String {
+    if name.parse::<i32>().is_ok() {
+        name.to_string()
+    } else {
+        format!("name:{name}")
     }
 }
 
@@ -638,15 +720,34 @@ fn output(program: &str, args: &[&str]) -> Result<Output> {
         .args(args)
         .output()
         .with_context(|| format!("failed to execute {program}"))?;
-    if !result.status.success() {
+    check_output(program, args, &result)?;
+    Ok(result)
+}
+
+fn check_output(program: &str, args: &[&str], result: &Output) -> Result<()> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    // Lua dispatcher warnings can be returned on stdout with exit status zero.
+    let rejected = program == "hyprctl"
+        && matches!(args.first(), Some(&"dispatch" | &"eval"))
+        && !matches!(stdout.trim(), "" | "ok");
+    if !result.status.success() || rejected {
         bail!(
             "{} {} failed: {}",
             program,
             args.join(" "),
-            String::from_utf8_lossy(&result.stderr).trim()
+            [stderr.trim(), stdout.trim()]
+                .into_iter()
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>()
+                .join("; ")
         );
     }
-    Ok(result)
+    Ok(())
+}
+
+pub fn hyprland_dispatch(dispatcher: &str) -> Result<()> {
+    run("hyprctl", &["dispatch", dispatcher])
 }
 
 fn output_text(program: &str, args: &[&str]) -> Result<String> {
@@ -702,6 +803,82 @@ fn required_i64(value: &Value, key: &str) -> Result<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::process::ExitStatusExt;
+
+    #[test]
+    fn hyprland_warning_is_not_a_successful_dispatch() {
+        let result = Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: b"warning: hl.focus.monitor: monitor not found\n".to_vec(),
+            stderr: Vec::new(),
+        };
+        let error = check_output("hyprctl", &["dispatch", "test"], &result).unwrap_err();
+        assert!(error.to_string().contains("monitor not found"));
+        let success = Output {
+            stdout: b"ok\n".to_vec(),
+            ..result
+        };
+        check_output("hyprctl", &["dispatch", "test"], &success).unwrap();
+    }
+
+    #[test]
+    fn restores_named_workspaces_with_explicit_selectors() {
+        assert_eq!(workspace_selector("4"), "4");
+        assert_eq!(workspace_selector("games"), "name:games");
+    }
+
+    #[test]
+    fn resolves_fractional_tv_timings_to_advertised_modes() {
+        let available = vec![
+            Value::from("3840x2160@29.97Hz"),
+            Value::from("1920x1080@119.88Hz"),
+        ];
+        assert_eq!(
+            resolve_mode("3840x2160@30.0", &available),
+            Some("3840x2160@29.97")
+        );
+        assert_eq!(
+            resolve_mode("1920x1080@120", &available),
+            Some("1920x1080@119.88")
+        );
+        assert_eq!(
+            resolve_mode("1920x1080@119.879", &available),
+            Some("1920x1080@119.88")
+        );
+    }
+
+    #[test]
+    fn mode_resolution_prefers_closest_refresh_regardless_of_order() {
+        let available = vec![
+            Value::from("3840x2160@29.97Hz"),
+            Value::from("3840x2160@30.00Hz"),
+        ];
+        assert_eq!(
+            resolve_mode("3840x2160@30", &available),
+            Some("3840x2160@30.00")
+        );
+    }
+
+    #[test]
+    fn mode_resolution_rejects_wrong_resolution_and_refresh_prefixes() {
+        let available = vec![
+            Value::from("3840x2160@60.00Hz"),
+            Value::from("1920x1080@30.00Hz"),
+        ];
+        for requested in [
+            "3840x2160@6",
+            "3840x2160@30",
+            "3840x2160@600",
+            "1920x1080@60",
+        ] {
+            assert_eq!(
+                resolve_mode(requested, &available),
+                None,
+                "accepted {requested}"
+            );
+        }
+        assert_eq!(resolve_mode("3840x2160@60", &[]), None);
+    }
 
     #[test]
     fn parses_monitor_snapshot() {
@@ -713,12 +890,14 @@ mod tests {
             "x": 6000,
             "y": 675,
             "scale": 1.0,
-            "transform": 0
+            "transform": 0,
+            "activeWorkspace": { "id": 3, "name": "3" }
         });
         let monitor = parse_monitor(&value).unwrap();
         assert_eq!(monitor.name, "HDMI-A-2");
         assert_eq!(monitor.width, 3840);
         assert_eq!(monitor.x, 6000);
+        assert_eq!(monitor.active_workspace.as_deref(), Some("3"));
     }
 
     #[test]
@@ -732,6 +911,7 @@ mod tests {
             y: 1092,
             scale: 1.25,
             transform: 0,
+            active_workspace: None,
         };
         assert_eq!(
             restore_monitor_command(&monitor),
