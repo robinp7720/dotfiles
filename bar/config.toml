@@ -16,6 +16,7 @@ full = [
   "context",
   "keyboard_layout",
   "resources",
+  "ai_usage",
   "network",
   "bluetooth_audio",
   "power",
@@ -27,6 +28,7 @@ reduced = ["workspaces", "focused_title", "critical_warning", "clock"]
 [freshness]
 compositor_seconds = 10
 resources_seconds = 15
+ai_usage_seconds = 45
 power_seconds = 30
 network_seconds = 30
 brightness_seconds = 10

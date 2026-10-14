@@ -356,6 +356,118 @@ button.system-module label {
   font-size: 13px;
 }
 
+.ai-usage-hero {
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, alpha(@primary, 0.12), @cockpit_item);
+  border: 1px solid alpha(@primary, 0.16);
+}
+
+.ai-provider-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: @cockpit_item;
+  border: 1px solid @cockpit_border;
+}
+
+.ai-total {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.ai-provider-total {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+}
+
+.ai-provider-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ai-usage-page .ai-caption,
+.ai-usage-page .ai-activity,
+.ai-usage-page .ai-empty {
+  color: @cockpit_muted;
+  font-size: 12px;
+}
+
+.ai-usage-page .ai-eyebrow {
+  color: @primary;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.ai-share,
+.ai-metric-value,
+.ai-quota-value {
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
+.ai-swatch {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+.ai-swatch.codex,
+.ai-swatch.cached { background: @primary; color: @primary; }
+.ai-swatch.claude,
+.ai-swatch.output { background: @tertiary; color: @tertiary; }
+.ai-swatch.fresh { background: @cockpit_text; color: @cockpit_text; }
+.ai-swatch.written { background: @cockpit_muted; color: @cockpit_muted; }
+
+.ai-quota {
+  padding-top: 12px;
+  border-top: 1px solid @cockpit_border;
+}
+
+.ai-quota-meter trough {
+  min-height: 8px;
+  border: 0;
+  border-radius: 4px;
+  background: @cockpit_item;
+}
+
+.ai-quota-meter progress {
+  min-height: 8px;
+  border: 0;
+  border-radius: 4px;
+  background: @primary;
+  transition: 180ms ease;
+}
+
+.ai-quota-meter.warning progress { background: @tertiary; }
+.ai-quota-meter.critical progress { background: @error; }
+.ai-usage-page .ai-health { color: @tertiary; }
+
+.ai-estimate {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: alpha(@primary, 0.07);
+}
+
+.ai-estimate-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ai-estimate.pending .ai-estimate-title { font-size: 15px; }
+.ai-estimate-outlook { font-size: 12px; }
+.ai-estimate.at-risk { background: alpha(@tertiary, 0.08); }
+.ai-estimate.at-risk .ai-estimate-title,
+.ai-estimate.at-risk .ai-estimate-outlook { color: @tertiary; }
+.ai-estimate.on-track .ai-estimate-outlook { color: @primary; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-quota-meter progress { transition: none; }
+}
+
 button.system-module.inactive,
 button.system-module.stale,
 button.system-module.disconnected {
