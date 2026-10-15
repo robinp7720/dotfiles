@@ -1,5 +1,9 @@
 mod config;
 mod control;
+mod library;
+mod oblecto;
+mod platform;
+mod player;
 mod session;
 mod ui;
 
@@ -38,6 +42,12 @@ enum CommandName {
     /// Run the TV shell process (used by tv-mode.service)
     #[command(hide = true)]
     Run,
+    /// Preview the TV interface without changing displays, audio, or power
+    Preview {
+        /// Disable physical controllers when running an isolated UI test
+        #[arg(long)]
+        no_controller: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -80,6 +90,9 @@ fn run(cli: Cli) -> Result<()> {
             }
             let session = session::Session::enter(config)?;
             ui::run(session)
+        }
+        CommandName::Preview { no_controller } => {
+            ui::preview(Config::load(&cli.config)?, !no_controller)
         }
     }
 }

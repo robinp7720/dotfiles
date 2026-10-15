@@ -13,6 +13,24 @@ pub struct Config {
     pub apps: AppCommands,
     #[serde(default)]
     pub power: PowerProfiles,
+    #[serde(default)]
+    pub oblecto: OblectoConfig,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct OblectoConfig {
+    pub server: String,
+    pub player: String,
+}
+
+impl Default for OblectoConfig {
+    fn default() -> Self {
+        Self {
+            server: String::new(),
+            player: "mpv".into(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -196,6 +214,7 @@ mod tests {
                 },
             },
             power: PowerProfiles::default(),
+            oblecto: OblectoConfig::default(),
         }
     }
 

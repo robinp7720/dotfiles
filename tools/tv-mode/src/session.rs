@@ -639,38 +639,50 @@ fn set_power_profile(profile: &str) -> Result<()> {
     run("powerprofilesctl", &["set", profile])
 }
 
+// Keep the small JSON socket contract independent of Vigil's GTK renderer.
+fn vigil_request(request: Value) -> Result<Value> {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::os::unix::net::UnixStream;
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR is required")?;
+    let mut stream = UnixStream::connect(PathBuf::from(runtime).join("vigil.sock"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+    serde_json::to_writer(&mut stream, &request)?;
+    stream.write_all(b"\n")?;
+    let mut line = String::new();
+    BufReader::new(stream)
+        .take(1024 * 1024)
+        .read_line(&mut line)?;
+    let response: Value = serde_json::from_str(&line)?;
+    if response["type"] == "error" {
+        bail!("Vigil: {}", response["message"]);
+    }
+    Ok(response)
+}
 fn vigil_presentation_hidden() -> Result<bool> {
-    match vigil::ControlClient::new()?.send(&vigil::ControlRequest::PresentationGet)? {
-        vigil::ControlResponse::Presentation { hidden } => Ok(hidden),
-        response => bail!("unexpected Vigil presentation response: {response:?}"),
-    }
+    vigil_request(serde_json::json!({"type":"presentation_get"}))?["hidden"]
+        .as_bool()
+        .context("unexpected Vigil presentation response")
 }
-
 fn set_vigil_presentation(hidden: bool) -> Result<()> {
-    match vigil::ControlClient::new()?.send(&vigil::ControlRequest::PresentationSet { hidden })? {
-        vigil::ControlResponse::Accepted => Ok(()),
-        vigil::ControlResponse::Error { message } => {
-            bail!("Vigil rejected presentation: {message}")
-        }
-        response => bail!("unexpected Vigil presentation response: {response:?}"),
+    let response = vigil_request(serde_json::json!({"type":"presentation_set", "hidden":hidden}))?;
+    if response["type"] != "accepted" {
+        bail!("unexpected Vigil presentation response");
     }
+    Ok(())
 }
-
 fn vigil_dnd() -> Result<bool> {
-    match vigil::ControlClient::new()?.send(&vigil::ControlRequest::NotificationsGet)? {
-        vigil::ControlResponse::Notifications { state } => Ok(state.dnd),
-        response => bail!("unexpected Vigil notification response: {response:?}"),
-    }
+    vigil_request(serde_json::json!({"type":"notifications_get"}))?["state"]["dnd"]
+        .as_bool()
+        .context("unexpected Vigil notification response")
 }
-
 fn set_vigil_dnd(enabled: bool) -> Result<()> {
-    match vigil::ControlClient::new()?
-        .send(&vigil::ControlRequest::NotificationsSetDnd { enabled })?
-    {
-        vigil::ControlResponse::Accepted => Ok(()),
-        vigil::ControlResponse::Error { message } => bail!("Vigil rejected DND: {message}"),
-        response => bail!("unexpected Vigil notification response: {response:?}"),
+    let response =
+        vigil_request(serde_json::json!({"type":"notifications_set_dnd", "enabled":enabled}))?;
+    if response["type"] != "accepted" {
+        bail!("unexpected Vigil notification response");
     }
+    Ok(())
 }
 
 fn optional_vigil_state<T>(action: &str, result: Result<T>) -> Option<T> {

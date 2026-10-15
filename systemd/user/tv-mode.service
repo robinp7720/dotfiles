@@ -7,4 +7,6 @@ Type=simple
 ExecStart=%h/.local/bin/tv-mode run
 ExecStopPost=%h/.local/bin/tv-mode recover
 Restart=no
+# Let the shell flush managed playback before terminating remaining app children.
+KillMode=mixed
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin

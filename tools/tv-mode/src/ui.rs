@@ -1,1064 +1,449 @@
-use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
-use std::process::{Child, Command};
-use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
-
-use anyhow::{Context, Result, anyhow, bail};
-use gilrs::{Axis, Button, EventType, Gilrs};
-use gtk::gdk;
-use gtk::gio::prelude::ListModelExtManual;
-use gtk::glib::{self, ControlFlow, Propagation};
-use gtk::prelude::*;
-use gtk4 as gtk;
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use serde_json::Value;
-
-use crate::config::{CommandSpec, Config, mode_label};
-use crate::control::{self, ControlCommand};
-use crate::session::{Profile, Session, hyprland_dispatch};
-
-const POWER_HOLD: Duration = Duration::from_secs(2);
-const GUIDE_HOLD: Duration = Duration::from_millis(1500);
-const APP_START_GRACE: Duration = Duration::from_secs(30);
-const APP_EXIT_STABLE: Duration = Duration::from_secs(15);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AppKind {
-    Steam,
-    Kodi,
+//! Qt Quick shell. Rust owns session state, credentials, IO and playback.
+use crate::{
+    config::Config,
+    control::{self, ControlCommand},
+    library::Library,
+    oblecto::{self, Media},
+    platform::{self, AppKind, NavDirection, UiEvent},
+    player::{self, CommandKind},
+    session::{Profile, Session},
+};
+use anyhow::{Result, bail};
+use serde_json::{Value, json};
+use std::{
+    ffi::{CStr, CString, c_char, c_void},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver},
+    },
+    time::{Duration, Instant},
+};
+unsafe extern "C" {
+    fn tv_quick_run(
+        context: *mut c_void,
+        poll: extern "C" fn(*mut c_void) -> *const c_char,
+        action: extern "C" fn(*mut c_void, *const c_char),
+        output: *const c_char,
+        preview: bool,
+    ) -> i32;
 }
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum NavDirection {
-    Left,
-    Right,
-    Up,
-    Down,
+struct Shell {
+    config: Config,
+    session: Option<Session>,
+    preview: bool,
+    library: Library,
+    events: Receiver<UiEvent>,
+    sender: mpsc::Sender<UiEvent>,
+    control: Receiver<ControlCommand>,
+    player: Option<(player::Handle, Receiver<player::Event>, Media)>,
+    active_app: Option<AppKind>,
+    state: Value,
+    dirty: bool,
+    inputs: Vec<String>,
+    window: String,
+    visible: bool,
+    quit: bool,
+    buffer: CString,
+    hold: Option<(String, Instant)>,
+    last_interaction: Instant,
+    focus_at: Option<Instant>,
 }
-
-#[derive(Clone, Debug)]
-enum UiEvent {
-    Navigate(NavDirection),
-    ActivatePressed,
-    ActivateReleased,
-    Back,
-    Show,
-    ExitRequested,
-    AppExited(AppKind),
-    Controller(String),
-    Error(String),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Tile {
-    Steam,
-    Kodi,
-    Sleep,
-    Shutdown,
-    Exit,
-}
-
-impl Tile {
-    const ALL: [Self; 5] = [
-        Self::Steam,
-        Self::Kodi,
-        Self::Sleep,
-        Self::Shutdown,
-        Self::Exit,
-    ];
-
-    fn is_power(self) -> bool {
-        matches!(self, Self::Sleep | Self::Shutdown)
-    }
-}
-
-struct UiState {
-    app: gtk::Application,
-    window: gtk::ApplicationWindow,
-    buttons: Vec<gtk::Button>,
-    status: gtk::Label,
-    controller: gtk::Label,
-    selected: Cell<usize>,
-    active_app: Cell<Option<AppKind>>,
-    hold: RefCell<Option<(Tile, Instant)>>,
-    hold_completed: Cell<bool>,
-    session: Rc<RefCell<Option<Session>>>,
-    events: Sender<UiEvent>,
-}
-
 pub fn run(session: Session) -> Result<()> {
-    let config = session.config().clone();
-    let session = Rc::new(RefCell::new(Some(session)));
-    let (event_tx, event_rx) = mpsc::channel::<UiEvent>();
-    let (control_tx, control_rx) = mpsc::channel::<ControlCommand>();
+    run_shell(session.config().clone(), Some(session), false, true)
+}
+pub fn preview(config: Config, controllers: bool) -> Result<()> {
+    run_shell(config, None, true, controllers)
+}
+fn run_shell(
+    config: Config,
+    session: Option<Session>,
+    preview: bool,
+    controllers: bool,
+) -> Result<()> {
+    let (tx, rx) = mpsc::channel();
+    let (ctx, crx) = mpsc::channel();
     let cancelled = Arc::new(AtomicBool::new(false));
-    let control_join = control::spawn_server(control_tx, Arc::clone(&cancelled))?;
-    let gamepad_join = spawn_gamepad_worker(event_tx.clone(), Arc::clone(&cancelled));
-
-    let application = gtk::Application::builder()
-        .application_id("me.robindecker.TvMode")
-        .build();
-    let state_for_activate = Rc::clone(&session);
-    let tx_for_activate = event_tx.clone();
-    let config_for_activate = config.clone();
-    let receiver = Rc::new(RefCell::new(Some((event_rx, control_rx))));
-    let receiver_for_activate = Rc::clone(&receiver);
-
-    application.connect_activate(move |app| {
-        let Some((event_rx, control_rx)) = receiver_for_activate.borrow_mut().take() else {
-            return;
-        };
-        match build_ui(
-            app,
-            &config_for_activate,
-            Rc::clone(&state_for_activate),
-            tx_for_activate.clone(),
-            event_rx,
-            control_rx,
-        ) {
-            Ok(state) => state.window.present(),
-            Err(error) => {
-                eprintln!("failed to build TV mode UI: {error:#}");
-                app.quit();
-            }
-        }
-    });
-
-    // Clap already consumed the binary's `run` subcommand. Do not let
-    // GApplication reinterpret it as a file to open.
-    application.run_with_args(&["tv-mode"]);
+    let library = Library::new(&config.oblecto)?;
+    let control = if preview {
+        None
+    } else {
+        Some(control::spawn_server(ctx, Arc::clone(&cancelled))?)
+    };
+    let gamepad =
+        controllers.then(|| platform::spawn_gamepad_worker(tx.clone(), Arc::clone(&cancelled)));
+    let output = CString::new(config.output.clone())?;
+    let display_mode = crate::config::mode_label(&config.modes.home);
+    let mut shell = Shell {
+        config,
+        session,
+        preview,
+        library,
+        events: rx,
+        sender: tx,
+        control: crx,
+        player: None,
+        active_app: None,
+        state: json!({"displayMode":display_mode,"preview":preview,"controller":"Keyboard & remote","playing":false,"activeApp":"","holdProgress":0,"theme":theme(),"reducedMotion":std::env::var("TV_MODE_REDUCED_MOTION").is_ok_and(|v|v=="1")}),
+        dirty: true,
+        inputs: vec![],
+        window: String::new(),
+        visible: true,
+        quit: false,
+        buffer: CString::default(),
+        hold: None,
+        last_interaction: Instant::now(),
+        focus_at: None,
+    };
+    // The C++ host invokes callbacks synchronously on this thread, never after returning.
+    let code = unsafe {
+        tv_quick_run(
+            (&mut shell as *mut Shell).cast(),
+            poll,
+            action,
+            output.as_ptr(),
+            preview,
+        )
+    };
     cancelled.store(true, Ordering::Relaxed);
-    let _ = control_join.join();
-    let _ = gamepad_join.join();
-
-    if let Some(mut session) = session.borrow_mut().take() {
+    if let Some((handle, _, _)) = shell.player.take() {
+        handle.send(CommandKind::Stop);
+        handle.finish();
+    }
+    if let Some(control) = control {
+        let _ = control.join();
+    }
+    if let Some(gamepad) = gamepad {
+        let _ = gamepad.join();
+    }
+    if let Some(mut session) = shell.session.take() {
         session.restore()?;
     }
+    if code != 0 {
+        bail!("Qt Quick interface exited with code {code}");
+    }
     Ok(())
 }
-
-fn build_ui(
-    app: &gtk::Application,
-    config: &Config,
-    session: Rc<RefCell<Option<Session>>>,
-    event_tx: Sender<UiEvent>,
-    event_rx: Receiver<UiEvent>,
-    control_rx: Receiver<ControlCommand>,
-) -> Result<Rc<UiState>> {
-    load_css()?;
-    let monitor = monitor_for_connector(&config.output)
-        .ok_or_else(|| anyhow!("GDK could not find output {}", config.output))?;
-    let window = gtk::ApplicationWindow::builder()
-        .application(app)
-        .title("TV Home")
-        .build();
-    window.set_decorated(false);
-    window.init_layer_shell();
-    window.set_namespace(Some("tv-mode"));
-    window.set_layer(Layer::Overlay);
-    window.set_monitor(Some(&monitor));
-    window.set_anchor(Edge::Top, true);
-    window.set_anchor(Edge::Right, true);
-    window.set_anchor(Edge::Bottom, true);
-    window.set_anchor(Edge::Left, true);
-    window.set_exclusive_zone(-1);
-    window.set_keyboard_mode(KeyboardMode::Exclusive);
-    window.add_css_class("tv-shell");
-
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 28);
-    root.add_css_class("tv-root");
-    if !gtk::Settings::default().is_some_and(|settings| settings.is_gtk_enable_animations()) {
-        root.add_css_class("reduced-motion");
+extern "C" fn poll(context: *mut c_void) -> *const c_char {
+    // No Rust unwind may cross the C ABI; leave the event loop for normal cleanup.
+    let shell = unsafe { &mut *context.cast::<Shell>() };
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| shell.tick())).is_err() {
+        shell.quit = true;
     }
-    root.set_margin_top(72);
-    root.set_margin_bottom(72);
-    root.set_margin_start(96);
-    root.set_margin_end(96);
-
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 24);
-    let title_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    let eyebrow = gtk::Label::new(Some("LIVING ROOM"));
-    eyebrow.add_css_class("tv-eyebrow");
-    eyebrow.set_xalign(0.0);
-    let title = gtk::Label::new(Some("What are we playing?"));
-    title.add_css_class("tv-title");
-    title.set_xalign(0.0);
-    title_box.append(&eyebrow);
-    title_box.append(&title);
-    title_box.set_hexpand(true);
-    let clock = gtk::Label::new(None);
-    clock.add_css_class("tv-clock");
-    update_clock(&clock);
-    header.append(&title_box);
-    header.append(&clock);
-    root.append(&header);
-
-    let hero = gtk::Grid::new();
-    hero.set_column_spacing(28);
-    hero.set_row_spacing(28);
-    hero.set_vexpand(true);
-    hero.set_valign(gtk::Align::Center);
-
-    let steam = tile_button(
-        "",
-        "Steam",
-        &format!("Big Picture • {}", mode_label(&config.modes.gaming)),
-        "hero steam",
-    );
-    let kodi = tile_button(
-        "󰟴",
-        "Kodi",
-        &format!("Media center • {}", mode_label(&config.modes.media)),
-        "hero kodi",
-    );
-    let sleep = tile_button("󰒲", "Sleep", "Hold to lock and suspend", "utility");
-    let shutdown = tile_button("󰐥", "Shut down", "Hold to power off", "utility danger");
-    let exit = tile_button(
-        "󰍃",
-        "Exit TV mode",
-        "Restore desk displays and audio",
-        "utility exit",
-    );
-    hero.attach(&steam, 0, 0, 1, 1);
-    hero.attach(&kodi, 1, 0, 1, 1);
-    hero.attach(&sleep, 0, 1, 1, 1);
-    hero.attach(&shutdown, 1, 1, 1, 1);
-    hero.attach(&exit, 2, 1, 1, 1);
-    root.append(&hero);
-
-    let footer = gtk::Box::new(gtk::Orientation::Horizontal, 20);
-    let status = gtk::Label::new(Some(&format!(
-        "TV audio • {}",
-        mode_label(&config.modes.home)
-    )));
-    status.add_css_class("tv-status");
-    status.set_xalign(0.0);
-    status.set_hexpand(true);
-    let controller = gtk::Label::new(Some("Connect a controller • Arrow keys also work"));
-    controller.add_css_class("tv-controller");
-    controller.set_xalign(1.0);
-    footer.append(&status);
-    footer.append(&controller);
-    root.append(&footer);
-    window.set_child(Some(&root));
-
-    let buttons = vec![steam, kodi, sleep, shutdown, exit];
-    let state = Rc::new(UiState {
-        app: app.clone(),
-        window,
-        buttons,
-        status,
-        controller,
-        selected: Cell::new(0),
-        active_app: Cell::new(None),
-        hold: RefCell::new(None),
-        hold_completed: Cell::new(false),
-        session,
-        events: event_tx,
-    });
-
-    wire_buttons(&state);
-    wire_keyboard(&state);
-    state.buttons[0].grab_focus();
-
-    let state_for_events = Rc::clone(&state);
-    glib::timeout_add_local(Duration::from_millis(40), move || {
-        loop {
-            match event_rx.try_recv() {
-                Ok(event) => handle_event(&state_for_events, event),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => break,
-            }
-        }
-        loop {
-            match control_rx.try_recv() {
-                Ok(ControlCommand::Show) => handle_event(&state_for_events, UiEvent::Show),
-                Ok(ControlCommand::Exit) => handle_event(&state_for_events, UiEvent::ExitRequested),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => break,
-            }
-        }
-        update_hold(&state_for_events);
-        ControlFlow::Continue
-    });
-
-    let clock_for_tick = clock.clone();
-    glib::timeout_add_local(Duration::from_secs(1), move || {
-        update_clock(&clock_for_tick);
-        ControlFlow::Continue
-    });
-
-    Ok(state)
+    let mut value = json!({"inputs":std::mem::take(&mut shell.inputs),"window":std::mem::take(&mut shell.window),"quit":shell.quit});
+    if shell.dirty || shell.library.dirty {
+        shell.state["library"] = shell.library.state.clone();
+        value["state"] = shell.state.clone();
+        shell.dirty = false;
+        shell.library.dirty = false;
+    }
+    shell.buffer = CString::new(value.to_string()).unwrap_or_default();
+    shell.buffer.as_ptr()
 }
-
-fn wire_buttons(state: &Rc<UiState>) {
-    for (index, button) in state.buttons.iter().enumerate() {
-        let state_for_focus = Rc::clone(state);
-        button.connect_has_focus_notify(move |button| {
-            if button.has_focus() {
-                state_for_focus.selected.set(index);
-            }
-        });
-
-        let tile = Tile::ALL[index];
-        let state_for_click = Rc::clone(state);
-        button.connect_clicked(move |_| {
-            if tile.is_power() {
-                state_for_click
-                    .status
-                    .set_text("Hold A or Enter for two seconds to confirm");
-            } else {
-                activate_tile(&state_for_click, tile);
-            }
-        });
+extern "C" fn action(context: *mut c_void, bytes: *const c_char) {
+    let shell = unsafe { &mut *context.cast::<Shell>() };
+    let bytes = unsafe { CStr::from_ptr(bytes) };
+    if let Ok(value) = serde_json::from_slice(bytes.to_bytes())
+        && std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| shell.action(value))).is_err()
+    {
+        shell.quit = true;
     }
 }
-
-fn wire_keyboard(state: &Rc<UiState>) {
-    let keys = gtk::EventControllerKey::new();
-    let state_for_press = Rc::clone(state);
-    keys.connect_key_pressed(move |_, key, _, _| {
-        let event = match key {
-            gdk::Key::Left => Some(UiEvent::Navigate(NavDirection::Left)),
-            gdk::Key::Right => Some(UiEvent::Navigate(NavDirection::Right)),
-            gdk::Key::Up => Some(UiEvent::Navigate(NavDirection::Up)),
-            gdk::Key::Down => Some(UiEvent::Navigate(NavDirection::Down)),
-            gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space => {
-                Some(UiEvent::ActivatePressed)
-            }
-            gdk::Key::Escape => Some(UiEvent::Back),
-            _ => None,
-        };
-        if let Some(event) = event {
-            handle_event(&state_for_press, event);
-            Propagation::Stop
-        } else {
-            Propagation::Proceed
-        }
-    });
-    let state_for_release = Rc::clone(state);
-    keys.connect_key_released(move |_, key, _, _| {
-        if matches!(key, gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space) {
-            handle_event(&state_for_release, UiEvent::ActivateReleased);
-        }
-    });
-    state.window.add_controller(keys);
-}
-
-fn handle_event(state: &Rc<UiState>, event: UiEvent) {
-    match event {
-        UiEvent::Navigate(direction) if state.window.is_visible() => navigate(state, direction),
-        UiEvent::ActivatePressed if state.window.is_visible() => {
-            let tile = Tile::ALL[state.selected.get()];
-            if tile.is_power() {
-                state.hold_completed.set(false);
-                state.hold.replace(Some((tile, Instant::now())));
-                state.status.set_text("Keep holding to confirm…");
-            } else {
-                activate_tile(state, tile);
+impl Shell {
+    fn tick(&mut self) {
+        self.library.poll();
+        while let Ok(command) = self.control.try_recv() {
+            match command {
+                ControlCommand::Show => self.show_home(),
+                ControlCommand::Exit => self.exit(),
             }
         }
-        UiEvent::ActivateReleased => {
-            if !state.hold_completed.replace(false) && state.hold.borrow().is_some() {
-                state.status.set_text("Power action cancelled");
-            }
-            state.hold.replace(None);
+        while let Ok(event) = self.events.try_recv() {
+            self.event(event);
         }
-        UiEvent::Back => {
-            state.hold.replace(None);
-            if state.active_app.get().is_some() {
-                state.window.set_visible(false);
+        let mut playback = vec![];
+        if let Some((_, rx, _)) = &self.player {
+            while let Ok(e) = rx.try_recv() {
+                playback.push(e);
             }
         }
-        UiEvent::Show => {
-            state.window.present();
-            state.buttons[state.selected.get()].grab_focus();
-            if state.active_app.get().is_some() {
-                state
-                    .status
-                    .set_text("Entertainment is still active • B returns to it");
-            }
-        }
-        UiEvent::ExitRequested => request_exit(state),
-        UiEvent::AppExited(kind) if state.active_app.get() == Some(kind) => {
-            state.active_app.set(None);
-            if let Some(session) = state.session.borrow().as_ref() {
-                match session.apply_profile(Profile::Home) {
-                    Ok(()) => state.status.set_text(&format!(
-                        "TV audio • {}",
-                        mode_label(&session.config().modes.home)
-                    )),
-                    Err(error) => state
-                        .status
-                        .set_text(&format!("Failed to restore home profile: {error}")),
+        for event in playback {
+            match event {
+                player::Event::Ready => {
+                    self.visibility(false);
+                    self.library.state["loading"] = false.into();
+                    self.library.message("");
                 }
-            }
-            state.window.present();
-            state.buttons[0].grab_focus();
-        }
-        UiEvent::Controller(name) => state.controller.set_text(&format!(
-            "{name} • D-pad navigate • A select • hold Guide for home"
-        )),
-        UiEvent::Error(message) => state.status.set_text(&message),
-        _ => {}
-    }
-}
-
-fn activate_tile(state: &Rc<UiState>, tile: Tile) {
-    match tile {
-        Tile::Steam => launch_app(state, AppKind::Steam),
-        Tile::Kodi => launch_app(state, AppKind::Kodi),
-        Tile::Exit => request_exit(state),
-        Tile::Sleep | Tile::Shutdown => state
-            .status
-            .set_text("Hold A or Enter for two seconds to confirm"),
-    }
-}
-
-fn launch_app(state: &Rc<UiState>, kind: AppKind) {
-    if state.active_app.get().is_some() {
-        state
-            .status
-            .set_text("Close the active entertainment app before launching another");
-        return;
-    }
-    let (command, workspace, label) = {
-        let session_guard = state.session.borrow();
-        let Some(session) = session_guard.as_ref() else {
-            return;
-        };
-        let (profile, command, label) = match kind {
-            AppKind::Steam => (
-                Profile::Gaming,
-                session.config().apps.steam.clone(),
-                format!(
-                    "Steam • {} • {}",
-                    mode_label(&session.config().modes.gaming),
-                    session.config().power.gaming
-                ),
-            ),
-            AppKind::Kodi => (
-                Profile::Media,
-                session.config().apps.kodi.clone(),
-                format!(
-                    "Kodi • {} • {}",
-                    mode_label(&session.config().modes.media),
-                    session.config().power.media
-                ),
-            ),
-        };
-        if let Err(error) = session.apply_profile(profile) {
-            state
-                .status
-                .set_text(&format!("Profile switch failed: {error}"));
-            return;
-        }
-        (command, session.config().workspace.clone(), label)
-    };
-    match spawn_command(&command) {
-        Ok(child) => {
-            state.active_app.set(Some(kind));
-            state.status.set_text(&label);
-            state.window.set_visible(false);
-            match kind {
-                AppKind::Kodi => spawn_child_waiter(child, kind, state.events.clone()),
-                AppKind::Steam => {
-                    spawn_steam_monitor(child, workspace, state.events.clone());
-                }
-            }
-        }
-        Err(error) => {
-            if let Some(session) = state.session.borrow().as_ref() {
-                let _ = session.apply_profile(Profile::Home);
-            }
-            state.status.set_text(&format!("Launch failed: {error}"));
-        }
-    }
-}
-
-fn request_exit(state: &Rc<UiState>) {
-    if state.active_app.get().is_some() || app_on_tv_workspace(state) {
-        state
-            .status
-            .set_text("Exit is locked while an entertainment app is active");
-        return;
-    }
-    state.app.quit();
-}
-
-fn update_hold(state: &Rc<UiState>) {
-    let Some((tile, started)) = *state.hold.borrow() else {
-        return;
-    };
-    if state.hold_completed.get() || started.elapsed() < POWER_HOLD {
-        return;
-    }
-    state.hold_completed.set(true);
-    match tile {
-        Tile::Sleep => {
-            state.status.set_text("Locking and suspending…");
-            state.window.set_visible(false);
-            if let Err(error) = lock_and_suspend() {
-                state.window.present();
-                state.status.set_text(&format!("Suspend failed: {error}"));
-            }
-        }
-        Tile::Shutdown => {
-            state.status.set_text("Shutting down…");
-            if let Err(error) = Command::new("systemctl").arg("poweroff").spawn() {
-                state.status.set_text(&format!("Shutdown failed: {error}"));
-            }
-        }
-        _ => {}
-    }
-}
-
-fn lock_and_suspend() -> Result<()> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("home directory is unavailable"))?;
-    let lock = home.join(".dotfiles/scripts/session_lock.sh");
-    let status = Command::new(&lock)
-        .status()
-        .with_context(|| format!("failed to run {}", lock.display()))?;
-    if !status.success() {
-        bail!("session lock exited with {status}");
-    }
-    Command::new("systemctl")
-        .arg("suspend")
-        .spawn()
-        .context("failed to start suspend")?;
-    Ok(())
-}
-
-fn spawn_command(spec: &CommandSpec) -> Result<Child> {
-    Command::new(&spec.program)
-        .args(&spec.args)
-        .spawn()
-        .with_context(|| format!("failed to launch {}", spec.program))
-}
-
-fn spawn_child_waiter(mut child: Child, kind: AppKind, sender: Sender<UiEvent>) {
-    thread::spawn(move || {
-        let mut seen_window = false;
-        let mut absent_since = None;
-        loop {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    let _ = sender.send(UiEvent::AppExited(kind));
-                    if !status.success() {
-                        let _ =
-                            sender.send(UiEvent::Error(format!("{kind:?} exited with {status}")));
-                    }
-                    return;
-                }
-                Err(error) => {
-                    let _ = sender.send(UiEvent::AppExited(kind));
-                    let _ = sender.send(UiEvent::Error(format!("App monitor failed: {error}")));
-                    return;
-                }
-                Ok(None) => {}
-            }
-            match hyprland_clients() {
-                Ok(clients) if has_app_window(&clients, kind) => {
-                    seen_window = true;
-                    absent_since = None;
-                }
-                Ok(_) if seen_window => {
-                    let since = absent_since.get_or_insert_with(Instant::now);
-                    if since.elapsed() >= APP_EXIT_STABLE {
-                        // Kodi's shell wrapper can spend minutes generating a crash
-                        // report after the window is gone. Restore home while it
-                        // finishes, and reap it without emitting a second exit event.
-                        let _ = sender.send(UiEvent::AppExited(kind));
-                        let _ = child.wait();
-                        return;
-                    }
-                }
-                Ok(_) => {}
-                Err(_) => absent_since = None,
-            }
-            thread::sleep(Duration::from_millis(250));
-        }
-    });
-}
-
-fn has_app_window(clients: &Value, kind: AppKind) -> bool {
-    let class = match kind {
-        AppKind::Kodi => "kodi",
-        AppKind::Steam => "steam",
-    };
-    clients.as_array().is_some_and(|clients| {
-        clients.iter().any(|client| {
-            client
-                .get("mapped")
-                .and_then(Value::as_bool)
-                .unwrap_or(true)
-                && ["class", "initialClass"].iter().any(|key| {
-                    client
-                        .get(key)
-                        .and_then(Value::as_str)
-                        .is_some_and(|value| value.eq_ignore_ascii_case(class))
-                })
-        })
-    })
-}
-
-fn spawn_steam_monitor(mut child: Child, workspace: String, sender: Sender<UiEvent>) {
-    let (launcher_tx, launcher_rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = launcher_tx.send(child.wait());
-    });
-    thread::spawn(move || {
-        let mut launcher_finished_at: Option<Instant> = None;
-        let mut seen_ready_client = false;
-        let mut absent_since: Option<Instant> = None;
-        loop {
-            if launcher_finished_at.is_none() && launcher_rx.try_recv().is_ok() {
-                launcher_finished_at = Some(Instant::now());
-            }
-            match steam_client_state(&workspace) {
-                Ok(state) if state.session_active => {
-                    for address in state.games_needing_fullscreen {
-                        if let Err(error) = enforce_game_fullscreen(&address) {
-                            eprintln!("failed to keep Steam game {address} fullscreen: {error:#}");
+                player::Event::Interaction => self.last_interaction = Instant::now(),
+                player::Event::Notice(message) => self.library.message(message),
+                player::Event::Finished { ended, error } => {
+                    if let Some((handle, _, item)) = self.player.take() {
+                        handle.finish();
+                        self.state["playing"] = false.into();
+                        self.dirty = true;
+                        self.visibility(true);
+                        self.profile(Profile::Home);
+                        let prompt = self.library.me["preferences"]["stillWatchingPrompt"] != false
+                            && self.last_interaction.elapsed() >= Duration::from_secs(5400);
+                        self.library.playback_finished(&item, ended, prompt);
+                        if let Some(e) = error {
+                            self.library.message(e);
                         }
                     }
-                    seen_ready_client |= state.session_ready;
-                    absent_since = None;
-                }
-                Ok(_) if seen_ready_client => {
-                    let since = absent_since.get_or_insert_with(Instant::now);
-                    if since.elapsed() >= APP_EXIT_STABLE {
-                        let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
-                        return;
-                    }
-                }
-                // Steam can spend longer than the grace period updating before
-                // Big Picture appears. Only time out after its launcher exits.
-                Ok(_)
-                    if launcher_finished_at
-                        .is_some_and(|finished| finished.elapsed() >= APP_START_GRACE) =>
-                {
-                    let _ = sender.send(UiEvent::AppExited(AppKind::Steam));
-                    let _ = sender.send(UiEvent::Error(
-                        "Steam exited without opening an entertainment window".to_string(),
-                    ));
-                    return;
-                }
-                Ok(_) => {}
-                Err(_) => {
-                    // A compositor query failure is not evidence that Steam exited.
-                    absent_since = None;
                 }
             }
-            thread::sleep(Duration::from_millis(250));
         }
-    });
-}
-
-fn app_on_tv_workspace(state: &UiState) -> bool {
-    state.session.borrow().as_ref().is_some_and(|session| {
-        mapped_clients_on_workspace(&session.config().workspace).unwrap_or(true)
-    })
-}
-
-fn mapped_clients_on_workspace(workspace: &str) -> Result<bool> {
-    let clients = hyprland_clients()?;
-    Ok(has_mapped_client_on_workspace(&clients, workspace))
-}
-
-fn steam_client_state(workspace: &str) -> Result<SteamClientState> {
-    let clients = hyprland_clients()?;
-    Ok(steam_client_state_from_json(&clients, workspace))
-}
-
-fn hyprland_clients() -> Result<Value> {
-    let output = Command::new("hyprctl")
-        .args(["clients", "-j"])
-        .output()
-        .context("failed to query Hyprland clients")?;
-    if !output.status.success() {
-        bail!("hyprctl clients failed");
-    }
-    serde_json::from_slice(&output.stdout).context("failed to parse Hyprland clients")
-}
-
-fn has_mapped_client_on_workspace(clients: &Value, workspace: &str) -> bool {
-    clients.as_array().is_some_and(|clients| {
-        clients.iter().any(|client| {
-            client
-                .get("workspace")
-                .and_then(|workspace| workspace.get("name"))
-                .and_then(Value::as_str)
-                == Some(workspace)
-                && client
-                    .get("mapped")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(true)
-        })
-    })
-}
-
-#[derive(Debug, Default, Eq, PartialEq)]
-struct SteamClientState {
-    session_active: bool,
-    session_ready: bool,
-    games_needing_fullscreen: Vec<String>,
-}
-
-fn steam_client_state_from_json(clients: &Value, workspace: &str) -> SteamClientState {
-    let mut state = SteamClientState::default();
-    let Some(clients) = clients.as_array() else {
-        return state;
-    };
-    for client in clients {
-        if !client
-            .get("mapped")
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
-        {
-            continue;
+        if let Some(request) = self.library.play_request.take() {
+            self.play(request);
         }
-        let on_tv_workspace = client
-            .get("workspace")
-            .and_then(|workspace| workspace.get("name"))
-            .and_then(Value::as_str)
-            == Some(workspace);
-        let class = client
-            .get("class")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let initial_class = client
-            .get("initialClass")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let is_steam =
-            class.eq_ignore_ascii_case("steam") || initial_class.eq_ignore_ascii_case("steam");
-        let is_game = class.starts_with("steam_app_") || initial_class.starts_with("steam_app_");
-        state.session_active |= on_tv_workspace || is_steam || is_game;
-        // Update/login windows may close well before Big Picture is ready.
-        state.session_ready |=
-            is_game || (is_steam && client.get("fullscreen").and_then(Value::as_i64) == Some(2));
-        if is_game
-            && (client.get("fullscreen").and_then(Value::as_i64) != Some(2)
-                || client.get("fullscreenClient").and_then(Value::as_i64) != Some(2))
-            && let Some(address) = client.get("address").and_then(Value::as_str)
-        {
-            state.games_needing_fullscreen.push(address.to_string());
+        if let Some((kind, start)) = &self.hold {
+            let progress = (start.elapsed().as_secs_f64() / 2.0).min(1.0);
+            self.state["holdProgress"] = progress.into();
+            self.dirty = true;
+            if progress >= 1.0 {
+                let kind = kind.clone();
+                self.hold = None;
+                self.power(&kind);
+            }
+        }
+        if self.focus_at.is_some_and(|t| Instant::now() >= t) {
+            self.focus_at = None;
+            if !self.preview {
+                let _ = crate::session::hyprland_dispatch(
+                    "hl.dsp.focus({ window = \"class:^me.robindecker.TvMode$\" })",
+                );
+            }
         }
     }
-    state
-}
-
-fn enforce_game_fullscreen(address: &str) -> Result<()> {
-    hyprland_dispatch(&format!(
-        "hl.dsp.focus({{ window = {:?} }})",
-        format!("address:{address}")
-    ))?;
-    hyprland_dispatch(
-        "hl.dsp.window.fullscreen_state({ internal = 2, client = 2, action = \"set\" })",
-    )
-}
-
-fn navigate(state: &UiState, direction: NavDirection) {
-    let current = state.selected.get();
-    let next = match (current, direction) {
-        (0, NavDirection::Right) => 1,
-        (1, NavDirection::Left) => 0,
-        (0, NavDirection::Down) => 2,
-        (1, NavDirection::Down) => 4,
-        (2, NavDirection::Up) => 0,
-        (3 | 4, NavDirection::Up) => 1,
-        (2, NavDirection::Right) => 3,
-        (3, NavDirection::Left) => 2,
-        (3, NavDirection::Right) => 4,
-        (4, NavDirection::Left) => 3,
-        _ => current,
-    };
-    state.selected.set(next);
-    state.buttons[next].grab_focus();
-}
-
-fn spawn_gamepad_worker(sender: Sender<UiEvent>, cancelled: Arc<AtomicBool>) -> JoinHandle<()> {
-    thread::spawn(move || {
-        let mut gilrs = match Gilrs::new() {
-            Ok(gilrs) => gilrs,
-            Err(error) => {
-                let _ = sender.send(UiEvent::Error(format!(
-                    "Controller support unavailable: {error}"
-                )));
+    fn action(&mut self, a: Value) {
+        self.last_interaction = Instant::now();
+        match a["type"].as_str().unwrap_or("") {
+            "app" => self.launch(if a["name"] == "steam" {
+                AppKind::Steam
+            } else {
+                AppKind::Kodi
+            }),
+            "exit" => self.exit(),
+            "home" => self.show_home(),
+            "resumeApp" => {
+                if self.player.is_some() || self.active_app.is_some() {
+                    self.visibility(false);
+                }
+            }
+            "powerPress" => {
+                if let Some(kind) = a["name"]
+                    .as_str()
+                    .filter(|s| ["sleep", "shutdown"].contains(s))
+                {
+                    self.hold = Some((kind.into(), Instant::now()));
+                }
+            }
+            "powerRelease" => {
+                self.hold = None;
+                self.state["holdProgress"] = 0.into();
+                self.dirty = true;
+            }
+            "motion" => {
+                self.state["reducedMotion"] = a["reduced"].clone();
+                self.dirty = true;
+            }
+            "back" if self.player.is_some() && self.library.state["page"] == "home" => {
+                self.visibility(false)
+            }
+            "back" if self.player.is_some() => {
+                self.player.as_ref().unwrap().0.send(CommandKind::Stop);
+            }
+            "back" if self.library.state["page"] == "home" && self.active_app.is_some() => {
+                self.visibility(false)
+            }
+            "back" if self.library.state["page"] == "home" => self.exit(),
+            "play" if self.active_app.is_some() || self.player.is_some() => self
+                .library
+                .message("Close the active app before starting another title."),
+            "logout" if self.player.is_some() => {
+                self.library.message("Stop playback before signing out.")
+            }
+            _ => self.library.action(a),
+        }
+    }
+    fn visibility(&mut self, show: bool) {
+        self.visible = show;
+        self.window = if show { "show" } else { "hide" }.into();
+        if show {
+            self.focus_at = Some(Instant::now() + Duration::from_millis(120));
+        }
+    }
+    fn profile(&mut self, profile: Profile) {
+        if let Some(session) = &self.session
+            && let Err(e) = session.apply_profile(profile)
+        {
+            self.library.message(format!("Display profile: {e}"));
+        }
+    }
+    fn show_home(&mut self) {
+        self.hold = None;
+        self.library.action(json!({"type":"home"}));
+        self.visibility(true);
+        if self.player.is_none() && self.active_app.is_none() {
+            self.profile(Profile::Home);
+        }
+    }
+    fn event(&mut self, event: UiEvent) {
+        if let Some((handle, _, _)) = &self.player
+            && !self.visible
+        {
+            let command = match event {
+                UiEvent::Navigate(NavDirection::Left) => Some(CommandKind::Seek(-10.0)),
+                UiEvent::Navigate(NavDirection::Right) => Some(CommandKind::Seek(10.0)),
+                UiEvent::Navigate(NavDirection::Up) => Some(CommandKind::Volume(5.0)),
+                UiEvent::Navigate(NavDirection::Down) => Some(CommandKind::Volume(-5.0)),
+                UiEvent::ActivatePressed => Some(CommandKind::TogglePause),
+                UiEvent::Back => Some(CommandKind::Stop),
+                UiEvent::PlayerControl(command) => Some(command),
+                _ => None,
+            };
+            if let Some(command) = command {
+                self.last_interaction = Instant::now();
+                handle.send(command);
                 return;
             }
-        };
-        for (_, gamepad) in gilrs.gamepads() {
-            let _ = sender.send(UiEvent::Controller(gamepad.name().to_string()));
         }
-        let mut guide_started: Option<Instant> = None;
-        let mut guide_sent = false;
-        let mut stick_x = 0_i8;
-        let mut stick_y = 0_i8;
-        while !cancelled.load(Ordering::Relaxed) {
-            while let Some(event) = gilrs.next_event() {
-                match event.event {
-                    EventType::Connected => {
-                        let name = gilrs.gamepad(event.id).name().to_string();
-                        let _ = sender.send(UiEvent::Controller(name));
-                    }
-                    EventType::ButtonPressed(Button::DPadLeft, _) => {
-                        let _ = sender.send(UiEvent::Navigate(NavDirection::Left));
-                    }
-                    EventType::ButtonPressed(Button::DPadRight, _) => {
-                        let _ = sender.send(UiEvent::Navigate(NavDirection::Right));
-                    }
-                    EventType::ButtonPressed(Button::DPadUp, _) => {
-                        let _ = sender.send(UiEvent::Navigate(NavDirection::Up));
-                    }
-                    EventType::ButtonPressed(Button::DPadDown, _) => {
-                        let _ = sender.send(UiEvent::Navigate(NavDirection::Down));
-                    }
-                    EventType::ButtonPressed(Button::South, _) => {
-                        let _ = sender.send(UiEvent::ActivatePressed);
-                    }
-                    EventType::ButtonReleased(Button::South, _) => {
-                        let _ = sender.send(UiEvent::ActivateReleased);
-                    }
-                    EventType::ButtonPressed(Button::East, _) => {
-                        let _ = sender.send(UiEvent::Back);
-                    }
-                    EventType::ButtonPressed(Button::Mode, _) => {
-                        guide_started = Some(Instant::now());
-                        guide_sent = false;
-                    }
-                    EventType::ButtonReleased(Button::Mode, _) => {
-                        guide_started = None;
-                        guide_sent = false;
-                    }
-                    EventType::AxisChanged(Axis::LeftStickX, value, _) => {
-                        let next = axis_bucket(value);
-                        if next != stick_x && next != 0 {
-                            let _ = sender.send(UiEvent::Navigate(if next < 0 {
-                                NavDirection::Left
-                            } else {
-                                NavDirection::Right
-                            }));
-                        }
-                        stick_x = next;
-                    }
-                    EventType::AxisChanged(Axis::LeftStickY, value, _) => {
-                        let next = axis_bucket(value);
-                        if next != stick_y && next != 0 {
-                            let _ = sender.send(UiEvent::Navigate(if next < 0 {
-                                NavDirection::Down
-                            } else {
-                                NavDirection::Up
-                            }));
-                        }
-                        stick_y = next;
-                    }
-                    _ => {}
+        match event {
+            UiEvent::Show => self.show_home(),
+            UiEvent::ExitRequested if self.visible || self.player.is_some() => self.exit(),
+            UiEvent::Navigate(dir) if self.visible => self.inputs.push(
+                match dir {
+                    NavDirection::Left => "left",
+                    NavDirection::Right => "right",
+                    NavDirection::Up => "up",
+                    NavDirection::Down => "down",
+                }
+                .into(),
+            ),
+            UiEvent::ActivatePressed if self.visible => self.inputs.push("press".into()),
+            UiEvent::ActivateReleased => self.inputs.push("release".into()),
+            UiEvent::Back if self.visible => self.inputs.push("back".into()),
+            UiEvent::Controller(name) => {
+                self.state["controller"] = name.into();
+                self.dirty = true;
+            }
+            UiEvent::Error(message) => self.library.message(message),
+            UiEvent::AppExited(kind) if self.active_app == Some(kind) => {
+                self.active_app = None;
+                self.state["activeApp"] = "".into();
+                self.dirty = true;
+                self.profile(Profile::Home);
+                self.visibility(true);
+            }
+            _ => {}
+        }
+    }
+    fn play(&mut self, (item, file, position): (Media, Value, f64)) {
+        if self.player.is_some() || self.active_app.is_some() {
+            return;
+        }
+        let Some(api) = self.library.api.clone() else {
+            return;
+        };
+        self.profile(Profile::Media);
+        let options = oblecto::playback_options(&file, &self.library.me["preferences"], position);
+        let (handle, events) = player::start(
+            api,
+            options,
+            self.config.oblecto.player.clone(),
+            !self.preview,
+        );
+        self.player = Some((handle, events, item));
+        self.state["playing"] = true.into();
+        self.library.message("Preparing your film…  B to cancel");
+        self.dirty = true;
+    }
+    fn launch(&mut self, kind: AppKind) {
+        if self.preview {
+            self.library
+                .message("App launching is disabled in preview.");
+            return;
+        }
+        if self.active_app.is_some() || self.player.is_some() {
+            self.library
+                .message("Close the active app before launching another.");
+            return;
+        }
+        let (profile, command) = match kind {
+            AppKind::Steam => (Profile::Gaming, &self.config.apps.steam),
+            AppKind::Kodi => (Profile::Media, &self.config.apps.kodi),
+        };
+        if let Some(session) = &self.session
+            && let Err(e) = session.apply_profile(profile)
+        {
+            self.library.message(e.to_string());
+            return;
+        }
+        match platform::spawn_command(command) {
+            Ok(child) => {
+                self.active_app = Some(kind);
+                self.state["activeApp"] = format!("{kind:?}").into();
+                self.dirty = true;
+                self.visibility(false);
+                match kind {
+                    AppKind::Steam => platform::spawn_steam_monitor(
+                        child,
+                        self.config.workspace.clone(),
+                        self.sender.clone(),
+                    ),
+                    AppKind::Kodi => platform::spawn_child_waiter(child, kind, self.sender.clone()),
                 }
             }
-            if !guide_sent && guide_started.is_some_and(|started| started.elapsed() >= GUIDE_HOLD) {
-                guide_sent = true;
-                let _ = sender.send(UiEvent::Show);
+            Err(e) => {
+                self.profile(Profile::Home);
+                self.library.message(e.to_string());
             }
-            thread::sleep(Duration::from_millis(10));
         }
-    })
-}
-
-fn axis_bucket(value: f32) -> i8 {
-    if value <= -0.65 {
-        -1
-    } else if value >= 0.65 {
-        1
-    } else {
-        0
+    }
+    fn exit(&mut self) {
+        if self.active_app.is_some()
+            || (!self.preview
+                && self.player.is_none()
+                && platform::mapped_clients_on_workspace(&self.config.workspace).unwrap_or(true))
+        {
+            self.library
+                .message("Close the active entertainment app before leaving TV mode.");
+            self.visibility(true);
+        } else {
+            self.quit = true;
+        }
+    }
+    fn power(&mut self, kind: &str) {
+        if self.preview {
+            self.library
+                .message("Power actions are disabled in preview.");
+            return;
+        }
+        let result = if kind == "sleep" {
+            platform::lock_and_suspend()
+        } else {
+            std::process::Command::new("systemctl")
+                .arg("poweroff")
+                .spawn()
+                .map(|_| ())
+                .map_err(Into::into)
+        };
+        if let Err(e) = result {
+            self.library.message(e.to_string());
+        }
     }
 }
-
-fn monitor_for_connector(connector: &str) -> Option<gdk::Monitor> {
-    let display = gdk::Display::default()?;
-    display
-        .monitors()
-        .snapshot()
-        .into_iter()
-        .filter_map(|item| item.downcast::<gdk::Monitor>().ok())
-        .find(|monitor| monitor.connector().as_deref() == Some(connector))
-}
-
-fn tile_button(icon: &str, title: &str, subtitle: &str, classes: &str) -> gtk::Button {
-    let button = gtk::Button::new();
-    for class in classes.split_whitespace() {
-        button.add_css_class(class);
-    }
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    content.set_halign(gtk::Align::Start);
-    content.set_valign(gtk::Align::Center);
-    let icon = gtk::Label::new(Some(icon));
-    icon.add_css_class("tile-icon");
-    icon.set_xalign(0.0);
-    let title = gtk::Label::new(Some(title));
-    title.add_css_class("tile-title");
-    title.set_xalign(0.0);
-    let subtitle = gtk::Label::new(Some(subtitle));
-    subtitle.add_css_class("tile-subtitle");
-    subtitle.set_xalign(0.0);
-    content.append(&icon);
-    content.append(&title);
-    content.append(&subtitle);
-    button.set_child(Some(&content));
-    button
-}
-
-fn load_css() -> Result<()> {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("tv-mode");
-    let provider = gtk::CssProvider::new();
-    let mut css = std::fs::read_to_string(config_dir.join("style.css"))
-        .context("failed to read TV mode style.css")?;
-    if let Ok(colors) = std::fs::read_to_string(config_dir.join("colors.css")) {
-        css.push('\n');
-        css.push_str(&colors);
-    }
-    provider.load_from_string(&css);
-    let display = gdk::Display::default().ok_or_else(|| anyhow!("GDK display is unavailable"))?;
-    gtk::style_context_add_provider_for_display(
-        &display,
-        &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-    Ok(())
-}
-
-fn update_clock(label: &gtk::Label) {
-    let text = glib::DateTime::now_local()
-        .ok()
-        .and_then(|time| time.format("%H:%M").ok())
-        .map(|value| value.to_string())
-        .unwrap_or_default();
-    label.set_text(&text);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn kodi_window_monitor_tracks_visible_app_across_workspaces() {
-        let mut clients = serde_json::json!([{
-            "class": "Kodi", "workspace": { "name": "5" }, "mapped": true
-        }]);
-        assert!(has_app_window(&clients, AppKind::Kodi));
-        clients[0]["mapped"] = Value::Bool(false);
-        assert!(!has_app_window(&clients, AppKind::Kodi));
-        assert!(!has_app_window(&serde_json::json!([]), AppKind::Kodi));
-    }
-
-    #[test]
-    fn steam_updater_is_not_a_ready_entertainment_session() {
-        let clients = serde_json::json!([{
-            "class": "steam", "title": "Updating Steam",
-            "workspace": { "name": "tv" }, "mapped": true, "fullscreen": 0
-        }]);
-        let state = steam_client_state_from_json(&clients, "tv");
-        assert!(state.session_active);
-        assert!(!state.session_ready);
-    }
-
-    #[test]
-    fn stick_threshold_requires_release_before_repeating() {
-        assert_eq!(axis_bucket(-1.0), -1);
-        assert_eq!(axis_bucket(1.0), 1);
-        assert_eq!(axis_bucket(0.0), 0);
-        assert_eq!(axis_bucket(0.5), 0);
-    }
-
-    #[test]
-    fn power_tiles_are_hold_only() {
-        assert!(Tile::Sleep.is_power());
-        assert!(Tile::Shutdown.is_power());
-        assert!(!Tile::Exit.is_power());
-    }
-
-    #[test]
-    fn borderless_game_on_another_workspace_stays_active_and_requests_fullscreen() {
-        let clients = serde_json::json!([{
-            "address": "0xgame",
-            "class": "steam_app_252950",
-            "initialClass": "steam_app_252950",
-            "workspace": { "name": "3" },
-            "mapped": true,
-            "fullscreen": 1,
-            "fullscreenClient": 1
-        }]);
-
-        assert_eq!(
-            steam_client_state_from_json(&clients, "tv"),
-            SteamClientState {
-                session_active: true,
-                session_ready: true,
-                games_needing_fullscreen: vec!["0xgame".to_string()],
+fn theme() -> Value {
+    let mut colors = json!({"primary":"#83d2e3","on_primary":"#00363e","tv_text":"#dee3e5","tv_muted":"#bfc8cb","tv_background":"#0e1416","tv_surface":"#1b2122","tertiary":"#bcc5eb"});
+    if let Some(path) = dirs::config_dir().map(|d| d.join("tv-mode/colors.css"))
+        && let Ok(text) = std::fs::read_to_string(path)
+    {
+        for line in text.lines() {
+            let words: Vec<_> = line.split_whitespace().collect();
+            if words.len() == 3 && words[0] == "@define-color" && words[2].starts_with('#') {
+                colors[words[1]] = words[2].trim_end_matches(';').into();
             }
-        );
+        }
     }
-
-    #[test]
-    fn true_fullscreen_game_needs_no_correction() {
-        let clients = serde_json::json!([{
-            "address": "0xgame",
-            "class": "steam_app_252950",
-            "workspace": { "name": "3" },
-            "mapped": true,
-            "fullscreen": 2,
-            "fullscreenClient": 2
-        }]);
-
-        assert_eq!(
-            steam_client_state_from_json(&clients, "tv"),
-            SteamClientState {
-                session_active: true,
-                session_ready: true,
-                games_needing_fullscreen: Vec::new(),
-            }
-        );
-    }
-
-    #[test]
-    fn steam_window_on_another_workspace_keeps_session_active() {
-        let clients = serde_json::json!([{
-            "address": "0xsteam",
-            "class": "steam",
-            "initialClass": "steam",
-            "title": "Steam Big Picture Mode",
-            "workspace": { "name": "5" },
-            "mapped": true,
-            "fullscreen": 2,
-            "fullscreenClient": 2
-        }]);
-
-        assert_eq!(
-            steam_client_state_from_json(&clients, "tv"),
-            SteamClientState {
-                session_active: true,
-                session_ready: true,
-                games_needing_fullscreen: Vec::new(),
-            }
-        );
-    }
-
-    #[test]
-    fn unmapped_or_other_workspace_clients_do_not_keep_session_active() {
-        let clients = serde_json::json!([
-            { "workspace": { "name": "tv" }, "mapped": false },
-            { "workspace": { "name": "3" }, "mapped": true }
-        ]);
-
-        assert!(!has_mapped_client_on_workspace(&clients, "tv"));
-    }
+    colors
 }

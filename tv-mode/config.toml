@@ -1,6 +1,10 @@
 output = "Unknown-2"
 workspace = "tv"
 
+[oblecto]
+server = "https://oblecto.home.robindecker.me"
+player = "mpv"
+
 [modes]
 home = "3840x2160@30.0"
 gaming = "1920x1080@119.88"
