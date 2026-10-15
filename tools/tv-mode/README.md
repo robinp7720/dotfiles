@@ -33,7 +33,7 @@ Open Luma and search for `tv`, press `Super+T`, or run:
 tv-mode start
 ```
 
-The home screen uses 4K30. Steam switches to 1080p120 and the performance
+The home screen uses 4K60. Steam switches to 1080p120 and the performance
 power profile; Kodi uses 4K30 and balanced. D-pad or the left stick moves
 focus, A selects, B returns to the active app from Home, and holding Guide for 1.5
 seconds reopens the home screen. Arrow keys, Enter, and Escape are available

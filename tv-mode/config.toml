@@ -6,7 +6,7 @@ server = "https://oblecto.home.robindecker.me"
 player = "mpv"
 
 [modes]
-home = "3840x2160@30.0"
+home = "3840x2160@60.0"
 gaming = "1920x1080@119.88"
 media = "3840x2160@30.0"
 scale = 1.0

@@ -25,7 +25,7 @@ require_path "tv-mode/config.toml"
 require_path "systemd/user/tv-mode.service"
 
 require_fixed 'output = "Unknown-2"' "tv-mode/config.toml"
-require_fixed 'home = "3840x2160@30.0"' "tv-mode/config.toml"
+require_fixed 'home = "3840x2160@60.0"' "tv-mode/config.toml"
 require_fixed 'gaming = "1920x1080@119.88"' "tv-mode/config.toml"
 require_fixed 'media = "3840x2160@30.0"' "tv-mode/config.toml"
 require_fixed '[apps.kodi]' "tv-mode/config.toml"
