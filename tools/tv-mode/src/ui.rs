@@ -12,6 +12,7 @@ use anyhow::{Result, bail};
 use serde_json::{Value, json};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -26,6 +27,7 @@ unsafe extern "C" {
         action: extern "C" fn(*mut c_void, *const c_char),
         output: *const c_char,
         preview: bool,
+        socket: *const c_char,
     ) -> i32;
 }
 struct Shell {
@@ -38,6 +40,9 @@ struct Shell {
     control: Receiver<ControlCommand>,
     player: Option<(player::Handle, Receiver<player::Event>, Media)>,
     active_app: Option<AppKind>,
+    decoder_socket: PathBuf,
+    decoder_ready: bool,
+    exiting: bool,
     state: Value,
     dirty: bool,
     inputs: Vec<String>,
@@ -73,6 +78,11 @@ fn run_shell(
     let gamepad =
         controllers.then(|| platform::spawn_gamepad_worker(tx.clone(), Arc::clone(&cancelled)));
     let output = CString::new(config.output.clone())?;
+    let decoder_dir = tempfile::Builder::new()
+        .prefix("tv-video-")
+        .tempdir_in(std::env::var_os("XDG_RUNTIME_DIR").unwrap_or_else(|| "/tmp".into()))?;
+    let decoder_socket = decoder_dir.path().join("control.sock");
+    let socket = CString::new(decoder_socket.to_string_lossy().as_bytes())?;
     let display_mode = crate::config::mode_label(&config.modes.home);
     let mut shell = Shell {
         config,
@@ -84,7 +94,10 @@ fn run_shell(
         control: crx,
         player: None,
         active_app: None,
-        state: json!({"displayMode":display_mode,"preview":preview,"controller":"Keyboard & remote","playing":false,"activeApp":"","holdProgress":0,"theme":theme(),"reducedMotion":std::env::var("TV_MODE_REDUCED_MOTION").is_ok_and(|v|v=="1")}),
+        decoder_socket,
+        decoder_ready: false,
+        exiting: false,
+        state: json!({"displayMode":display_mode,"preview":preview,"controller":"Keyboard & remote","playing":false,"nativePlayer":true,"playerView":false,"playback":{},"activeApp":"","holdProgress":0,"theme":theme(),"reducedMotion":std::env::var("TV_MODE_REDUCED_MOTION").is_ok_and(|v|v=="1")}),
         dirty: true,
         inputs: vec![],
         window: String::new(),
@@ -103,6 +116,7 @@ fn run_shell(
             action,
             output.as_ptr(),
             preview,
+            socket.as_ptr(),
         )
     };
     cancelled.store(true, Ordering::Relaxed);
@@ -170,22 +184,34 @@ impl Shell {
         for event in playback {
             match event {
                 player::Event::Ready => {
-                    self.visibility(false);
                     self.library.state["loading"] = false.into();
                     self.library.message("");
                 }
-                player::Event::Interaction => self.last_interaction = Instant::now(),
+                player::Event::Interaction => {
+                    self.last_interaction = Instant::now();
+                    self.inputs.push("playerActivity".into());
+                }
+                player::Event::Status(status) => {
+                    self.state["playback"] = status;
+                    self.dirty = true;
+                }
                 player::Event::Notice(message) => self.library.message(message),
                 player::Event::Finished { ended, error } => {
                     if let Some((handle, _, item)) = self.player.take() {
                         handle.finish();
                         self.state["playing"] = false.into();
+                        self.state["playerView"] = false.into();
+                        self.state["playback"] = json!({});
                         self.dirty = true;
                         self.visibility(true);
                         self.profile(Profile::Home);
                         let prompt = self.library.me["preferences"]["stillWatchingPrompt"] != false
                             && self.last_interaction.elapsed() >= Duration::from_secs(5400);
-                        self.library.playback_finished(&item, ended, prompt);
+                        if self.exiting {
+                            self.quit = true;
+                        } else {
+                            self.library.playback_finished(&item, ended, prompt);
+                        }
                         if let Some(e) = error {
                             self.library.message(e);
                         }
@@ -193,7 +219,7 @@ impl Shell {
                 }
             }
         }
-        if let Some(request) = self.library.play_request.take() {
+        if let Some(request) = self.library.play_request.take().filter(|_| !self.exiting) {
             self.play(request);
         }
         if let Some((kind, start)) = &self.hold {
@@ -223,10 +249,28 @@ impl Shell {
             } else {
                 AppKind::Kodi
             }),
+            "shutdown" => self.request_quit(),
+            "videoReady" => {
+                self.decoder_ready = a["ready"] == true;
+                if !self.decoder_ready {
+                    self.library
+                        .message("The video renderer could not initialize.");
+                }
+            }
+            "player" => {
+                if let Some(command) = player_command(&a)
+                    && let Some((handle, _, _)) = &self.player
+                {
+                    handle.send(command);
+                }
+            }
             "exit" => self.exit(),
             "home" => self.show_home(),
             "resumeApp" => {
-                if self.player.is_some() || self.active_app.is_some() {
+                if self.player.is_some() {
+                    self.state["playerView"] = true.into();
+                    self.dirty = true;
+                } else if self.active_app.is_some() {
                     self.visibility(false);
                 }
             }
@@ -248,7 +292,8 @@ impl Shell {
                 self.dirty = true;
             }
             "back" if self.player.is_some() && self.library.state["page"] == "home" => {
-                self.visibility(false)
+                self.state["playerView"] = true.into();
+                self.dirty = true;
             }
             "back" if self.player.is_some() => {
                 self.player.as_ref().unwrap().0.send(CommandKind::Stop);
@@ -282,6 +327,8 @@ impl Shell {
     }
     fn show_home(&mut self) {
         self.hold = None;
+        self.state["playerView"] = false.into();
+        self.dirty = true;
         self.library.action(json!({"type":"home"}));
         self.visibility(true);
         if self.player.is_none() && self.active_app.is_none() {
@@ -289,24 +336,13 @@ impl Shell {
         }
     }
     fn event(&mut self, event: UiEvent) {
-        if let Some((handle, _, _)) = &self.player
-            && !self.visible
+        if let UiEvent::PlayerControl(command) = &event
+            && self.state["playerView"] == true
+            && let Some((handle, _, _)) = &self.player
         {
-            let command = match event {
-                UiEvent::Navigate(NavDirection::Left) => Some(CommandKind::Seek(-10.0)),
-                UiEvent::Navigate(NavDirection::Right) => Some(CommandKind::Seek(10.0)),
-                UiEvent::Navigate(NavDirection::Up) => Some(CommandKind::Volume(5.0)),
-                UiEvent::Navigate(NavDirection::Down) => Some(CommandKind::Volume(-5.0)),
-                UiEvent::ActivatePressed => Some(CommandKind::TogglePause),
-                UiEvent::Back => Some(CommandKind::Stop),
-                UiEvent::PlayerControl(command) => Some(command),
-                _ => None,
-            };
-            if let Some(command) = command {
-                self.last_interaction = Instant::now();
-                handle.send(command);
-                return;
-            }
+            self.last_interaction = Instant::now();
+            handle.send(*command);
+            return;
         }
         match event {
             UiEvent::Show => self.show_home(),
@@ -345,17 +381,21 @@ impl Shell {
         let Some(api) = self.library.api.clone() else {
             return;
         };
+        if !self.decoder_ready {
+            self.library
+                .message("The video renderer is not ready. Try again.");
+            return;
+        }
         self.profile(Profile::Media);
         let options = oblecto::playback_options(&file, &self.library.me["preferences"], position);
-        let (handle, events) = player::start(
-            api,
-            options,
-            self.config.oblecto.player.clone(),
-            !self.preview,
-        );
+        let (handle, events) = player::start(api, options, self.decoder_socket.clone());
+        self.state["playerTitle"] = item.display_title(&self.library.me["preferences"]).into();
+        self.state["playerView"] = true.into();
+        self.state["playback"] =
+            json!({"position":position,"buffering":true,"paused":false,"volume":100});
         self.player = Some((handle, events, item));
         self.state["playing"] = true.into();
-        self.library.message("Preparing your film…  B to cancel");
+        self.library.message("");
         self.dirty = true;
     }
     fn launch(&mut self, kind: AppKind) {
@@ -410,6 +450,14 @@ impl Shell {
                 .message("Close the active entertainment app before leaving TV mode.");
             self.visibility(true);
         } else {
+            self.request_quit();
+        }
+    }
+    fn request_quit(&mut self) {
+        self.exiting = true;
+        if let Some((handle, _, _)) = &self.player {
+            handle.send(CommandKind::Stop);
+        } else {
             self.quit = true;
         }
     }
@@ -446,4 +494,40 @@ fn theme() -> Value {
         }
     }
     colors
+}
+
+fn player_command(action: &Value) -> Option<CommandKind> {
+    match action["command"].as_str()? {
+        "pause" => Some(CommandKind::TogglePause),
+        "stop" => Some(CommandKind::Stop),
+        "seek" => action["value"]
+            .as_f64()
+            .filter(|v| v.is_finite())
+            .map(|v| CommandKind::Seek(v.clamp(-600.0, 600.0))),
+        "seekTo" => action["value"]
+            .as_f64()
+            .filter(|v| v.is_finite())
+            .map(CommandKind::SeekTo),
+        "volume" => action["value"]
+            .as_f64()
+            .filter(|v| v.is_finite())
+            .map(|v| CommandKind::Volume(v.clamp(-10.0, 10.0))),
+        "audio" => Some(CommandKind::Audio),
+        "subtitles" => Some(CommandKind::Subtitles),
+        "quality" => Some(CommandKind::Quality),
+        "audioTrack" => action["value"]
+            .as_i64()
+            .filter(|v| *v >= 0)
+            .map(CommandKind::AudioTrack),
+        "subtitleTrack" => action["value"]
+            .as_i64()
+            .filter(|v| *v >= -1)
+            .map(CommandKind::SubtitleTrack),
+        "setQuality" => action["value"]
+            .as_u64()
+            .filter(|v| [0, 1, 360, 480, 720, 1080].contains(v))
+            .map(|v| CommandKind::SetQuality(v as u16)),
+        "skip" => Some(CommandKind::Skip),
+        _ => None,
+    }
 }

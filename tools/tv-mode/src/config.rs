@@ -17,20 +17,10 @@ pub struct Config {
     pub oblecto: OblectoConfig,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct OblectoConfig {
     pub server: String,
-    pub player: String,
-}
-
-impl Default for OblectoConfig {
-    fn default() -> Self {
-        Self {
-            server: String::new(),
-            player: "mpv".into(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

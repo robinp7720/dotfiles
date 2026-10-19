@@ -9,7 +9,7 @@ Window {
     minimumWidth: 960
     minimumHeight: 540
     title: "TV Home"
-    color: "#0a1018"
+    color: "#101216"
     onClosing: close => {
         close.accepted = false;
         send({
@@ -18,6 +18,7 @@ Window {
     }
     property var bridge: backend
     property var app: bridge.state
+    readonly property bool playerShowing: !!app.playerView
     property var lib: app.library || ({})
     property color accent: app.theme ? app.theme.primary : "#83d2e3"
     property bool reduced: app.reducedMotion || false
@@ -38,7 +39,6 @@ Window {
     property real scrollTarget: 0
     property string oldBackdrop: ""
     property string newBackdrop: ""
-    property int appHover: 0
     readonly property bool inLibrary: lib.authenticated || false
     readonly property var feature: page === "detail" ? detail : hero
     readonly property string backdrop: (lib.assets || {})[feature.backdrop || ""] || (lib.assets || {})[feature.art || ""] || ""
@@ -121,6 +121,12 @@ Window {
         }
     }
     function navigate(key) {
+        if (playerShowing) {
+            playbackView.navigate(key);
+            return;
+        }
+        if (key === "playerActivity")
+            return;
         if (key === "back") {
             if (keyboard.visible) {
                 keyboard.finish();
@@ -240,8 +246,12 @@ Window {
         interval: 80
         onTriggered: {
             focusPending = false;
+            if (playerShowing) {
+                playbackView.focusControl();
+                return;
+            }
             if (page === "home")
-                heroButton.forceActiveFocus();
+                firstFocus(launchers);
             else if (page === "login") {
                 if (profiles.length)
                     firstFocus(profileRow);
@@ -271,17 +281,41 @@ Window {
         repeat: true
         onTriggered: clockText = Qt.formatTime(new Date(), "HH:mm")
     }
+    Loader {
+        anchors.fill: parent
+        active: !!app.nativePlayer
+        source: active ? "NativeVideo.qml" : ""
+        onLoaded: item.ready.connect(success => send({
+                type: "videoReady",
+                ready: success
+            }))
+        onStatusChanged: if (status === Loader.Error)
+            send({
+                type: "videoReady",
+                ready: false
+            })
+    }
+    Player {
+        id: playbackView
+        objectName: "playbackView"
+        anchors.fill: parent
+        visible: playerShowing
+        playback: app.playback || ({})
+        title: app.playerTitle || ""
+        notice: lib.message || ""
+        accent: window.accent
+        reducedMotion: reduced
+        onAction: value => send(value)
+    }
     Item {
         id: scene
+        visible: !playerShowing
         width: 1920
         height: 1080
         anchors.centerIn: parent
         scale: Math.min(window.width / width, window.height / height)
         Ambient {
             anchors.fill: parent
-            accent: window.accent
-            drift: appHover
-            reducedMotion: reduced
         }
         Image {
             id: previousImage
@@ -289,7 +323,7 @@ Window {
             source: oldBackdrop
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            opacity: newImage.source ? 1 : 0.6
+            opacity: newImage.source ? (page === "home" ? 0.22 : 0.65) : 0
             sourceSize.width: 1920
         }
         Image {
@@ -308,7 +342,7 @@ Window {
             target: newImage
             property: "opacity"
             from: 0
-            to: newBackdrop ? 0.8 : 0
+            to: newBackdrop ? (page === "home" ? 0.22 : 0.65) : 0
             duration: reduced ? 0 : 600
             easing.type: Easing.OutCubic
         }
@@ -318,15 +352,15 @@ Window {
                 orientation: Gradient.Horizontal
                 GradientStop {
                     position: 0
-                    color: "#ff0a1018"
+                    color: "#ff101216"
                 }
                 GradientStop {
                     position: .35
-                    color: "#c70a1018"
+                    color: "#c7101216"
                 }
                 GradientStop {
                     position: 1
-                    color: "#180a1018"
+                    color: "#18101216"
                 }
             }
         }
@@ -335,26 +369,26 @@ Window {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#600a1018"
+                    color: "#60101216"
                 }
                 GradientStop {
                     position: .4
-                    color: "#000a1018"
+                    color: "#00101216"
                 }
                 GradientStop {
                     position: .85
-                    color: "#f50a1018"
+                    color: "#f5101216"
                 }
                 GradientStop {
                     position: 1
-                    color: "#ff0a1018"
+                    color: "#ff101216"
                 }
             }
         }
         // A soft vignette leaves every focus target readable over artwork.
         Rectangle {
             anchors.fill: parent
-            color: "#0a1018"
+            color: "#101216"
             opacity: page === "browse" ? 0.38 : 0
             Behavior on opacity {
                 NumberAnimation {
@@ -368,37 +402,13 @@ Window {
             y: 55
             width: 1664
             height: 66
-            Row {
-                spacing: 14
+            Text {
                 anchors.verticalCenter: parent.verticalCenter
-                Text {
-                    text: "◉"
-                    font.pixelSize: 37
-                    color: accent
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Text {
-                    text: "oblecto"
-                    font.family: "Inter"
-                    font.pixelSize: 33
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: -1
-                    color: "#f1f6f8"
-                }
-                Rectangle {
-                    width: 1
-                    height: 27
-                    color: "#41545e"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Text {
-                    text: page === "home" ? "TV HOME" : page === "detail" ? "YOUR LIBRARY" : page.toUpperCase()
-                    font.family: "Inter"
-                    font.pixelSize: 17
-                    font.letterSpacing: 3
-                    color: "#adc0c8"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
+                text: "TV"
+                font.family: "Inter"
+                font.pixelSize: 30
+                font.weight: Font.DemiBold
+                color: "#f2f3f5"
             }
             Row {
                 anchors.right: parent.right
@@ -407,7 +417,8 @@ Window {
                 TvButton {
                     objectName: "exitTv"
                     text: "Exit TV"
-                    icon: "↗"
+                    iconName: "exit"
+                    quiet: true
                     width: 174
                     height: 56
                     accent: window.accent
@@ -417,24 +428,12 @@ Window {
                     })
                 }
                 Text {
-                    text: lib.account || "Make yourself at home"
+                    text: lib.account || ""
+                    visible: !!lib.account
                     font.family: "Inter"
                     font.pixelSize: 21
                     color: "#becdd3"
                     anchors.verticalCenter: parent.verticalCenter
-                }
-                Rectangle {
-                    width: 40
-                    height: 40
-                    radius: 20
-                    color: "#344d59"
-                    visible: inLibrary
-                    Text {
-                        anchors.centerIn: parent
-                        text: (lib.account || "?").substring(0, 1).toUpperCase()
-                        font.pixelSize: 20
-                        color: "#d6ebf0"
-                    }
                 }
                 Text {
                     text: clockText
@@ -450,37 +449,31 @@ Window {
             objectName: "rail"
             x: 35
             y: 278
-            spacing: 19
+            spacing: 30
             z: 5
             Repeater {
                 model: [
                     {
-                        icon: "⌂",
                         name: "Home",
                         route: "home"
                     },
                     {
-                        icon: "⌕",
                         name: "Search",
                         route: "search"
                     },
                     {
-                        icon: "▣",
                         name: "Movies",
                         route: "movie"
                     },
                     {
-                        icon: "▤",
                         name: "Series",
                         route: "series"
                     },
                     {
-                        icon: "♡",
                         name: "Watchlist",
                         route: "saved"
                     },
                     {
-                        icon: "⚙",
                         name: "Settings",
                         route: "account"
                     }
@@ -490,10 +483,11 @@ Window {
                     compact: true
                     width: 72
                     height: 72
-                    icon: modelData.icon
+                    iconName: modelData.route
+                    quiet: true
                     accent: window.accent
                     reducedMotion: reduced
-                    selected: (page === modelData.route) || (page === "browse" && lib.browseKind === modelData.route)
+                    selected: page === modelData.route || (page === "browse" && (modelData.route === "saved" ? lib.browseList === "watchlist" : lib.browseList !== "watchlist" && lib.browseKind === modelData.route))
                     Accessible.name: modelData.name
                     onClicked: {
                         if (modelData.route === "movie" || modelData.route === "series")
@@ -514,15 +508,13 @@ Window {
                             });
                     }
                     Text {
-                        anchors.left: parent.right
-                        anchors.leftMargin: 15
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.top: parent.bottom
+                        anchors.topMargin: 4
+                        anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.name
                         color: "#f1f7fa"
-                        font.pixelSize: 22
+                        font.pixelSize: 16
                         visible: parent.activeFocus
-                        style: Text.Outline
-                        styleColor: "#101923"
                     }
                 }
             }
@@ -589,182 +581,63 @@ Window {
                 x: 18
                 width: 1664
                 height: page === "login" ? 850 : page === "search" ? 770 : page === "account" ? 830 : page === "detail" ? detailArea.height + (episodeSection.visible ? episodeSection.height : 0) : shelfColumn.y + shelfColumn.height
-                Item {
-                    id: heroArea
-                    width: parent.width
-                    height: inLibrary ? 430 : 465
+                Text {
+                    y: inLibrary ? 38 : 130
+                    text: "Apps"
                     visible: page === "home"
-                    Text {
-                        x: 0
-                        y: 51
-                        text: inLibrary ? "TONIGHT, PICK UP A GREAT STORY" : "THE BIG SCREEN IS YOURS"
-                        font.family: "Inter"
-                        font.pixelSize: 18
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 4
-                        color: accent
-                    }
-                    Text {
-                        x: 0
-                        y: 99
-                        width: 1030
-                        height: inLibrary ? 165 : 230
-                        text: inLibrary ? (hero.title || "Settle into something good.") : "Your evening.\nYour way."
-                        font.family: "Inter"
-                        font.pixelSize: inLibrary ? 76 : 100
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: -3
-                        lineHeight: 0.95
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        color: "#f4f7f9"
-                    }
-                    Text {
-                        x: 2
-                        y: inLibrary ? 275 : 342
-                        width: 870
-                        text: inLibrary ? (hero.overview || hero.subtitle || "Films, series, and the stories you keep coming back to.") : "Films, games, and one more episode. All in one place."
-                        font.family: "Inter"
-                        font.pixelSize: 25
-                        lineHeight: 1.25
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        color: "#adbec8"
-                    }
-                    TvButton {
-                        id: heroButton
-                        objectName: "heroButton"
-                        x: 0
-                        y: inLibrary ? 365 : 426
-                        text: inLibrary && hero.id ? "Explore title" : "Open Oblecto"
-                        icon: "▶"
-                        primary: true
-                        accent: window.accent
-                        reducedMotion: reduced
-                        onClicked: inLibrary && hero.id ? openTitle(hero) : send({
-                            type: "open"
-                        })
-                    }
-                    Text {
-                        x: heroButton.width + 29
-                        y: heroButton.y + 22
-                        text: inLibrary ? (hero.subtitle || "") : "Your personal cinema"
-                        font.family: "Inter"
-                        font.pixelSize: 21
-                        color: "#91a7b2"
-                    }
+                    color: "#f2f3f5"
+                    font.family: "Inter"
+                    font.pixelSize: 32
+                    font.weight: Font.Medium
                 }
                 Row {
                     id: launchers
-                    y: inLibrary ? 480 : 560
-                    spacing: 22
+                    y: inLibrary ? 108 : 204
+                    spacing: 28
                     visible: page === "home"
                     Repeater {
                         model: [
                             {
                                 name: "Oblecto",
-                                tag: "YOUR PERSONAL CINEMA",
-                                description: "The stories you love, together.",
-                                symbol: "◉",
-                                color: "#213f4a",
+                                icon: "oblecto",
+                                artwork: "",
+                                tint: "#202d32",
                                 route: "open"
                             },
                             {
                                 name: "Steam",
-                                tag: "READY, PLAYER ONE",
-                                description: "Jump into your next adventure.",
-                                symbol: "✦",
-                                color: "#28324b",
+                                icon: "gamepad",
+                                artwork: "file:///usr/share/icons/hicolor/256x256/apps/steam.png",
+                                tint: "#202735",
                                 route: "steam"
                             },
                             {
                                 name: "Kodi",
-                                tag: "MORE TO EXPLORE",
-                                description: "A world of media, on your terms.",
-                                symbol: "◇",
-                                color: "#283b45",
+                                icon: "media",
+                                artwork: "file:///usr/share/icons/hicolor/scalable/apps/kodi.svg",
+                                tint: "#222c32",
                                 route: "kodi"
                             }
                         ]
-                        Item {
-                            id: launch
+                        AppTile {
                             required property var modelData
-                            required property int index
-                            width: 540
-                            height: inLibrary ? 124 : 244
-                            activeFocusOnTab: true
-                            scale: activeFocus ? 1.025 : 1
-                            z: activeFocus ? 2 : 0
-                            Accessible.role: Accessible.Button
-                            Accessible.name: modelData.name
-                            property bool hold: false
-                            signal clicked
-                            onClicked: modelData.route === "open" ? send({
+                            objectName: "launcher_" + modelData.route
+                            title: modelData.name
+                            iconName: modelData.icon
+                            artwork: modelData.artwork
+                            tint: modelData.tint
+                            accent: window.accent
+                            reducedMotion: reduced
+                            onClicked: modelData.route === "open" ? send(inLibrary ? {
+                                type: "browse",
+                                kind: "movie",
+                                list: "all"
+                            } : {
                                 type: "open"
                             }) : send({
                                 type: "app",
                                 name: modelData.route
                             })
-                            onActiveFocusChanged: if (activeFocus)
-                                appHover = index
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: reduced ? 0 : 180
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 22
-                                color: modelData.color
-                                border.width: launch.activeFocus ? 3 : 1
-                                border.color: launch.activeFocus ? "#f1f7fa" : "#355a6a77"
-                            }
-                            Text {
-                                x: inLibrary ? 28 : 35
-                                y: inLibrary ? 30 : 30
-                                text: modelData.symbol
-                                font.pixelSize: inLibrary ? 52 : 67
-                                color: index === 0 ? accent : index === 1 ? "#b3c2f1" : "#a4d7df"
-                            }
-                            Text {
-                                x: inLibrary ? 105 : 35
-                                y: inLibrary ? 26 : 130
-                                text: modelData.name
-                                font.family: "Inter"
-                                font.pixelSize: inLibrary ? 30 : 39
-                                font.weight: Font.DemiBold
-                                color: "#f1f6f8"
-                            }
-                            Text {
-                                x: inLibrary ? 106 : 36
-                                y: inLibrary ? 73 : 188
-                                text: inLibrary ? modelData.tag : modelData.description
-                                font.family: "Inter"
-                                font.pixelSize: inLibrary ? 14 : 20
-                                font.letterSpacing: inLibrary ? 2 : 0
-                                color: "#aec0cc"
-                            }
-                            Text {
-                                anchors.right: parent.right
-                                anchors.rightMargin: 30
-                                y: inLibrary ? 40 : 37
-                                text: "↗"
-                                font.pixelSize: 35
-                                color: launch.activeFocus ? "#ffffff" : "#8aa8b9"
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onEntered: launch.forceActiveFocus()
-                                onClicked: launch.clicked()
-                            }
-                            Keys.onReturnPressed: clicked()
-                            Keys.onEnterPressed: clicked()
-                            Keys.onSpacePressed: clicked()
                         }
                     }
                 }
@@ -784,7 +657,7 @@ Window {
                         font.family: "Inter"
                         font.pixelSize: 52
                         font.weight: Font.DemiBold
-                        font.letterSpacing: -2
+                        font.letterSpacing: -1
                         color: "#f3f7fa"
                     }
                     Row {
@@ -837,7 +710,7 @@ Window {
                 Item {
                     id: detailArea
                     width: parent.width
-                    height: detail.kind === "series" ? 585 : 760
+                    height: Math.max(590, detail.kind === "series" ? detailActions.y + detailActions.height + 50 : detailSources.y + detailSources.height + 50)
                     visible: page === "detail" && !lib.loading
                     Image {
                         x: 1280
@@ -855,37 +728,31 @@ Window {
                         }
                     }
                     Text {
-                        y: 38
-                        text: detail.kind === "series" ? "A STORY TO GET LOST IN" : detail.resumable ? "WELCOME BACK TO THE STORY" : "MAKE IT A MOVIE NIGHT"
-                        font.family: "Inter"
-                        font.pixelSize: 18
-                        font.letterSpacing: 4
-                        color: accent
-                    }
-                    Text {
-                        y: 86
+                        id: detailTitle
+                        y: 48
                         width: 1130
                         text: detail.title || ""
                         font.family: "Inter"
-                        font.pixelSize: 79
+                        font.pixelSize: 68
                         font.weight: Font.DemiBold
-                        font.letterSpacing: -2
+                        font.letterSpacing: -1
                         color: "#f3f7fa"
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
                     }
                     Text {
-                        y: 282
+                        id: detailMetadata
+                        y: detailTitle.y + detailTitle.height + 24
                         text: detail.subtitle || ""
                         font.family: "Inter"
                         font.pixelSize: 23
                         color: accent
                     }
                     Text {
-                        y: 329
+                        id: detailOverview
+                        y: detailMetadata.y + detailMetadata.height + 24
                         width: 1090
-                        height: 112
                         text: detail.overview || "No synopsis available."
                         font.family: "Inter"
                         font.pixelSize: 27
@@ -896,11 +763,12 @@ Window {
                         elide: Text.ElideRight
                     }
                     Row {
-                        y: 485
+                        id: detailActions
+                        y: detailOverview.y + detailOverview.height + 40
                         spacing: 17
                         TvButton {
                             text: detail.resumable ? "Resume · " + detail.resume : "Play"
-                            icon: "▶"
+                            iconName: "play"
                             primary: true
                             accent: window.accent
                             reducedMotion: reduced
@@ -951,7 +819,8 @@ Window {
                         }
                     }
                     Row {
-                        y: 590
+                        id: detailSources
+                        y: detailActions.y + detailActions.height + 36
                         spacing: 20
                         visible: detail.kind !== "series"
                         TvButton {
@@ -1032,7 +901,7 @@ Window {
                 }
                 Column {
                     id: shelfColumn
-                    y: page === "home" ? (inLibrary ? 660 : 850) : page === "detail" ? detailArea.height : 270
+                    y: 408
                     width: parent.width
                     spacing: 36
                     visible: page === "home"
@@ -1060,7 +929,7 @@ Window {
                                     width: 240
                                     height: 50
                                     text: "Browse all →"
-                                    visible: shelf.modelData.title === "Something worth watching" || shelf.modelData.title === "One more episode"
+                                    visible: shelf.modelData.title === "Movies" || shelf.modelData.title === "Series"
                                     accent: window.accent
                                     reducedMotion: reduced
                                     onClicked: send({
@@ -1112,7 +981,7 @@ Window {
                     }
                     Text {
                         visible: !lib.loading && inLibrary && shelves.length === 0 && page !== "detail"
-                        text: "Nothing here yet. Your next favourite is waiting to be discovered."
+                        text: "Your library is empty."
                         font.family: "Inter"
                         font.pixelSize: 27
                         color: "#9db3bf"
@@ -1127,23 +996,16 @@ Window {
                     height: 850
                     Text {
                         y: 52
-                        text: "Who's watching?"
+                        text: profiles.length ? "Choose a profile" : "Sign in"
                         font.family: "Inter"
-                        font.pixelSize: 76
+                        font.pixelSize: 56
                         font.weight: Font.DemiBold
-                        font.letterSpacing: -3
+                        font.letterSpacing: -1
                         color: "#f1f7f9"
-                    }
-                    Text {
-                        y: 160
-                        text: "A familiar face. A whole world of stories."
-                        font.family: "Inter"
-                        font.pixelSize: 27
-                        color: "#a9beca"
                     }
                     Row {
                         id: profileRow
-                        y: 244
+                        y: 175
                         spacing: 28
                         Repeater {
                             model: profiles
@@ -1176,7 +1038,7 @@ Window {
                                 Rectangle {
                                     width: 112
                                     height: 112
-                                    radius: 34
+                                    radius: 56
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     color: profile.activeFocus ? accent : index % 2 === 0 ? "#375263" : "#4d4b68"
                                     border.width: profile.activeFocus ? 4 : 0
@@ -1218,14 +1080,13 @@ Window {
                         }
                     }
                     Row {
-                        y: profiles.length ? 460 : 250
+                        y: profiles.length ? 390 : 190
                         spacing: 20
                         Column {
                             spacing: 12
                             Text {
-                                text: "USERNAME"
-                                font.pixelSize: 15
-                                font.letterSpacing: 3
+                                text: "Username"
+                                font.pixelSize: 22
                                 color: "#99b2bf"
                             }
                             TextField {
@@ -1234,7 +1095,7 @@ Window {
                                 width: 440
                                 height: 72
                                 placeholderTextColor: "#91aab9"
-                                placeholderText: "Your username"
+                                placeholderText: "Username"
                                 font.pixelSize: 26
                                 font.family: "Inter"
                                 color: "#f1f7fa"
@@ -1246,8 +1107,8 @@ Window {
                                 }
                                 Keys.onReturnPressed: openKeyboard()
                                 background: Rectangle {
-                                    radius: 18
-                                    color: "#243744"
+                                    radius: 10
+                                    color: "#242930"
                                     border.width: username.activeFocus ? 3 : 1
                                     border.color: username.activeFocus ? accent : "#48606b"
                                 }
@@ -1256,9 +1117,8 @@ Window {
                         Column {
                             spacing: 12
                             Text {
-                                text: "PASSWORD"
-                                font.pixelSize: 15
-                                font.letterSpacing: 3
+                                text: "Password"
+                                font.pixelSize: 22
                                 color: "#99b2bf"
                             }
                             TextField {
@@ -1267,7 +1127,7 @@ Window {
                                 width: 440
                                 height: 72
                                 placeholderTextColor: "#91aab9"
-                                placeholderText: "Your password"
+                                placeholderText: "Password"
                                 echoMode: TextInput.Password
                                 font.pixelSize: 26
                                 font.family: "Inter"
@@ -1280,16 +1140,16 @@ Window {
                                 }
                                 onAccepted: window.login()
                                 background: Rectangle {
-                                    radius: 18
-                                    color: "#243744"
+                                    radius: 10
+                                    color: "#242930"
                                     border.width: password.activeFocus ? 3 : 1
                                     border.color: password.activeFocus ? accent : "#48606b"
                                 }
                             }
                         }
                         TvButton {
-                            text: lib.loading ? "Connecting…" : "Sign in →"
-                            y: 29
+                            text: lib.loading ? "Connecting…" : "Sign in"
+                            y: 38
                             height: 72
                             primary: true
                             accent: window.accent
@@ -1299,7 +1159,7 @@ Window {
                         }
                     }
                     Row {
-                        y: profiles.length ? 600 : 390
+                        y: profiles.length ? 530 : 330
                         spacing: 28
                         CheckBox {
                             id: remember
@@ -1323,7 +1183,7 @@ Window {
                         }
                     }
                     Row {
-                        y: profiles.length ? 710 : 510
+                        y: profiles.length ? 640 : 440
                         spacing: 20
                         visible: serverSettings
                         TextField {
@@ -1341,7 +1201,7 @@ Window {
                             Keys.onReturnPressed: openKeyboard()
                             background: Rectangle {
                                 radius: 16
-                                color: "#263c49"
+                                color: "#242930"
                                 border.width: server.activeFocus ? 3 : 1
                                 border.color: accent
                             }
@@ -1363,24 +1223,17 @@ Window {
                     height: 700
                     Text {
                         y: 55
-                        text: "Find your next favourite."
+                        text: "Search"
                         font.family: "Inter"
-                        font.pixelSize: 72
+                        font.pixelSize: 56
                         font.weight: Font.DemiBold
-                        font.letterSpacing: -2
+                        font.letterSpacing: -1
                         color: "#f1f6f9"
-                    }
-                    Text {
-                        y: 160
-                        text: "A film you've been meaning to watch. A series worth staying in for."
-                        font.family: "Inter"
-                        font.pixelSize: 27
-                        color: "#afc3cf"
                     }
                     TextField {
                         id: searchField
                         objectName: "searchField"
-                        y: 270
+                        y: 170
                         width: 1250
                         height: 86
                         placeholderTextColor: "#91aab9"
@@ -1401,14 +1254,14 @@ Window {
                             list: "all"
                         })
                         background: Rectangle {
-                            radius: 22
-                            color: "#263c49"
+                            radius: 10
+                            color: "#242930"
                             border.width: searchField.activeFocus ? 3 : 1
                             border.color: accent
                         }
                     }
                     Row {
-                        y: 400
+                        y: 295
                         spacing: 20
                         TvButton {
                             text: "Search movies"
@@ -1439,12 +1292,12 @@ Window {
                     width: parent.width
                     spacing: 30
                     Text {
-                        text: "Make yourself comfortable."
+                        text: "Settings"
                         font.family: "Inter"
-                        font.pixelSize: 65
+                        font.pixelSize: 56
                         font.weight: Font.DemiBold
                         color: "#eef5f8"
-                        font.letterSpacing: -2
+                        font.letterSpacing: -1
                     }
                     Text {
                         text: (lib.account || "Guest") + "  ·  " + (lib.server || "")
@@ -1485,7 +1338,7 @@ Window {
                         }
                     }
                     Text {
-                        text: "Playback follows your quality, language, and spoiler preferences in Oblecto."
+                        text: "Playback preferences are managed in Oblecto."
                         font.family: "Inter"
                         font.pixelSize: 24
                         color: "#93aebb"
@@ -1496,7 +1349,7 @@ Window {
                         color: "#334c59"
                     }
                     Text {
-                        text: "When the evening's done"
+                        text: "Power"
                         font.family: "Inter"
                         font.pixelSize: 34
                         color: "#dceaf2"
@@ -1551,11 +1404,11 @@ Window {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#000a1018"
+                    color: "#00101216"
                 }
                 GradientStop {
                     position: .35
-                    color: "#ff0a1018"
+                    color: "#ff101216"
                 }
             }
         }
@@ -1574,23 +1427,24 @@ Window {
                         label: page === "home" ? (app.playing || app.activeApp ? "Return to app" : "Desktop") : "Back"
                     },
                     {
-                        key: "⌂",
-                        label: "Hold Guide for home"
+                        key: "Guide",
+                        label: "Home (hold)"
                     },
                     {
-                        key: "⧉",
-                        label: "View / Select exits TV"
+                        key: "View",
+                        label: "Exit TV"
                     }
                 ]
                 Row {
                     required property var modelData
                     spacing: 9
                     Rectangle {
-                        width: 27
+                        width: Math.max(27, hintKey.implicitWidth + 14)
                         height: 27
-                        radius: 14
-                        color: "#30444e"
+                        radius: 6
+                        color: "#2b3038"
                         Text {
+                            id: hintKey
                             anchors.centerIn: parent
                             text: modelData.key
                             font.pixelSize: 16
@@ -1622,10 +1476,9 @@ Window {
         Text {
             x: 1510
             y: 1030
-            text: "TV MODE  /  PREVIEW"
+            text: "Preview"
             font.family: "Inter"
             font.pixelSize: 15
-            font.letterSpacing: 2
             color: "#678592"
             visible: !!app.preview && !app.playing && !app.activeApp
         }

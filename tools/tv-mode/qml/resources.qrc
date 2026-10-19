@@ -1,3 +1,4 @@
 <RCC><qresource prefix="/">
-<file>Main.qml</file><file>MediaGrid.qml</file><file>TvButton.qml</file><file>Poster.qml</file><file>Keyboard.qml</file><file>Ambient.qml</file>
+<file>Main.qml</file><file>MediaGrid.qml</file><file>TvButton.qml</file><file>Poster.qml</file><file>Keyboard.qml</file><file>Ambient.qml</file><file>Icon.qml</file><file>AppTile.qml</file>
+<file>NativeVideo.qml</file><file>Player.qml</file>
 </qresource></RCC>

@@ -399,8 +399,12 @@ impl Library {
                     let mut rows = Vec::new();
                     let mut warning = None;
                     for (title, path, kind) in [
-                        ("Pick up where you left off", "movies/watching", Kind::Movie),
-                        ("Your next chapter", "episodes/watching", Kind::Episode),
+                        ("Continue watching", "movies/watching", Kind::Movie),
+                        (
+                            "Continue watching series",
+                            "episodes/watching",
+                            Kind::Episode,
+                        ),
                         ("Up next", "episodes/next", Kind::Episode),
                     ] {
                         match api.get(path).and_then(|v| oblecto::media_array(kind, v)) {
@@ -415,10 +419,7 @@ impl Library {
                             }
                         }
                     }
-                    for (title, kind) in [
-                        ("Something worth watching", Kind::Movie),
-                        ("One more episode", Kind::Series),
-                    ] {
+                    for (title, kind) in [("Movies", Kind::Movie), ("Series", Kind::Series)] {
                         match api.browse(kind, "all", "", None) {
                             Ok(p) => rows.push((title.into(), p.items)),
                             Err(e) => warning = Some(e.to_string()),

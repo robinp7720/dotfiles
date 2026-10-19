@@ -67,13 +67,35 @@ TestCase {
     function test_home_controller_launchers() {
         fake.input("press");
         compare(actions[actions.length - 1].type, "open");
-        fake.input("down");
         fake.input("right");
         fake.input("press");
         compare(actions[actions.length - 1].name, "steam");
         fake.input("right");
         fake.input("press");
         compare(actions[actions.length - 1].name, "kodi");
+    }
+    function test_home_library_entry_and_shelf_navigation() {
+        route("home", {
+            rows: [
+                {
+                    title: "Continue watching",
+                    items: movies(3)
+                }
+            ]
+        });
+        compare(shell.activeFocusItem.objectName, "launcher_open");
+        fake.input("press");
+        compare(actions[actions.length - 1].type, "browse");
+        compare(actions[actions.length - 1].kind, "movie");
+        fake.input("down");
+        compare(shell.activeFocusItem.media.id, 2);
+        fake.input("left");
+        compare(shell.activeFocusItem.media.id, 1);
+        fake.input("press");
+        compare(actions[actions.length - 1].type, "detail");
+        compare(actions[actions.length - 1].id, 1);
+        fake.input("up");
+        compare(shell.activeFocusItem.objectName, "launcher_open");
     }
     function test_profile_controller_keyboard() {
         route("login", {
@@ -274,6 +296,75 @@ TestCase {
         fake.input("down");
         wait(40);
         compare(shell.activeFocusItem.media.id, 5);
+    }
+    function test_native_player_controller_and_track_menus() {
+        let state = JSON.parse(JSON.stringify(fake.state));
+        // A library refresh must not steal focus from the video controls.
+        state.library.serial = serial++;
+        state.playing = true;
+        state.playerView = true;
+        state.playerTitle = "A title";
+        state.playback = {
+            position: 42,
+            duration: 300,
+            paused: false,
+            buffering: false,
+            quality: "original",
+            selectedAudio: 4,
+            selectedSubtitle: null,
+            audioTracks: [
+                {
+                    index: 4,
+                    label: "English"
+                },
+                {
+                    index: 7,
+                    label: "German"
+                }
+            ],
+            subtitleTracks: [
+                {
+                    index: 9,
+                    label: "English"
+                }
+            ]
+        };
+        fake.state = state;
+        wait(140);
+        let player = findChild(shell, "playbackView");
+        verify(player.visible);
+        verify(player.activeFocus);
+        keyClick(Qt.Key_Space);
+        compare(actions[actions.length - 1].command, "pause");
+        fake.input("right");
+        compare(actions[actions.length - 1].command, "seek");
+        compare(actions[actions.length - 1].value, 10);
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "pause");
+        fake.input("down");
+        fake.input("right");
+        fake.input("press");
+        compare(player.menu, "Audio");
+        fake.input("down");
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "audioTrack");
+        compare(actions[actions.length - 1].value, 7);
+        verify(player.handleKey(Qt.Key_X));
+        fake.input("down");
+        fake.input("press");
+        compare(actions[actions.length - 1].value, 9);
+        compare(actions[actions.length - 1].command, "subtitleTrack");
+        player.openMenu("Subtitles");
+        fake.input("press");
+        compare(actions[actions.length - 1].value, -1);
+        player.openMenu("Quality");
+        fake.input("down");
+        fake.input("down");
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "setQuality");
+        compare(actions[actions.length - 1].value, 1080);
+        fake.input("back");
+        compare(actions[actions.length - 1].command, "stop");
     }
     function test_source_selection_and_power_hold() {
         route("detail", {

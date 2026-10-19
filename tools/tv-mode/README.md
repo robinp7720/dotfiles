@@ -12,7 +12,8 @@ recovery; a small C++ bridge exposes presentation state to QML.
 ## Build and install
 
 Requires a C++17 compiler, pkg-config, **Qt 6 Base, Declarative, and Wayland**
-(`qt6-base qt6-declarative qt6-wayland` on Arch), plus the existing session tools.
+and **libmpv 0.38+** (`qt6-base qt6-declarative qt6-wayland mpv` on Arch),
+an OpenGL 3.3-capable graphics driver, and the existing session tools.
 QML and artwork-free ambient visuals are embedded in the binary; no web server
 or browser is needed. Inter is the preferred font, with the system sans fallback.
 
@@ -42,8 +43,11 @@ as keyboard fallbacks.
 Display modes are matched by resolution and the nearest advertised refresh
 rate within 0.2%, so nominal 30/60/120 Hz settings also accept fractional
 29.97/59.94/119.88 Hz timings. The selected advertised mode is applied and
-used by the fullscreen home screen; unsupported resolutions or rates still fail before
-changing the desktop.
+used by the fullscreen home screen. Startup waits up to 30 seconds for the TV to
+reconnect and advertise all configured modes, before changing the desktop. If
+the TV remains unavailable or a mode is unsupported, startup fails with a message
+in `journalctl --user -u tv-mode.service`; turn on the TV, select its connected
+input, and retry.
 
 Steam startup remains in the gaming profile while its launcher updates; a
 temporary updater window closing does not count as leaving Big Picture.
@@ -75,7 +79,8 @@ Runtime state is stored with user-only permissions under
 
 ## Oblecto
 
-The Oblecto card opens the integrated library. The default server is
+The Oblecto card opens the movie library, or sign-in when no account is connected.
+Continue-watching and catalogue shelves are also available directly on Home. The default server is
 `https://oblecto.home.robindecker.me`; change `[oblecto].server` in
 `~/.config/tv-mode/config.toml`, or enter another address on the sign-in screen.
 HTTP/HTTPS deployment prefixes are supported. Choose a profile and enter its
@@ -95,25 +100,30 @@ and episode-spoiler preferences are applied. Automatic continuation runs after a
 episode actually ends; multiple source versions require a choice. If the account's
 still-watching prompt is enabled, continuation asks after 90 minutes without input.
 
-Playback uses **mpv 0.41+**. mpv receives
-session-scoped media URLs over a private IPC socket, never the account token or a
-URL on its command line. Oblecto negotiates direct, remux, or transcoded HLS output.
+Playback is embedded in TV mode, with a native video surface and controller-operated
+controls. **libmpv** handles decoding; Oblecto supplies managed HLS streams, remuxing
+or transcoding as needed. There is no separate player window. Session-scoped media
+URLs travel over a private control socket and never enter QML or a command line.
 Progress is sent every ten seconds, on transitions, and before session deletion.
-Audio/subtitle/quality changes preserve position and pause state. An expired
-playback session is recreated once; a failed direct decode gets one HLS fallback.
-Errors remain visible instead of endlessly retrying.
+Audio, subtitle, and quality changes preserve position and pause state. An expired
+session is recreated once; errors remain visible instead of endlessly retrying.
 
 | During playback | Controller | Keyboard |
 | --- | --- | --- |
 | Play/pause | A | Space |
 | Seek 10 seconds | D-pad left/right | Left/right |
-| Volume | D-pad up/down | mpv's 9/0 |
+| Focus control row; return to seeking | D-pad down; up | Down; up |
+| Select audio, subtitles, quality, or volume | Control row, then A | Control row, then Enter |
 | Stop and return to details | B | Escape |
-| Cycle subtitles, including off | X | X |
-| Cycle audio | Y | Y |
-| Cycle original / 1080p / 720p / auto | Left shoulder | Q |
+| Cycle subtitles, including off | X | X opens menu |
+| Cycle audio | Y | Y opens menu |
+| Cycle original / 1080p / 720p / auto | Left shoulder | Q opens menu |
+| Change volume | Volume buttons | + / − |
 | Skip current intro/recap, or next chapter | Right shoulder | N |
-| Show TV home / return to playback | Hold Guide / B | `tv-mode home` / Escape |
+| Show TV home / return to playback | Hold Guide / B | Home / Escape |
+
+Controls fade during playback and reappear on input. Playback continues behind
+Home; the resume action returns to the video. The timeline also supports mouse seeking.
 
 Library navigation uses D-pad/left stick and A/B, or arrows/Enter/Escape. Press A on a text field to open the controller-operated keyboard with uppercase
 and symbols; B dismisses it and restores field focus. Sign-in passwords are never saved. “Remember me” stores the token
@@ -122,8 +132,8 @@ and run a compatible keyring). If it is unavailable, sign-in still works for the
 current session. Only server/account metadata goes in
 `$XDG_STATE_HOME/tv-mode/oblecto-profile.json`; sign-out removes the saved token.
 
-`[oblecto].player` defaults to `mpv` and can name another mpv executable. The
-client uses the native API, not Jellyfin compatibility endpoints. Socket.IO remote
+The client uses the native Oblecto API. The old `[oblecto].player` executable
+setting is no longer used. Socket.IO remote
 casting, administrative tools, and viewing-statistics dashboards are outside this
 client's current scope. Library shelves refresh on navigation; there is no
 background realtime connection.
@@ -145,14 +155,18 @@ playback remain functional. The implementation follows the upstream
 
 `qml/` contains the interface, `qt/bridge.cpp` the Qt host, `src/library.rs` the
 asynchronous library state, and `src/platform.rs` controller/process monitoring.
-`src/player.rs` manages mpv and Oblecto playback sessions. Qt runs on the main
+`src/player.rs` manages the embedded decoder and Oblecto playback sessions;
+`qt/bridge.cpp` owns libmpv and its OpenGL render context. Qt runs on the main
 thread; HTTP and decoding work run off it. Stale navigation results are ignored.
 Artwork is cached in a private temporary directory with a 128-entry limit; older
 entries are evicted individually and visible covers are reloaded on demand. The
 cache is removed on sign-out/exit. Image URLs are never reused between accounts.
 
-The large 16:9 canvas, Inter typography, opaque cinema backdrop, and larger
-18–34 px radii deliberately adapt the desktop style for viewing from a sofa.
+Home puts three app tiles above the library shelves. A neutral background,
+Inter typography, restrained corners, and white focus outlines keep navigation
+readable from a sofa. Steam and Kodi use their installed icons from
+`/usr/share/icons/hicolor`, with built-in vector fallbacks when unavailable.
+Headings describe the content; titles retain their year, runtime, rating, and synopsis.
 Focus uses the Matugen `primary` role read from `tv-mode/colors.css`; edit
 `matugen/templates/tv-mode.css` for palette changes. Focus takes 160–180 ms,
 pages arrive in 320 ms, and artwork crossfades in 600 ms. Decorative visuals
@@ -169,7 +183,20 @@ bash tests/tv_mode_contract.sh
 The QML tests exercise controller navigation, password keyboard entry, focus
 preservation while artwork loads and pages append, grid navigation/virtualization,
 restoring browse position, fast pagination responses, direct exit, episode grids,
-source selection, and power press/release.
+source selection, player menus and controls, and power press/release.
 Use `tv-mode preview` for visual checks and playback without switching displays.
 Use `tv-mode preview --no-controller` in isolated Xvfb tests so the test window
 does not consume controller input intended for your desktop preview.
+
+For software decoding (including isolated Xvfb playback checks), set
+`TV_MODE_SOFTWARE_VIDEO=1`. Normal playback uses automatic hardware decoding.
+The native HLS smoke test requires FFmpeg, Xvfb, xdotool, and ImageMagick:
+
+```bash
+cargo build --manifest-path tools/tv-mode/Cargo.toml
+xvfb-run -a -s '-screen 0 1600x900x24' python tools/tv-mode/tests/native_player_smoke.py
+```
+
+It serves a generated clip from a local Oblecto fixture and checks real rendered
+frames, pause/seek, quality changes, Home/return, engine reuse, and progress saving
+on shutdown. It uses temporary state and software decoding.

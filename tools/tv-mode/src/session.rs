@@ -10,9 +10,10 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::config::{Config, DisplayMode};
+use crate::config::{Config, DisplayMode, DisplayModes};
 
 const SINK_WAIT: Duration = Duration::from_secs(3);
+pub const DISPLAY_WAIT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SessionSnapshot {
@@ -237,39 +238,7 @@ fn preflight(config: &mut Config) -> Result<()> {
         );
     }
 
-    let monitors = hypr_json("monitors")?;
-    let monitor = monitors
-        .as_array()
-        .and_then(|items| {
-            items
-                .iter()
-                .find(|item| string(item, "name") == Some(config.output.as_str()))
-        })
-        .ok_or_else(|| anyhow!("TV output {} is not active", config.output))?;
-    let available = monitor
-        .get("availableModes")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    for mode in [
-        &mut config.modes.home,
-        &mut config.modes.gaming,
-        &mut config.modes.media,
-    ] {
-        let resolved = resolve_mode(mode, &available).ok_or_else(|| {
-            anyhow!(
-                "TV output {} does not advertise mode {} (available: {})",
-                config.output,
-                mode,
-                available
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?;
-        *mode = resolved.to_string();
-    }
+    wait_for_display_modes(config, DISPLAY_WAIT, || hypr_json("monitors"))?;
 
     let cards = output("pactl", &["list", "cards"])?;
     let cards = String::from_utf8_lossy(&cards.stdout);
@@ -285,6 +254,84 @@ fn preflight(config: &mut Config) -> Result<()> {
         config.audio.card
     );
     Ok(())
+}
+
+fn wait_for_display_modes(
+    config: &mut Config,
+    wait: Duration,
+    mut read_monitors: impl FnMut() -> Result<Value>,
+) -> Result<()> {
+    let deadline = Instant::now() + wait;
+    let mut announced = false;
+    loop {
+        // Query/parse errors are not evidence of a TV still negotiating its modes.
+        let monitors = read_monitors()?;
+        ensure!(
+            monitors.is_array(),
+            "hyprctl monitors did not return an array"
+        );
+        match resolve_display_modes(config, &monitors) {
+            Ok(modes) => {
+                config.modes = modes;
+                return Ok(());
+            }
+            Err(error) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(error.context(format!(
+                        "TV output {} was not ready after {} seconds; turn on the TV and select the connected input, then retry",
+                        config.output,
+                        wait.as_secs()
+                    )));
+                }
+                if !announced {
+                    eprintln!(
+                        "Waiting for TV output {} to become ready: {error:#}",
+                        config.output
+                    );
+                    announced = true;
+                }
+                thread::sleep(remaining.min(Duration::from_millis(250)));
+            }
+        }
+    }
+}
+
+fn resolve_display_modes(config: &Config, monitors: &Value) -> Result<DisplayModes> {
+    let monitor = monitors
+        .as_array()
+        .and_then(|items| {
+            items.iter().find(|item| {
+                string(item, "name") == Some(config.output.as_str())
+                    && !bool_field(item, "disabled")
+            })
+        })
+        .ok_or_else(|| anyhow!("TV output {} is not active", config.output))?;
+    let available = monitor
+        .get("availableModes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    // Resolve all profiles from the same query, without changing the requested
+    // modes when a reconnect only advertises some of them yet.
+    let mut modes = config.modes.clone();
+    for mode in [&mut modes.home, &mut modes.gaming, &mut modes.media] {
+        let resolved = resolve_mode(mode, &available).ok_or_else(|| {
+            anyhow!(
+                "TV output {} does not advertise mode {} (available: {})",
+                config.output,
+                mode,
+                available
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+        *mode = resolved.to_string();
+    }
+
+    Ok(modes)
 }
 
 fn resolve_mode<'a>(requested: &str, available: &'a [Value]) -> Option<&'a str> {
@@ -890,6 +937,88 @@ mod tests {
             );
         }
         assert_eq!(resolve_mode("3840x2160@60", &[]), None);
+    }
+
+    fn display_config() -> Config {
+        toml::from_str(include_str!("../../../tv-mode/config.toml")).unwrap()
+    }
+
+    #[test]
+    fn startup_waits_through_missing_and_fallback_tv_modes() {
+        let mut config = display_config();
+        let output = config.output.clone();
+        let mut observations = [
+            serde_json::json!([]),
+            serde_json::json!([{
+                "name": output,
+                "availableModes": ["640x480@59.94Hz"]
+            }]),
+            serde_json::json!([{
+                "name": output,
+                "availableModes": [
+                    "3840x2160@59.94Hz", "1920x1080@119.88Hz", "3840x2160@29.97Hz"
+                ]
+            }]),
+        ]
+        .into_iter();
+        wait_for_display_modes(&mut config, Duration::from_secs(2), || {
+            Ok(observations.next().expect("unexpected display query"))
+        })
+        .unwrap();
+        assert!(observations.next().is_none());
+        assert_eq!(config.modes.home, "3840x2160@59.94");
+        assert_eq!(config.modes.gaming, "1920x1080@119.88");
+        assert_eq!(config.modes.media, "3840x2160@29.97");
+    }
+
+    #[test]
+    fn startup_timeout_preserves_requests_and_reports_unsupported_profile() {
+        let mut config = display_config();
+        let requested_home = config.modes.home.clone();
+        let monitors = serde_json::json!([{
+            "name": config.output,
+            "availableModes": ["3840x2160@59.94Hz"]
+        }]);
+        let error = wait_for_display_modes(&mut config, Duration::ZERO, || Ok(monitors.clone()))
+            .unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("turn on the TV"), "{message}");
+        assert!(
+            message.contains("does not advertise mode 1920x1080@119.88"),
+            "{message}"
+        );
+        assert_eq!(config.modes.home, requested_home);
+    }
+
+    #[test]
+    fn disabled_tv_is_not_ready_even_with_all_modes() {
+        let config = display_config();
+        let monitors = serde_json::json!([{
+            "name": config.output,
+            "disabled": true,
+            "availableModes": [
+                "3840x2160@60.00Hz", "1920x1080@119.88Hz", "3840x2160@29.97Hz"
+            ]
+        }]);
+        assert!(
+            resolve_display_modes(&config, &monitors)
+                .unwrap_err()
+                .to_string()
+                .contains("not active")
+        );
+    }
+
+    #[test]
+    fn startup_does_not_retry_compositor_query_errors() {
+        let mut config = display_config();
+        let mut queries = 0;
+        let error = wait_for_display_modes(&mut config, Duration::from_secs(30), || {
+            queries += 1;
+            Err(anyhow!("Hyprland socket unavailable"))
+        })
+        .unwrap_err();
+        assert_eq!(queries, 1);
+        assert_eq!(error.to_string(), "Hyprland socket unavailable");
     }
 
     #[test]

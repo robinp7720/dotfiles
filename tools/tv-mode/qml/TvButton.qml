@@ -5,6 +5,8 @@ Item {
     id: control
     property string text: ""
     property string icon: ""
+    property string iconName: ""
+    property bool quiet: false
     property bool primary: false
     property bool compact: false
     property bool hold: false
@@ -15,13 +17,13 @@ Item {
     signal clicked
     signal pressed
     signal released
-    implicitWidth: Math.max(compact ? 64 : 120, label.implicitWidth + (compact ? 32 : 52))
+    implicitWidth: Math.max(compact ? 64 : 120, label.implicitWidth + (iconName && text ? 42 : 0) + (compact ? 32 : 48))
     implicitHeight: compact ? 64 : 68
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
     Accessible.name: text
     Accessible.onPressAction: clicked()
-    scale: activeFocus ? 1.045 : 1
+    scale: activeFocus ? 1.025 : 1
     Behavior on scale {
         NumberAnimation {
             duration: control.reducedMotion ? 0 : 160
@@ -30,11 +32,11 @@ Item {
     }
     Rectangle {
         anchors.fill: parent
-        radius: control.compact ? 22 : 18
-        color: control.activeFocus ? (control.primary ? "#ffffff" : "#eaf3f5") : control.primary ? control.accent : control.selected ? "#35484b" : "#283039"
+        radius: 10
+        color: control.activeFocus ? "#f2f3f5" : control.primary ? control.accent : control.selected ? "#30363e" : control.quiet ? "transparent" : "#242930"
         opacity: control.enabled ? 1 : 0.4
-        border.width: control.activeFocus ? 3 : 1
-        border.color: control.activeFocus ? "#ffffff" : "#30495760"
+        border.width: control.activeFocus ? 2 : 0
+        border.color: "#ffffff"
         Behavior on color {
             ColorAnimation {
                 duration: control.reducedMotion ? 0 : 160
@@ -50,14 +52,24 @@ Item {
             visible: control.progress > 0
         }
     }
+    Icon {
+        x: control.text ? 22 : (control.width - width) / 2
+        anchors.verticalCenter: parent.verticalCenter
+        width: 28
+        height: 28
+        name: control.iconName
+        visible: !!name
+        color: control.activeFocus || control.primary ? "#14171c" : control.selected ? control.accent : "#a7afb9"
+    }
     Text {
         id: label
-        width: control.width - (control.compact ? 20 : 48)
+        width: control.width - (control.compact ? 20 : 48) - (control.iconName && control.text ? 42 : 0)
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
         anchors.centerIn: parent
+        anchors.horizontalCenterOffset: control.iconName && control.text ? 21 : 0
         text: control.icon + (control.icon && control.text ? "  " : "") + control.text
-        color: control.activeFocus || control.primary ? "#102025" : "#e5ebee"
+        color: control.activeFocus || control.primary ? "#14171c" : "#e5e7eb"
         font.family: "Inter"
         font.pixelSize: control.compact ? 29 : 24
         font.weight: Font.DemiBold

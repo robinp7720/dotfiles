@@ -4,6 +4,13 @@ fn main() {
     let qt = pkg_config::Config::new()
         .probe("Qt6Quick")
         .expect("Qt 6 Quick development files are required");
+    let gl = pkg_config::Config::new()
+        .probe("Qt6OpenGL")
+        .expect("Qt 6 OpenGL development files are required");
+    let mpv = pkg_config::Config::new()
+        .atleast_version("2.3.0")
+        .probe("mpv")
+        .expect("libmpv development files are required");
     let libexec = Command::new("pkg-config")
         .args(["--variable=libexecdir", "Qt6Core"])
         .output()
@@ -40,7 +47,12 @@ fn main() {
     }
     let mut build = cc::Build::new();
     build.cpp(true).std("c++17").flag("-fPIC").include(&out);
-    for path in qt.include_paths {
+    for path in qt
+        .include_paths
+        .into_iter()
+        .chain(gl.include_paths)
+        .chain(mpv.include_paths)
+    {
         build.include(path);
     }
     build

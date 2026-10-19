@@ -9,7 +9,7 @@ mod ui;
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -98,9 +98,6 @@ fn run(cli: Cli) -> Result<()> {
 }
 
 fn start_service() -> Result<()> {
-    if session::is_active()? {
-        return control::send(ControlCommand::Show, Duration::from_secs(1));
-    }
     let status = Command::new("systemctl")
         .args(["--user", "start", "tv-mode.service"])
         .status()
@@ -108,5 +105,28 @@ fn start_service() -> Result<()> {
     if !status.success() {
         anyhow::bail!("systemctl failed to start tv-mode.service");
     }
-    control::send(ControlCommand::Show, Duration::from_secs(4))
+    // Display negotiation can outlast the old four-second socket timeout.
+    // Starting an already active service is a no-op, including during preflight.
+    let deadline = Instant::now() + session::DISPLAY_WAIT + Duration::from_secs(10);
+    loop {
+        match control::send(ControlCommand::Show, Duration::from_millis(250)) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                let active = Command::new("systemctl")
+                    .args(["--user", "is-active", "--quiet", "tv-mode.service"])
+                    .status()
+                    .context("failed to check tv-mode.service")?;
+                if !active.success() {
+                    anyhow::bail!(
+                        "TV mode failed to start; see journalctl --user -u tv-mode.service -n 20"
+                    );
+                }
+                if Instant::now() >= deadline {
+                    return Err(
+                        error.context("TV mode did not become ready before the startup timeout")
+                    );
+                }
+            }
+        }
+    }
 }

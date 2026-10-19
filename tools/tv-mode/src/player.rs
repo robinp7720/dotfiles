@@ -1,14 +1,10 @@
 //! One worker owns the decoder and managed session, serializing progress/PATCH/DELETE.
-use std::collections::VecDeque;
-use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
@@ -19,6 +15,10 @@ use crate::oblecto::{Api, ApiError, number};
 pub enum CommandKind {
     TogglePause,
     Seek(f64),
+    SeekTo(f64),
+    AudioTrack(i64),
+    SubtitleTrack(i64),
+    SetQuality(u16),
     Volume(f64),
     Audio,
     Subtitles,
@@ -30,6 +30,7 @@ pub enum Event {
     Ready,
     Interaction,
     Notice(String),
+    Status(Value),
     Finished { ended: bool, error: Option<String> },
 }
 pub struct Handle {
@@ -51,16 +52,11 @@ impl Drop for Handle {
         let _ = self.tx.send(CommandKind::Stop);
     }
 }
-pub fn start(
-    api: Api,
-    options: Value,
-    program: String,
-    fullscreen: bool,
-) -> (Handle, Receiver<Event>) {
+pub fn start(api: Api, options: Value, socket: PathBuf) -> (Handle, Receiver<Event>) {
     let (tx, rx) = mpsc::channel();
     let (events, receive) = mpsc::channel();
     let join = thread::spawn(move || {
-        let result = play(api, options, &program, fullscreen, rx, &events);
+        let result = play(api, options, &socket, rx, &events);
         let event = match result {
             Ok(ended) => Event::Finished { ended, error: None },
             Err(error) => Event::Finished {
@@ -79,59 +75,23 @@ pub fn start(
     )
 }
 
+// The engine lives in the Qt process. This private socket is only the control channel;
+// media URLs never enter QML, a command line, or a log.
 struct Decoder {
-    child: Child,
     reader: BufReader<UnixStream>,
     writer: UnixStream,
-    directory: PathBuf,
+    partial: String,
 }
 impl Decoder {
-    fn spawn(program: &str, fullscreen: bool) -> Result<Self> {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .context("No desktop runtime directory")?;
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let directory = runtime.join(format!("tv-oblecto-{}-{nonce}", std::process::id()));
-        fs::create_dir(&directory)?;
-        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))?;
-        let socket = directory.join("mpv.sock");
-        let result = (|| {
-            let mut child = Command::new(program)
-                .args(["--no-config", "--idle=yes", "--force-window=yes", "--keep-open=no", "--terminal=no", "--osc=yes", "--hwdec=auto-safe", "--sub-auto=no", "--audio-file-auto=no", "--ytdl=no", "--title=Oblecto · TV mode", "--wayland-app-id=tv-mode-oblecto"])
-                .arg(if fullscreen { "--fullscreen=yes" } else { "--fullscreen=no" })
-                .arg(format!("--input-ipc-server={}", socket.display()))
-                .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()
-                .context("Could not start mpv. Install mpv or update oblecto.player in the TV mode config.")?;
-            let deadline = Instant::now() + Duration::from_secs(8);
-            loop {
-                if let Ok(stream) = UnixStream::connect(&socket) {
-                    stream.set_read_timeout(Some(Duration::from_millis(100)))?;
-                    stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-                    return Ok((child, stream));
-                }
-                if child.try_wait()?.is_some() {
-                    bail!("mpv exited before opening its control socket");
-                }
-                if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    bail!("mpv did not become ready");
-                }
-                thread::sleep(Duration::from_millis(40));
-            }
-        })();
-        match result {
-            Ok((child, stream)) => Ok(Self {
-                child,
-                reader: BufReader::new(stream.try_clone()?),
-                writer: stream,
-                directory,
-            }),
-            Err(error) => {
-                let _ = fs::remove_dir_all(directory);
-                Err(error)
-            }
-        }
+    fn connect(socket: &Path) -> Result<Self> {
+        let stream = UnixStream::connect(socket).context("The embedded player is unavailable")?;
+        stream.set_read_timeout(Some(Duration::from_millis(100)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+        Ok(Self {
+            reader: BufReader::new(stream.try_clone()?),
+            writer: stream,
+            partial: String::new(),
+        })
     }
     fn command(&mut self, args: Value) -> Result<()> {
         serde_json::to_writer(&mut self.writer, &json!({"command": args}))?;
@@ -139,10 +99,9 @@ impl Decoder {
         Ok(())
     }
     fn event(&mut self) -> Result<Option<Value>> {
-        let mut line = String::new();
-        match self.reader.read_line(&mut line) {
+        match self.reader.read_line(&mut self.partial) {
             Ok(0) => bail!("The player closed"),
-            Ok(_) => Ok(serde_json::from_str(&line).ok()),
+            Ok(_) => Ok(serde_json::from_str(&std::mem::take(&mut self.partial)).ok()),
             Err(error)
                 if matches!(
                     error.kind(),
@@ -181,20 +140,11 @@ impl Decoder {
         }
         None
     }
-    fn osd(&mut self, message: &str) {
-        let _ = self.command(json!(["show-text", message, 3500]));
-    }
 }
 impl Drop for Decoder {
     fn drop(&mut self) {
-        let _ = self.command(json!(["quit"]));
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while self.child.try_wait().ok().flatten().is_none() && Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(20));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-        let _ = fs::remove_dir_all(&self.directory);
+        // Leave the reusable engine and render context alive for the next title.
+        let _ = self.command(json!(["stop"]));
     }
 }
 
@@ -290,11 +240,39 @@ fn track_label(descriptor: &Value, subtitle: bool) -> String {
         label.unwrap_or("Off")
     )
 }
+fn quality_value(value: u16) -> Value {
+    match value {
+        0 => json!("original"),
+        360 | 480 | 720 | 1080 => json!(value),
+        _ => json!("auto"),
+    }
+}
+fn status(
+    descriptor: &Value,
+    options: &Value,
+    position: f64,
+    paused: bool,
+    buffering: bool,
+    volume: f64,
+) -> Value {
+    let tracks = |kind: &str| -> Vec<Value> {
+        descriptor["tracks"].as_array().into_iter().flatten()
+            .filter(|t| t["codec_type"] == kind)
+            .map(|t| json!({"index":t["index"], "label":t["tags"]["title"].as_str().or(t["tags"]["language"].as_str()).unwrap_or("Track")}))
+            .collect()
+    };
+    json!({"position":position,"duration":number(&descriptor["duration"]).unwrap_or(0.0),
+        "paused":paused,"buffering":buffering,"volume":volume,
+        "audioLabel":track_label(descriptor, false), "subtitleLabel":track_label(descriptor, true),
+        "audioTracks":tracks("audio"),"subtitleTracks":tracks("subtitle"),
+        "selectedAudio":descriptor["selectedTracks"]["audioStreamIndex"],
+        "selectedSubtitle":descriptor["selectedTracks"]["subtitleStreamIndex"],
+        "quality":options["quality"]})
+}
 fn play(
     api: Api,
     mut options: Value,
-    program: &str,
-    fullscreen: bool,
+    socket: &Path,
     commands: Receiver<CommandKind>,
     events: &Sender<Event>,
 ) -> Result<bool> {
@@ -308,25 +286,14 @@ fn play(
         if commands.try_iter().any(|c| matches!(c, CommandKind::Stop)) {
             return Ok(false);
         }
-        let mut decoder = Decoder::spawn(program, fullscreen)?;
-        for (index, property) in [(1, "time-pos"), (2, "pause"), (3, "paused-for-cache")] {
-            decoder.command(json!(["observe_property", index, property]))?;
-        }
-        for (key, action) in [
-            ("ESC", "stop"),
-            ("SPACE", "pause"),
-            ("LEFT", "back"),
-            ("RIGHT", "forward"),
-            ("x", "subtitles"),
-            ("y", "audio"),
-            ("q", "quality"),
-            ("n", "skip"),
+        let mut decoder = Decoder::connect(socket)?;
+        for (index, property) in [
+            (1, "time-pos"),
+            (2, "pause"),
+            (3, "paused-for-cache"),
+            (4, "volume"),
         ] {
-            decoder.command(json!([
-                "keybind",
-                key,
-                format!("script-message tv-mode-oblecto {action}")
-            ]))?;
+            decoder.command(json!(["observe_property", index, property]))?;
         }
         decoder.load(&api, &descriptor, false)?;
         let _ = events.send(Event::Ready);
@@ -335,10 +302,10 @@ fn play(
         let mut fallback = false;
         let mut recovered = false;
         let mut last_warning = String::new();
-        let mut quality = 0;
-        let mut keyboard_commands = VecDeque::new();
+        let mut volume = 100.0;
+        let mut last_status = Instant::now() - Duration::from_secs(1);
         loop {
-            for command in commands.try_iter().chain(keyboard_commands.drain(..)) {
+            for command in commands.try_iter() {
                 let _ = events.send(Event::Interaction);
                 match command {
                     CommandKind::Stop => {
@@ -346,27 +313,55 @@ fn play(
                         return Ok(false);
                     }
                     CommandKind::TogglePause => {
-                        decoder.command(json!(["cycle", "pause"]))?;
+                        paused = !paused;
+                        decoder.command(json!(["set_property", "pause", paused]))?;
                     }
                     CommandKind::Seek(seconds) => {
                         decoder.command(json!(["seek", seconds, "relative+exact"]))?;
                         report_after = Some(Instant::now() + Duration::from_millis(500));
                     }
+                    CommandKind::SeekTo(target) => {
+                        if target.is_finite() {
+                            let duration = number(&descriptor["duration"]).unwrap_or(f64::MAX);
+                            decoder.command(json!([
+                                "seek",
+                                target.clamp(0.0, duration),
+                                "absolute+exact"
+                            ]))?;
+                            report_after = Some(Instant::now() + Duration::from_millis(500));
+                        }
+                    }
                     CommandKind::Volume(delta) => {
                         decoder.command(json!(["add", "volume", delta]))?;
-                        decoder.command(json!(["show-progress"]))?;
                     }
-                    CommandKind::Audio | CommandKind::Subtitles | CommandKind::Quality => {
-                        let subtitle = matches!(command, CommandKind::Subtitles);
-                        let patch = if matches!(command, CommandKind::Quality) {
-                            quality = (quality + 1) % 4;
-                            let value = [json!("original"), json!(1080), json!(720), json!("auto")]
-                                [quality]
-                                .clone();
-                            options["quality"] = value.clone();
-                            json!({"quality":value,"forceHls":false})
-                        } else {
-                            cycle_track(&descriptor, subtitle)
+                    CommandKind::Audio
+                    | CommandKind::Subtitles
+                    | CommandKind::Quality
+                    | CommandKind::AudioTrack(_)
+                    | CommandKind::SubtitleTrack(_)
+                    | CommandKind::SetQuality(_) => {
+                        position = decoder.current_position().unwrap_or(position);
+                        let patch = match command {
+                            CommandKind::Quality => {
+                                let choices =
+                                    [json!("original"), json!(1080), json!(720), json!("auto")];
+                                let next = choices
+                                    .iter()
+                                    .position(|q| q == &options["quality"])
+                                    .map(|i| (i + 1) % choices.len())
+                                    .unwrap_or(0);
+                                json!({"quality":choices[next], "forceHls":true})
+                            }
+                            CommandKind::SetQuality(value) => {
+                                json!({"quality":quality_value(value), "forceHls":true})
+                            }
+                            CommandKind::AudioTrack(index) => json!({"audioStreamIndex":index}),
+                            CommandKind::SubtitleTrack(index) => {
+                                json!({"subtitleStreamIndex":if index < 0 {Value::Null} else {json!(index)}, "subtitleMode":if index < 0 {"off"} else {"auto"}})
+                            }
+                            _ => {
+                                cycle_track(&descriptor, matches!(command, CommandKind::Subtitles))
+                            }
                         };
                         match replace(
                             &api,
@@ -381,11 +376,6 @@ fn play(
                                     options[key] = value.clone();
                                 }
                                 buffering = true;
-                                decoder.osd(&if matches!(command, CommandKind::Quality) {
-                                    format!("Quality: {}", options["quality"])
-                                } else {
-                                    track_label(&descriptor, subtitle)
-                                });
                             }
                             Err(error) => {
                                 if !error.downcast_ref::<ApiError>().is_some_and(|e| {
@@ -393,7 +383,6 @@ fn play(
                                 }) {
                                     return Err(error);
                                 }
-                                decoder.osd(&error.to_string());
                                 let _ = events.send(Event::Notice(error.to_string()));
                             }
                         }
@@ -416,37 +405,21 @@ fn play(
                         if let Some(target) = target {
                             decoder.command(json!(["seek", target, "absolute+exact"]))?;
                         } else {
-                            decoder.osd("No next chapter or intro to skip");
+                            let _ = events
+                                .send(Event::Notice("No next chapter or intro to skip".into()));
                         }
                     }
                 }
             }
-            if decoder.child.try_wait()?.is_some() {
-                return Ok(false);
-            }
             if let Some(event) = decoder.event()? {
                 match event["event"].as_str() {
-                    Some("client-message") if event["args"][0] == "tv-mode-oblecto" => {
-                        if let Some(command) = match event["args"][1].as_str() {
-                            Some("stop") => Some(CommandKind::Stop),
-                            Some("pause") => Some(CommandKind::TogglePause),
-                            Some("back") => Some(CommandKind::Seek(-10.0)),
-                            Some("forward") => Some(CommandKind::Seek(10.0)),
-                            Some("subtitles") => Some(CommandKind::Subtitles),
-                            Some("audio") => Some(CommandKind::Audio),
-                            Some("quality") => Some(CommandKind::Quality),
-                            Some("skip") => Some(CommandKind::Skip),
-                            _ => None,
-                        } {
-                            keyboard_commands.push_back(command);
-                        }
-                    }
                     Some("property-change") => match event["name"].as_str() {
                         Some("time-pos") => {
                             if let Some(value) = number(&event["data"]) {
                                 position = value;
                             }
                         }
+                        Some("volume") => volume = number(&event["data"]).unwrap_or(volume),
                         Some("pause") => {
                             paused = event["data"].as_bool().unwrap_or(paused);
                             report_after = Some(Instant::now() + Duration::from_millis(250));
@@ -475,7 +448,6 @@ fn play(
                                 "select"
                             ]))?;
                         }
-                        decoder.osd("A / Space pause · ← → seek · B / Esc stop\nX subtitles · Y audio · LB quality · RB skip chapter");
                     }
                     Some("playback-restart" | "seek") => {
                         buffering = event["event"] == "seek";
@@ -508,6 +480,17 @@ fn play(
                     _ => {}
                 }
             }
+            if last_status.elapsed() >= Duration::from_millis(200) {
+                let _ = events.send(Event::Status(status(
+                    &descriptor,
+                    &options,
+                    position,
+                    paused,
+                    buffering,
+                    volume,
+                )));
+                last_status = Instant::now();
+            }
             if last_report.elapsed() >= Duration::from_secs(10)
                 || report_after.is_some_and(|deadline| Instant::now() >= deadline)
             {
@@ -537,7 +520,6 @@ fn play(
                     Err(error) => {
                         let warning = format!("Progress not saved: {error}");
                         if warning != last_warning {
-                            decoder.osd(&warning);
                             let _ = events.send(Event::Notice(warning.clone()));
                             last_warning = warning;
                         }
@@ -573,6 +555,75 @@ fn play(
 mod tests {
     use super::*;
     #[test]
+    fn reconfiguration_flushes_old_revision_and_restores_paused_absolute_position() {
+        let (api, server) = crate::oblecto::fixture::server(vec![
+            (204, Value::Null),
+            (
+                200,
+                json!({"sessionId":"test", "revision":2, "position":42.75, "method":"remux", "mediaUrl":"/media/hls.m3u8"}),
+            ),
+        ]);
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("decoder.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let engine = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut commands = Vec::new();
+            for _ in 0..2 {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                commands.push(serde_json::from_str::<Value>(&line).unwrap()["command"].clone());
+            }
+            commands
+        });
+        let mut decoder = Decoder::connect(&socket).unwrap();
+        let mut descriptor = json!({"sessionId":"test", "revision":1, "duration":300});
+        replace(
+            &api,
+            &mut decoder,
+            &mut descriptor,
+            json!({"quality":720,"forceHls":true}),
+            42.75,
+            true,
+        )
+        .unwrap();
+        drop(decoder);
+        let requests = server.join().unwrap();
+        assert_eq!(requests[0].method, "POST");
+        assert!(requests[0].path.ends_with("/progress"));
+        assert_eq!(requests[0].body["revision"], 1);
+        assert_eq!(requests[0].body["position"], 42.75);
+        assert_eq!(requests[0].body["paused"], true);
+        assert_eq!(requests[1].method, "PATCH");
+        assert_eq!(requests[1].body["revision"], 1);
+        assert_eq!(requests[1].body["position"], 42.75);
+        assert_eq!(requests[1].body["forceHls"], true);
+        let commands = engine.join().unwrap();
+        assert_eq!(commands[0][0], "loadfile");
+        assert_eq!(commands[0][4]["start"], "42.75");
+        assert_eq!(commands[0][4]["pause"], "yes");
+        assert_eq!(commands[1], json!(["stop"]));
+    }
+    #[test]
+    fn presentation_state_excludes_session_urls_and_tokens() {
+        let descriptor = json!({"mediaUrl":"https://example.test/?token=secret", "subtitleUrl":"secret", "sessionId":"secret", "tracks":[{"index":7,"codec_type":"audio","tags":{"language":"English"}}]});
+        let value = status(
+            &descriptor,
+            &json!({"quality":"original"}),
+            10.5,
+            true,
+            false,
+            80.0,
+        );
+        assert!(!value.to_string().contains("secret"));
+        assert_eq!(value["audioTracks"][0]["index"], 7);
+        assert_eq!(value["position"], 10.5);
+    }
+    #[test]
     fn cancelled_creation_disposes_session_without_starting_decoder() {
         let (api, server) = crate::oblecto::fixture::server(vec![
             (
@@ -589,8 +640,7 @@ mod tests {
             !play(
                 api,
                 json!({"fileId":73}),
-                "/must-not-launch",
-                false,
+                Path::new("/must-not-connect"),
                 rx,
                 &events
             )
@@ -615,8 +665,7 @@ mod tests {
             play(
                 api,
                 json!({"fileId":73}),
-                "/nonexistent/tv-oblecto-player",
-                false,
+                Path::new("/nonexistent/tv-oblecto-player"),
                 rx,
                 &events
             )

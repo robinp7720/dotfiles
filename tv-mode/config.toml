@@ -3,7 +3,6 @@ workspace = "tv"
 
 [oblecto]
 server = "https://oblecto.home.robindecker.me"
-player = "mpv"
 
 [modes]
 home = "3840x2160@60.0"

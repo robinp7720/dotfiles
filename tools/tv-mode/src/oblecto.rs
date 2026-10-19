@@ -438,7 +438,7 @@ pub fn timestamp(seconds: f64) -> String {
     }
 }
 pub fn playback_options(file: &Value, preferences: &Value, position: f64) -> Value {
-    let mut body = json!({"fileId": file["id"], "position": position,
+    let mut body = json!({"fileId": file["id"], "position": position, "forceHls": true,
         "quality": preferences.get("quality").unwrap_or(&json!("original")),
         "subtitleMode": preferences.get("subtitleMode").unwrap_or(&json!("auto")),
         "capabilities": {"containers": ["mp4", "m4v", "mkv", "webm", "avi", "mov"],
