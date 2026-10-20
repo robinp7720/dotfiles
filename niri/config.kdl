@@ -331,6 +331,7 @@ spawn-sh-at-startup "systemctl --user import-environment WAYLAND_DISPLAY XDG_CUR
 spawn-sh-at-startup "systemctl --user restart vigil.service"
 spawn-sh-at-startup "systemctl --user restart awww-daemon.service awww-wallpaper.service"
 spawn-sh-at-startup "systemctl --user restart hypridle.service"
+spawn-sh-at-startup "systemctl --user restart cliphist.service"
 
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/start_codex_self_improve_service.sh"
@@ -429,6 +430,8 @@ binds {
     Mod+Space hotkey-overlay-title="Search Apps, Files and Actions" { spawn "Luma" "--toggle"; }
     Mod+Tab hotkey-overlay-title="Search Open Windows" { spawn "Luma" "--mode" "windows" "--toggle"; }
     Mod+Shift+Space hotkey-overlay-title="Search Desktop Controls" { spawn "Luma" "--mode" "controls" "--toggle"; }
+    Mod+Shift+V hotkey-overlay-title="Search Clipboard History" { spawn "Luma" "--mode" "clipboard" "--toggle"; }
+    Mod+Slash hotkey-overlay-title="Show Keyboard Shortcuts" { show-hotkey-overlay; }
     Mod+P hotkey-overlay-title="Search Passwords" { spawn "Luma" "--mode" "pass" "--toggle"; }
     Super+L allow-when-locked=true allow-inhibiting=false hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
 
@@ -440,10 +443,10 @@ binds {
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
     // Using spawn-sh allows to pass multiple arguments together with the command.
-    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05-"; }
-    XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
-    XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0 && vigil osd volume"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05- && vigil osd volume"; }
+    XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && vigil osd volume"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle && vigil osd microphone"; }
     XF86AudioPlay        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--toggle"; }
     XF86AudioPause       allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--toggle"; }
     XF86AudioPrev        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--previous"; }
@@ -452,8 +455,8 @@ binds {
     // Example brightness key mappings for brightnessctl.
     // You can use regular spawn with multiple arguments too (to avoid going through "sh"),
     // but you need to manually put each argument in separate "" quotes.
-    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+5%"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "5%-"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn-sh "brightnessctl --class=backlight set +5% && vigil osd brightness"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn-sh "brightnessctl --class=backlight set 5%- && vigil osd brightness"; }
 
     // Open/close the Overview: a zoomed-out view of workspaces and windows.
     // You can also move the mouse into the top-left hot corner,
@@ -646,7 +649,7 @@ binds {
 
     // Move the focused window between the floating and the tiling layout.
     Mod+V       { toggle-window-floating; }
-    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+    Mod+Ctrl+V  { switch-focus-between-floating-and-tiling; }
 
     // Toggle tabbed column display mode.
     // Windows in this column will appear as vertical tabs,

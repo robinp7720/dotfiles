@@ -26,6 +26,7 @@ shared_bindings=(
   'SUPER + B|vigil control-center toggle"|Mod+B|"vigil" "control-center" "toggle";'
   'SUPER + SHIFT + N|vigil control-center toggle --context notifications|Mod+Shift+N|"vigil" "control-center" "toggle" "--context" "notifications"'
   'SUPER + Print|~/.dotfiles/scripts/screenshot.sh area|Super+Print|"~/.dotfiles/scripts/screenshot.sh" "area"'
+  'SUPER + SHIFT + V|Luma --mode clipboard --toggle|Mod+Shift+V|"Luma" "--mode" "clipboard" "--toggle"'
 )
 
 for entry in "${shared_bindings[@]}"; do
@@ -37,7 +38,9 @@ for entry in "${shared_bindings[@]}"; do
   fi
 done
 
-assert_contains "$HYPR" 'wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0'
-assert_contains "$NIRI" 'wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0'
+assert_contains "$HYPR" 'wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0 && vigil osd volume'
+assert_contains "$NIRI" 'wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0 && vigil osd volume'
+assert_contains "$HYPR" 'set-mute @DEFAULT_AUDIO_SOURCE@ toggle && vigil osd microphone'
+assert_contains "$NIRI" 'set-mute @DEFAULT_AUDIO_SOURCE@ toggle && vigil osd microphone'
 
 printf 'compositor binding parity: ok\n'
