@@ -18,11 +18,13 @@ The configuration targets Arch Linux or a derivative. Core runtime dependencies 
 - Desktop: `hyprland`, `niri`, `hypridle`, `hyprlock`, `hyprsunset`, `kitty`
 - Login: `greetd`, `nwg-hello`
 - Desktop services: `pipewire`, `wireplumber`, `networkmanager`, `bluez`, `power-profiles-daemon`, `polkit-gnome`
-- Helpers: `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`, `cliphist`
+- Helpers: `bash`, `python`, `jq`, `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`, `wl-paste`, `cliphist`
+- Shell preview: `fzf`, `eza`, `bat`; setup installs the tracked `preview` helper
 - Theming and wallpaper: `matugen`, `awww`
-- Builds: a Rust toolchain for Vigil, Luma, and TV mode
+- Builds: a Rust toolchain, C/C++ compiler, and `pkg-config`; GTK 4 and gtk4-layer-shell development files for Vigil/Luma; Evolution and Evolution Data Server development files for Luma's mail integration; Qt 6 Quick/OpenGL, libmpv, and libudev development files for TV mode
 
 Optional integrations include `khal` or `gcalcli` for calendar context, `pass` for passwords, Steam and Kodi for TV mode, Spotify for Bluetooth auto-launch, and Codex for self-improvement automation.
+The optional `hyprshade` timer uses the tracked `hypr/hyprshade.toml`. Install Hyprshade with its `vibrance` and `blue-light-filter` shaders before enabling it with `systemctl --user enable --now hyprshade.timer`. Hyprshade is currently absent on the audited machine, so its existing timer cannot apply a filter.
 
 ## Installation
 
@@ -30,14 +32,39 @@ Optional integrations include `khal` or `gcalcli` for calendar context, `pass` f
 git clone --recurse-submodules https://github.com/robinp7720/dotfiles.git ~/.dotfiles
 cd ~/.dotfiles
 cargo build --release --manifest-path tools/bar/Cargo.toml
-cargo build --release --manifest-path tools/launcher/Cargo.toml --bin Luma
+cargo build --release --manifest-path tools/launcher/Cargo.toml --bins
 cargo build --release --manifest-path tools/tv-mode/Cargo.toml
 ./setup.sh
 ```
 
 `setup.sh` links supported configuration under `~/.config`, exposes built binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs greetd/nwg-hello files when `sudo` is available. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
+Building both launcher binaries also supplies `luma-mail-eds`; setup exposes this helper for Luma's optional Evolution mail search.
 
 Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update greetd/nwg-hello under `/etc`.
+
+### Hyprland gesture plugins
+
+The desktop loads Hyprspace and hymission when installed. Their upstream sources
+are external dependencies; the local swipe-event plugin and Hyprspace gesture
+coordination patch are stored here. Install hymission through Hyprpm, which also
+builds and installs its `hymission-search-input` helper:
+
+```bash
+hyprpm add https://github.com/gfhdhytghd/hymission
+hyprpm enable hymission
+git clone https://github.com/KZDKM/Hyprspace.git ~/Hyprspace
+git -C ~/Hyprspace checkout cf08bed82621c1fb943ef4934ff0ba36540fea77
+./scripts/install_hyprland_plugins.sh ~/Hyprspace
+```
+
+The patch matches the Hyprspace revision above; the installed hymission revision
+at the time of this audit was `f1394d72e1a203f2a3faf6711e1d62714b466de8`.
+Plugins must be rebuilt against the headers matching the installed Hyprland.
+The build requires `make`, a C++23 compiler, and development files for Hyprland,
+Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon, and Lua;
+hymission also uses CMake, GTK 4, gtk4-layer-shell, and libadwaita.
+Running `./scripts/install_hyprland_plugins.sh` alone installs only the swipe-event
+plugin. Restart Hyprland after installing plugins.
 
 Restart the session after initial installation. When migrating an existing Hyprland session from `.conf` to Lua, use `hyprctl reload full-reset` once to switch parsers. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
 
@@ -49,6 +76,7 @@ Restart the session after initial installation. When migrating an existing Hyprl
 - `matugen/` — theme source templates; generated outputs should not be edited directly
 - `greetd/`, `nwg-hello/` — login screen configuration
 - `scripts/` — wallpaper, lockscreen, calendar, media, and session helpers
+- `wallpapers/` — the four images used by the active wallpaper mapping
 - `systemd/user/` — Vigil, wallpaper, TV-mode, Spotify, and Codex units
 - `tools/bar`, `tools/launcher` — Vigil and Luma Git submodules
 - `tools/tv-mode` — controller-first couch-session tool
@@ -109,6 +137,8 @@ vigil control-center close
 - Hyprland loads `hypr/hyprland.lua` and native Lua modules in `hypr/hyprland-config/` (Hyprland 0.55+). Desktop is the default; set `HYPRLAND_PROFILE=laptop` before starting Hyprland, or use `--config ~/.config/hypr/hyprland-config/laptop.lua`. Matugen generates `hypr/colors.lua` and reloads the palette. Vigil, Luma, TV mode, and display helpers use the Lua IPC API; rebuild the tools when migrating.
 - Monitor layouts live in `hypr/monitor_layouts/`, `hypr/monitors.lua`, and `niri/outputs.kdl`. Update connector names when hardware changes.
 - `scripts/awww_wallpapers.conf` maps wallpapers to outputs. `awww-daemon.service` owns the sole wallpaper daemon; `awww-wallpaper.service` applies images and follows output changes.
+- Active wallpapers are bundled under `wallpapers/`; their filenames identify the original Wallhaven images. The older `hypr/hyprpaper.conf` is unused by the current startup path.
+- Personal shell settings can remain in `~/.config/environment`. Setup preserves that file; it is not needed by the desktop helpers and should not be copied into Git with credentials.
 - Matugen writes generated palettes to ignored runtime paths. Run `matugen image <wallpaper> -c ~/.config/matugen/config.toml` to refresh them.
 - Colors, geometry, motion, and reduced-motion options are documented in [the desktop design contract](matugen/UI_STYLE.md). Vigil reloads its theme automatically after Matugen generation.
 - `scripts/session_lock.sh` closes transient Vigil UI, refreshes lock-safe context, and uses `swaylock` only as an emergency fallback.

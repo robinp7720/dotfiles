@@ -148,6 +148,7 @@ mkdir -p "$HOME/.local/bin"
 
 scripts=(
   "scripts/launch_kitty.sh:kitty"
+  "scripts/preview.sh:preview"
 )
 
 for script_pair in "${scripts[@]}"; do
@@ -167,6 +168,14 @@ if [[ -x "$DIR/tools/launcher/target/release/Luma" ]]; then
 else
   remove_managed_symlink "$HOME/.local/bin/Luma" "$DIR/tools/launcher/target/release/Luma"
   warn "skipping Luma binary link because tools/launcher/target/release/Luma is missing"
+fi
+
+if [[ -x "$DIR/tools/launcher/target/release/luma-mail-eds" ]]; then
+  link_path "$DIR/tools/launcher/target/release/luma-mail-eds" "$HOME/.local/bin/luma-mail-eds"
+  echo "Linked $HOME/.local/bin/luma-mail-eds -> $DIR/tools/launcher/target/release/luma-mail-eds"
+else
+  remove_managed_symlink "$HOME/.local/bin/luma-mail-eds" "$DIR/tools/launcher/target/release/luma-mail-eds"
+  warn "skipping optional Evolution helper link because tools/launcher/target/release/luma-mail-eds is missing"
 fi
 
 if [[ -x "$DIR/tools/bar/target/release/vigil" ]]; then

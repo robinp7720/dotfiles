@@ -74,8 +74,10 @@ make_setup_fixture() {
 
   touch \
     "$repo_root/scripts/launch_kitty.sh" \
+    "$repo_root/scripts/preview.sh" \
     "$repo_root/systemd/user/example.service" \
     "$repo_root/tools/launcher/target/release/Luma" \
+    "$repo_root/tools/launcher/target/release/luma-mail-eds" \
     "$repo_root/nwg-hello/hyprland.lua" \
     "$repo_root/hypr/hyprland-config/base.lua" \
     "$repo_root/hypr/monitor_layouts/default.lua" \
@@ -83,6 +85,7 @@ make_setup_fixture() {
     "$repo_root/greetd/config.toml"
 
   chmod +x "$repo_root/tools/launcher/target/release/Luma"
+  chmod +x "$repo_root/tools/launcher/target/release/luma-mail-eds"
 
   local dir
   for dir in hypr kitty matugen niri nvim nwg-hello greetd bar tv-mode; do
@@ -143,6 +146,11 @@ verify_luma_binary_link() {
     printf 'setup should expose the built Luma binary in ~/.local/bin\n' >&2
     exit 1
   fi
+
+  [[ "$(readlink "$test_home/.local/bin/preview")" == "$fixture_root/scripts/preview.sh" ]] \
+    || { printf 'setup should install the tracked FZF preview helper\n' >&2; exit 1; }
+  [[ "$(readlink "$test_home/.local/bin/luma-mail-eds")" == "$fixture_root/tools/launcher/target/release/luma-mail-eds" ]] \
+    || { printf 'setup should expose the Evolution mail helper\n' >&2; exit 1; }
 }
 
 make_stub_commands() {

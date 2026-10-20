@@ -1,19 +1,24 @@
 -- Preferences and autoloading for Hyprland plugins.
+local home = assert(os.getenv("HOME"), "HOME is required")
+local data_home = os.getenv("XDG_DATA_HOME") or (home .. "/.local/share")
+local plugin_dir = data_home .. "/hyprland/plugins/"
+local hyprpm_dir = "/var/cache/hyprpm/" .. assert(os.getenv("USER"), "USER is required") .. "/"
+
 local function resolve_hyprspace()
-    local custom_path = "/home/robin/.local/share/hyprland/plugins/Hyprspace.so"
+    local custom_path = plugin_dir .. "Hyprspace.so"
     local f = io.open(custom_path, "r")
     if f then
         f:close()
         return custom_path
     end
-    return "/var/cache/hyprpm/robin/Hyprspace/Hyprspace.so"
+    return hyprpm_dir .. "Hyprspace/Hyprspace.so"
 end
 
 local plugin_paths = {
     resolve_hyprspace(),
-    "/var/cache/hyprpm/robin/hymission/hymission.so",
+    hyprpm_dir .. "hymission/hymission.so",
     -- Live workspace swipe progress for Vigil (tools/hypr-swipe-events).
-    "/home/robin/.local/share/hyprland/plugins/hypr-swipe-events.so",
+    plugin_dir .. "hypr-swipe-events.so",
 }
 
 for _, path in ipairs(plugin_paths) do
