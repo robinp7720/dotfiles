@@ -1,4 +1,17 @@
--- Preferences for optional plugins; loading remains an explicit user choice.
+-- Preferences and autoloading for Hyprland plugins.
+local plugin_paths = {
+    "/var/cache/hyprpm/robin/Hyprspace/Hyprspace.so",
+    "/var/cache/hyprpm/robin/hymission/hymission.so",
+}
+
+for _, path in ipairs(plugin_paths) do
+    local f = io.open(path, "r")
+    if f then
+        f:close()
+        hl.plugin.load(path)
+    end
+end
+
 local settings = {
     hymission = {
         outer_padding_top = 92,
@@ -55,6 +68,10 @@ local settings = {
         debug_logs = 0,
         debug_surface_logs = 0,
     },
+    -- Hyprspace registers under plugin.overview
+    overview = {
+        disableGestures = true,
+    },
     hyprexpo = {
         columns = 3,
         gap_size = 10,
@@ -67,8 +84,54 @@ local settings = {
     },
 }
 
+-- Apply plugin configs
 for _, plugin in ipairs(hl.get_loaded_plugins()) do
     if settings[plugin.name] then
         hl.config({ plugin = { [plugin.name] = settings[plugin.name] } })
     end
+    if plugin.name == "Hyprspace" and settings.overview then
+        hl.config({ plugin = { overview = settings.overview } })
+    end
+end
+
+-- Trackpad gestures for overview & mission control
+-- 3 fingers UP: hymission (Mission Control)
+if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.toggle then
+    hl.gesture({
+        fingers = 3,
+        direction = "up",
+        action = function()
+            if hl.plugin and hl.plugin.overview and hl.plugin.overview.close then
+                pcall(hl.plugin.overview.close)
+            end
+            if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.toggle then
+                pcall(hl.plugin.hymission.toggle, "forceall")
+            end
+        end,
+    })
+end
+
+-- 3 fingers DOWN: Hyprspace (Workspace overview)
+if hl.plugin and hl.plugin.overview and hl.plugin.overview.toggle then
+    hl.gesture({
+        fingers = 3,
+        direction = "down",
+        action = function()
+            if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.close then
+                pcall(hl.plugin.hymission.close)
+            end
+            if hl.plugin and hl.plugin.overview and hl.plugin.overview.toggle then
+                pcall(hl.plugin.overview.toggle)
+            end
+        end,
+    })
+end
+
+-- 3 fingers HORIZONTAL: hymission-aware workspace switching
+if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.gesture then
+    pcall(hl.plugin.hymission.gesture, {
+        fingers = 3,
+        direction = "horizontal",
+        action = "workspace",
+    })
 end
