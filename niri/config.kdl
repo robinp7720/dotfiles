@@ -424,9 +424,12 @@ binds {
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+X hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
     Mod+Q hotkey-overlay-title="Open a Terminal: kitty" { spawn "~/.dotfiles/scripts/launch_kitty.sh"; }
-    Mod+B hotkey-overlay-title="Open Control Center" { spawn "vigil" "control-center" "open"; }
-    Mod+Space hotkey-overlay-title="Run Luma" { spawn "Luma"; }
-    Mod+P hotkey-overlay-title="Passwords: Luma" { spawn "Luma" "--mode" "pass"; }
+    Mod+B hotkey-overlay-title="Toggle Quick Settings" { spawn "vigil" "control-center" "toggle"; }
+    Mod+Shift+N hotkey-overlay-title="Toggle Notification Inbox" { spawn "vigil" "control-center" "toggle" "--context" "notifications"; }
+    Mod+Space hotkey-overlay-title="Search Apps, Files and Actions" { spawn "Luma" "--toggle"; }
+    Mod+Tab hotkey-overlay-title="Search Open Windows" { spawn "Luma" "--mode" "windows" "--toggle"; }
+    Mod+Shift+Space hotkey-overlay-title="Search Desktop Controls" { spawn "Luma" "--mode" "controls" "--toggle"; }
+    Mod+P hotkey-overlay-title="Search Passwords" { spawn "Luma" "--mode" "pass" "--toggle"; }
     Super+L allow-when-locked=true allow-inhibiting=false hotkey-overlay-title="Lock the Screen" { spawn "~/.dotfiles/scripts/session_lock.sh"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
@@ -437,8 +440,8 @@ binds {
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
     // Using spawn-sh allows to pass multiple arguments together with the command.
-    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05-"; }
     XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
     XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
     XF86AudioPlay        allow-when-locked=true { spawn "~/.dotfiles/scripts/now_playing.sh" "--toggle"; }
@@ -449,8 +452,8 @@ binds {
     // Example brightness key mappings for brightnessctl.
     // You can use regular spawn with multiple arguments too (to avoid going through "sh"),
     // but you need to manually put each argument in separate "" quotes.
-    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+10%"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "10%-"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+5%"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "5%-"; }
 
     // Open/close the Overview: a zoomed-out view of workspaces and windows.
     // You can also move the mouse into the top-left hot corner,
@@ -656,14 +659,12 @@ binds {
     // Having both at once on the same hotkey will break the switching,
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
     // Mod+Space       { switch-layout "next"; }
-    Mod+Shift+Space hotkey-overlay-title="Switch Keyboard Layout" { switch-layout "next"; }
+    Mod+Ctrl+Space hotkey-overlay-title="Switch Keyboard Layout" { switch-layout "next"; }
 
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
-    Super+Print hotkey-overlay-title="Screenshot Area (grim)" {
-        spawn-sh "dir=\"$HOME/Pictures/Screenshots\"; mkdir -p \"$dir\"; ts=$(date +'%Y-%m-%d %H-%M-%S'); file=\"$dir/Screenshot from $ts.png\"; region=$(slurp) || exit 1; grim -g \"$region\" \"$file\" && wl-copy -t image/png < \"$file\" && notify-send -i \"$file\" \"Screenshot\" \"Saved to $file and copied to clipboard\"";
-    }
+    Super+Print hotkey-overlay-title="Screenshot Area (grim)" { spawn "~/.dotfiles/scripts/screenshot.sh" "area"; }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here
