@@ -1,0 +1,16 @@
+[Unit]
+Description=Clipboard history for Luma
+After=graphical-session.target
+PartOf=graphical-session.target
+# Stays inactive until the cliphist package is installed.
+ConditionPathExists=/usr/bin/cliphist
+
+[Service]
+Type=simple
+# wl-paste re-runs cliphist for every new selection, text and images alike.
+ExecStart=/usr/bin/wl-paste --watch /usr/bin/cliphist store
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
