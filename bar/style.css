@@ -51,28 +51,6 @@
   100% { opacity: 1; transform: none; }
 }
 
-@keyframes workspace-activate {
-  0% {
-    transform: scale(0.76, 1.22);
-    box-shadow: 0 0 0 0 alpha(@primary, 0.65);
-  }
-  38% {
-    transform: translateY(-2.5px) scale(1.22, 0.84) rotate(-3deg);
-    box-shadow: 0 0 0 8px alpha(@primary, 0.22);
-  }
-  66% {
-    transform: translateY(1px) scale(0.92, 1.07) rotate(1.5deg);
-    box-shadow: 0 0 0 15px alpha(@primary, 0);
-  }
-  84% {
-    transform: scale(1.04, 0.97);
-  }
-  100% {
-    transform: none;
-    box-shadow: none;
-  }
-}
-
 @keyframes state-pop {
   0% {
     transform: scale(0.66, 1.24) rotate(-14deg);
@@ -317,12 +295,26 @@ button.system-module:active,
   background: @primary;
 }
 
-.workspace-button.workspace-new {
-  animation: workspace-arrive 460ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+/* The sliding pill paints the active background so it can follow swipes. */
+.workspace-pill {
+  background: @primary;
+  border-radius: 8px;
 }
 
-.workspace-button.workspace-activated {
-  animation: workspace-activate 480ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+.workspace-strip.has-pill .workspace-button.active {
+  background: transparent;
+}
+
+.workspace-strip.pill-moving .workspace-button.active:not(.under-pill) {
+  color: @cockpit_muted;
+}
+
+.workspace-strip.pill-moving .workspace-button.under-pill {
+  color: @on_primary;
+}
+
+.workspace-button.workspace-new {
+  animation: workspace-arrive 460ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 .workspace-button.urgent {
@@ -447,7 +439,6 @@ window.ambient-always .bar-island {
 }
 
 window.motion-calm .workspace-button.workspace-new,
-window.motion-calm .workspace-button.workspace-activated,
 window.motion-calm button.system-module.state-changed,
 window.motion-calm .context-chip.context-arrived {
   animation-duration: 220ms;
@@ -688,7 +679,6 @@ window.control-center-window scale:focus-visible {
   }
   .bar-root.bar-entering .bar-island,
   .workspace-button.workspace-new,
-  .workspace-button.workspace-activated,
   .workspace-button.urgent,
   button.system-module.state-changed,
   .context-chip.context-arrived,
