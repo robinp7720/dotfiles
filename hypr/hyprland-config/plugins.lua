@@ -12,6 +12,8 @@ end
 local plugin_paths = {
     resolve_hyprspace(),
     "/var/cache/hyprpm/robin/hymission/hymission.so",
+    -- Live workspace swipe progress for Vigil (tools/hypr-swipe-events).
+    "/home/robin/.local/share/hyprland/plugins/hypr-swipe-events.so",
 }
 
 for _, path in ipairs(plugin_paths) do
