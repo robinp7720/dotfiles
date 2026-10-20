@@ -1,7 +1,7 @@
 [submodule "Luma"]
 	path = tools/launcher
-	url = git@github.com:robinp7720/Luma.git
+	url = ../Luma.git
 [submodule "Vigil"]
 	path = tools/bar
-	url = git@github.com:robinp7720/Vigil.git
+	url = ../Vigil.git
 	branch = master
