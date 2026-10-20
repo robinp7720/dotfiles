@@ -92,5 +92,9 @@ hl.layer_rule({ name = "Luma-ignore_alpha", match = { namespace = "Luma" }, igno
 hl.layer_rule({ name = "vigil-ignore_alpha", match = { namespace = "vigil" }, ignore_alpha = 0.20 })
 hl.layer_rule({ name = "vigil-control-center-ignore_alpha", match = { namespace = "vigil-control-center" }, ignore_alpha = 0.20 })
 hl.layer_rule({ name = "vigil-notifications-ignore_alpha", match = { namespace = "vigil-notifications" }, ignore_alpha = 0.20 })
+hl.layer_rule({ name = "vigil-osd-blur", match = { namespace = "vigil-osd" }, blur = true })
+hl.layer_rule({ name = "vigil-osd-ignore_alpha", match = { namespace = "vigil-osd" }, ignore_alpha = 0.20 })
+-- Unlike the morphing Vigil surfaces, the OSD leaves its entrance to Hyprland.
+hl.layer_rule({ name = "vigil-osd-animation", match = { namespace = "vigil-osd" }, animation = "popin 92%" })
 
 hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
