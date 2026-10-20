@@ -71,6 +71,10 @@ Restart the session after initial installation. When migrating an existing Hyprl
 | `Super+Shift+Arrow` | Move a window in that direction |
 | `Super+Ctrl+Arrow` | Resize the current split |
 | `Super+grave` | Return to the previous workspace |
+| `Super+F` / `Super+Shift+F` | Toggle maximized / fullscreen |
+| `Super+V` | Toggle floating |
+| `Super+Ctrl+Space` | Cycle keyboard layouts |
+| `Print` / `Shift+Print` | Screenshot an area / the focused monitor (Niri keeps its own `Print` UI; `Super+Print` is shared) |
 
 The search button on every bar opens Luma on that monitor; right-click it for
 windows. Luma's All, Apps, Windows, Controls, and Files filters preserve the search
