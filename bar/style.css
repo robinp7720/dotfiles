@@ -13,35 +13,86 @@
 @define-color success #83d6a3;
 
 @keyframes cockpit-enter {
-  0% { opacity: 0; transform: translate(0, -12px) scale(0.88); }
-  58% { opacity: 1; transform: translate(0, 2px) scale(1.025); }
-  78% { transform: translate(0, -1px) scale(0.992); }
+  0% { opacity: 0; transform: translate(0, -18px) scale(0.82, 1.16); }
+  42% { opacity: 1; transform: translate(0, 4px) scale(1.06, 0.92); }
+  68% { transform: translate(0, -2px) scale(0.97, 1.03); }
+  86% { transform: translate(0, 1px) scale(1.015, 0.99); }
   100% { opacity: 1; transform: none; }
 }
 
 @keyframes context-arrive {
-  0% { opacity: 0; transform: translate(0, 8px) scale(0.9); }
-  56% { opacity: 1; transform: translate(0, -2px) scale(1.04); }
-  100% { transform: none; }
+  0% {
+    opacity: 0;
+    transform: translate(0, 10px) scale(0.78, 1.16) rotate(-2.5deg);
+    box-shadow: 0 0 0 0 alpha(@primary, 0.52), inset 0 0 0 2px alpha(@primary, 0.52);
+  }
+  44% {
+    opacity: 1;
+    transform: translate(0, -3px) scale(1.09, 0.92) rotate(1.2deg);
+    box-shadow: 0 0 0 10px alpha(@primary, 0.18), inset 0 0 12px alpha(@primary, 0.22);
+  }
+  72% {
+    transform: translate(0, 1.5px) scale(0.96, 1.03) rotate(-0.5deg);
+    box-shadow: 0 0 0 18px alpha(@primary, 0), inset 0 0 0 0 alpha(@primary, 0);
+  }
+  88% {
+    transform: translate(0, -0.5px) scale(1.02, 0.99);
+  }
+  100% {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 @keyframes workspace-arrive {
-  0% { opacity: 0; transform: scale(0.88); }
-  68% { opacity: 1; transform: scale(1.06); }
-  100% { transform: none; }
+  0% { opacity: 0; transform: translateY(6px) scale(0.55, 1.25) rotate(-10deg); }
+  48% { opacity: 1; transform: translateY(-3px) scale(1.18, 0.86) rotate(4deg); }
+  74% { transform: translateY(1px) scale(0.93, 1.05) rotate(-1.5deg); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes workspace-activate {
-  0% { transform: scale(0.92); }
-  48% { transform: scale(1.10); }
-  74% { transform: scale(0.96); }
-  100% { transform: none; }
+  0% {
+    transform: scale(0.76, 1.22);
+    box-shadow: 0 0 0 0 alpha(@primary, 0.65);
+  }
+  38% {
+    transform: translateY(-2.5px) scale(1.22, 0.84) rotate(-3deg);
+    box-shadow: 0 0 0 8px alpha(@primary, 0.22);
+  }
+  66% {
+    transform: translateY(1px) scale(0.92, 1.07) rotate(1.5deg);
+    box-shadow: 0 0 0 15px alpha(@primary, 0);
+  }
+  84% {
+    transform: scale(1.04, 0.97);
+  }
+  100% {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 @keyframes state-pop {
-  0% { transform: scale(0.75) rotate(-8deg); }
-  62% { transform: scale(1.2) rotate(3deg); }
-  100% { transform: none; }
+  0% {
+    transform: scale(0.66, 1.24) rotate(-14deg);
+    box-shadow: 0 0 0 0 alpha(@primary, 0.52);
+  }
+  40% {
+    transform: translateY(-3px) scale(1.26, 0.84) rotate(8deg);
+    box-shadow: 0 0 0 9px alpha(@primary, 0.18);
+  }
+  68% {
+    transform: translateY(1px) scale(0.91, 1.06) rotate(-4deg);
+    box-shadow: 0 0 0 16px alpha(@primary, 0);
+  }
+  86% {
+    transform: scale(1.05, 0.97) rotate(1.5deg);
+  }
+  100% {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 @keyframes meaningful-pulse {
@@ -60,17 +111,49 @@
 }
 
 @keyframes success-pop {
-  0% { transform: scale(0.86); }
-  58% { transform: scale(1.13); }
+  0% { transform: scale(0.76, 1.18); }
+  44% { transform: translateY(-2px) scale(1.20, 0.88); }
+  72% { transform: scale(0.94, 1.04); }
+  88% { transform: scale(1.04, 0.98); }
   100% { transform: none; }
 }
 
 @keyframes failure-shake {
   0%, 100% { transform: none; }
-  20% { transform: translate(-4px, 0); }
-  40% { transform: translate(4px, 0); }
-  60% { transform: translate(-2px, 0); }
-  80% { transform: translate(2px, 0); }
+  18% { transform: translate(-5px, 0) rotate(-3deg); }
+  36% { transform: translate(5px, 0) rotate(3deg); }
+  54% { transform: translate(-3px, 0) rotate(-1.5deg); }
+  72% { transform: translate(3px, 0) rotate(1.5deg); }
+}
+
+@keyframes popover-morph-bounce {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.22, 0.08);
+    border-radius: 28px;
+  }
+  26% {
+    opacity: 1;
+    transform: translateY(-2px) scale(0.72, 1.18);
+    border-radius: 22px;
+  }
+  52% {
+    transform: translateY(3.5px) scale(1.09, 0.91);
+    border-radius: 15px;
+  }
+  74% {
+    transform: translateY(-2px) scale(0.95, 1.04);
+    border-radius: 20px;
+  }
+  88% {
+    transform: translateY(0.8px) scale(1.02, 0.985);
+    border-radius: 17px;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    border-radius: 18px;
+  }
 }
 
 window.bar-window {
@@ -91,7 +174,16 @@ window.bar-window image {
 }
 
 .bar-root.bar-entering .bar-island {
-  animation: cockpit-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: cockpit-enter 520ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+}
+
+.bar-root.bar-entering .context-island {
+  animation-delay: 45ms;
+}
+
+.bar-root.bar-entering .system-cluster,
+.bar-root.bar-entering .reduced-status-island {
+  animation-delay: 90ms;
 }
 
 .bar-island {
@@ -102,6 +194,14 @@ window.bar-window image {
   border: 1px solid @cockpit_border;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
+  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 220ms ease-out,
+              border-color 200ms ease-out;
+}
+
+.bar-island:hover {
+  border-color: alpha(@primary, 0.32);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.36), 0 0 14px alpha(@primary, 0.10);
 }
 
 .workspace-island {
@@ -121,30 +221,34 @@ button.launcher-button {
 
 button.launcher-button:hover {
   background: alpha(@primary, 0.24);
+  transform: translateY(-1.5px) scale(1.08);
+  box-shadow: 0 4px 12px alpha(@primary, 0.22);
 }
 
 button.launcher-button:hover image {
-  transform: rotate(-12deg) scale(1.16);
+  transform: rotate(-18deg) scale(1.24);
 }
 
-button.launcher-button image {
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+button.launcher-button image,
+button.system-module image,
+.title-button image {
+  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Use the same short hover/press response in every desktop control. */
+/* Use an expressive springy hover/press response in every desktop control. */
 window.bar-window button,
 window.control-center-window button,
 window.control-center-window switch,
 popover button {
   transition: background-color 160ms ease-out, color 160ms ease-out,
-              border-color 160ms ease-out, box-shadow 160ms ease-out,
-              transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+              border-color 160ms ease-out, box-shadow 200ms ease-out,
+              transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 button.launcher-button:active,
 window.control-center-window button:active,
 popover button:active {
-  transform: scale(0.94);
+  transform: translateY(1px) scale(0.88, 0.94);
 }
 
 window.bar-window button:focus-visible {
@@ -193,13 +297,19 @@ button.system-module {
 button.system-module:hover {
   color: @cockpit_text;
   background: @cockpit_item_hover;
+  transform: translateY(-1.5px) scale(1.06);
+}
+
+button.system-module:hover image,
+.title-button:hover image {
+  transform: rotate(-8deg) scale(1.16);
 }
 
 .workspace-button:active,
 .title-button:active,
 button.system-module:active,
 .suggestion-action:active {
-  transform: scale(0.92);
+  transform: translateY(1px) scale(0.86, 0.94);
 }
 
 .workspace-button.active {
@@ -208,11 +318,11 @@ button.system-module:active,
 }
 
 .workspace-button.workspace-new {
-  animation: workspace-arrive 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: workspace-arrive 460ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 .workspace-button.workspace-activated {
-  animation: workspace-activate 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: workspace-activate 480ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 .workspace-button.urgent {
@@ -247,7 +357,7 @@ button.system-module:active,
 }
 
 .context-chip.context-arrived {
-  animation: context-arrive 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: context-arrive 600ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 .context-chip.proactive {
@@ -506,6 +616,8 @@ popover.control-center contents {
 
 popover contents {
   padding: 8px;
+  transform-origin: top center;
+  animation: popover-morph-bounce 540ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 popover.control-center contents {
@@ -592,7 +704,8 @@ window.control-center-window scale:focus-visible {
   .suggestion-card.is-failure,
   .control-error-slot.is-pending,
   .control-error-slot.is-success,
-  .control-error-slot.has-error {
+  .control-error-slot.has-error,
+  popover contents {
     animation: none;
   }
 }
