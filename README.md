@@ -31,14 +31,12 @@ The optional `hyprshade` timer uses the tracked `hypr/hyprshade.toml`. Install H
 ```bash
 git clone --recurse-submodules https://github.com/robinp7720/dotfiles.git ~/.dotfiles
 cd ~/.dotfiles
-cargo build --release --manifest-path tools/bar/Cargo.toml
-cargo build --release --manifest-path tools/launcher/Cargo.toml --bins
-cargo build --release --manifest-path tools/tv-mode/Cargo.toml
 ./setup.sh
 ```
 
-`setup.sh` links supported configuration under `~/.config`, exposes built binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs greetd/nwg-hello files when `sudo` is available. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
-Building both launcher binaries also supplies `luma-mail-eds`; setup exposes this helper for Luma's optional Evolution mail search.
+`setup.sh` initializes missing tool submodules and builds Vigil, Luma, `luma-mail-eds`, and TV mode in release mode using their lockfiles. It also builds and installs the local Hyprland swipe-event plugin. Install the build dependencies listed above and the plugin development dependencies below before running setup. A build failure stops setup before it changes installed configuration or services.
+
+After building, setup links supported configuration under `~/.config`, exposes binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs greetd/nwg-hello files when `sudo` is available. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
 
 Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update greetd/nwg-hello under `/etc`.
 
@@ -63,8 +61,9 @@ Plugins must be rebuilt against the headers matching the installed Hyprland.
 The build requires `make`, a C++23 compiler, and development files for Hyprland,
 Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon, and Lua;
 hymission also uses CMake, GTK 4, gtk4-layer-shell, and libadwaita.
-Running `./scripts/install_hyprland_plugins.sh` alone installs only the swipe-event
-plugin. Restart Hyprland after installing plugins.
+Setup already builds and installs the swipe-event plugin. Running
+`./scripts/install_hyprland_plugins.sh` alone rebuilds and installs that plugin.
+Restart Hyprland after installing plugins.
 
 Restart the session after initial installation. When migrating an existing Hyprland session from `.conf` to Lua, use `hyprctl reload full-reset` once to switch parsers. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
 

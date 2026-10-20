@@ -66,6 +66,7 @@ make_setup_fixture() {
     "$repo_root/tools/bar/target/release" \
     "$repo_root/tools/launcher/target/release" \
     "$repo_root/tools/tv-mode/target/release" \
+    "$repo_root/tools/hypr-swipe-events" \
     "$repo_root/nwg-hello" \
     "$repo_root/hypr/hyprland-config" \
     "$repo_root/hypr/monitor_layouts" \
@@ -75,6 +76,9 @@ make_setup_fixture() {
   touch \
     "$repo_root/scripts/launch_kitty.sh" \
     "$repo_root/scripts/preview.sh" \
+    "$repo_root/tools/bar/Cargo.toml" \
+    "$repo_root/tools/launcher/Cargo.toml" \
+    "$repo_root/tools/tv-mode/Cargo.toml" \
     "$repo_root/systemd/user/example.service" \
     "$repo_root/tools/launcher/target/release/Luma" \
     "$repo_root/tools/launcher/target/release/luma-mail-eds" \
@@ -169,6 +173,12 @@ exit 1
 EOF
 
   chmod +x "$stub_root/systemctl" "$stub_root/sudo"
+
+  # Most desktop contracts exercise installation with builds stubbed out.
+  for build_command in cargo make; do
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$stub_root/$build_command"
+    chmod +x "$stub_root/$build_command"
+  done
 }
 
 verify_user_only_setup_skips_sudo() {

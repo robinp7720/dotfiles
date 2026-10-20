@@ -96,6 +96,23 @@ sudo_install_file() {
 
 echo "Setting up dotfiles from $DIR"
 
+# Complete every build before changing installed configuration or services.
+for tool in bar launcher; do
+  if [[ ! -f "$DIR/tools/$tool/Cargo.toml" ]]; then
+    git -C "$DIR" submodule update --init --recursive -- "tools/$tool"
+  fi
+done
+
+for tool in bar launcher tv-mode; do
+  echo "Building $tool (release)"
+  cargo build --release --locked --bins \
+    --manifest-path "$DIR/tools/$tool/Cargo.toml" \
+    --target-dir "$DIR/tools/$tool/target"
+done
+
+echo "Building Hyprland swipe-event plugin"
+make -C "$DIR/tools/hypr-swipe-events" all
+
 # Create symlinks for dotfiles
 link_path "$DIR/zshrc" "$HOME/.zshrc"
 
@@ -196,6 +213,9 @@ else
 fi
 
 remove_managed_symlink "$HOME/.local/bin/rofi" "$DIR/scripts/rofi_wrapper.sh"
+
+make -C "$DIR/tools/hypr-swipe-events" install \
+  "PLUGIN_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/hyprland/plugins"
 
 # Link user systemd units
 mkdir -p "$HOME/.config/systemd/user"
