@@ -1,6 +1,16 @@
 -- Preferences and autoloading for Hyprland plugins.
+local function resolve_hyprspace()
+    local custom_path = "/home/robin/.local/share/hyprland/plugins/Hyprspace.so"
+    local f = io.open(custom_path, "r")
+    if f then
+        f:close()
+        return custom_path
+    end
+    return "/var/cache/hyprpm/robin/Hyprspace/Hyprspace.so"
+end
+
 local plugin_paths = {
-    "/var/cache/hyprpm/robin/Hyprspace/Hyprspace.so",
+    resolve_hyprspace(),
     "/var/cache/hyprpm/robin/hymission/hymission.so",
 }
 
@@ -70,7 +80,7 @@ local settings = {
     },
     -- Hyprspace registers under plugin.overview
     overview = {
-        disableGestures = true,
+        disableGestures = false,
     },
     hyprexpo = {
         columns = 3,
@@ -94,41 +104,19 @@ for _, plugin in ipairs(hl.get_loaded_plugins()) do
     end
 end
 
--- Trackpad gestures for overview & mission control
--- 3 fingers UP: hymission (Mission Control)
-if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.toggle then
-    hl.gesture({
-        fingers = 3,
-        direction = "up",
-        action = function()
-            if hl.plugin and hl.plugin.overview and hl.plugin.overview.close then
-                pcall(hl.plugin.overview.close)
-            end
-            if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.toggle then
-                pcall(hl.plugin.hymission.toggle, "forceall")
-            end
-        end,
-    })
-end
-
--- 3 fingers DOWN: Hyprspace (Workspace overview)
-if hl.plugin and hl.plugin.overview and hl.plugin.overview.toggle then
-    hl.gesture({
-        fingers = 3,
-        direction = "down",
-        action = function()
-            if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.close then
-                pcall(hl.plugin.hymission.close)
-            end
-            if hl.plugin and hl.plugin.overview and hl.plugin.overview.toggle then
-                pcall(hl.plugin.overview.toggle)
-            end
-        end,
-    })
-end
-
--- 3 fingers HORIZONTAL: hymission-aware workspace switching
+-- 1:1 Continuous finger-tracked gestures:
+-- 3 fingers VERTICAL:
+--   Swipe UP opens hymission (Mission Control) with 1:1 tracking; swipe DOWN closes it.
+--   When hymission is closed, swipe DOWN is passed to Hyprspace which tracks 1:1 from the top.
 if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.gesture then
+    pcall(hl.plugin.hymission.gesture, {
+        fingers = 3,
+        direction = "vertical",
+        action = "hymission:toggle",
+        args = "forceall",
+    })
+
+    -- 3 fingers HORIZONTAL: hymission-aware 1:1 continuous workspace swipe
     pcall(hl.plugin.hymission.gesture, {
         fingers = 3,
         direction = "horizontal",
