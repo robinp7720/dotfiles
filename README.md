@@ -5,7 +5,7 @@ Personal configuration for a Wayland desktop built around Hyprland and Niri. The
 ## Highlights
 
 - **Hyprland and Niri** share the same launch, lock, wallpaper, and cockpit workflows.
-- **Vigil** is the always-visible desktop cockpit and notification server. It provides workspaces, urgent context, quick settings, timers, media, notifications, and monitor-aware control-center placement.
+- **Vigil** is the always-visible desktop cockpit and notification server. It provides workspaces, urgent context, quick settings, timers, media, notifications, volume/brightness and idle-lock displays, and monitor-aware control-center placement.
 - **Luma** is the command palette for applications, files, windows, passwords, system controls, and Vigil handoffs.
 - **Dynamic Matugen themes** cover Vigil, Luma, Hyprland, Hyprlock, Niri, Kitty, TV mode, greetd, and nwg-hello.
 - **Focused-output locking** renders a privacy-bounded Hyprlock dashboard with calendar, timer, media, network, power, and notification-count context.
@@ -18,7 +18,7 @@ The configuration targets Arch Linux or a derivative. Core runtime dependencies 
 - Desktop: `hyprland`, `niri`, `hypridle`, `hyprlock`, `hyprsunset`, `kitty`
 - Login: `greetd`, `nwg-hello`
 - Desktop services: `pipewire`, `wireplumber`, `networkmanager`, `bluez`, `power-profiles-daemon`, `polkit-gnome`
-- Helpers: `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`
+- Helpers: `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`, `cliphist`
 - Theming and wallpaper: `matugen`, `awww`
 - Builds: a Rust toolchain for Vigil, Luma, and TV mode
 
@@ -63,6 +63,8 @@ Restart the session after initial installation. When migrating an existing Hyprl
 | `Super+Tab` | Toggle open-window search |
 | `Super+Shift+Space` | Toggle desktop controls in Luma |
 | `Super+P` | Toggle password search |
+| `Super+/` | Search keyboard shortcuts (Niri: its own overlay) |
+| `Super+Shift+V` | Search clipboard history |
 | `Super+B` | Toggle quick settings on the focused output |
 | `Super+Shift+N` | Toggle the notification inbox |
 | `Super+L` | Lock through the shared session-lock lifecycle |
