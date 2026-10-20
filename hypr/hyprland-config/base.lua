@@ -10,7 +10,8 @@ hl.config({
         gaps_in = 5,
         gaps_out = 5,
         border_size = 2,
-        ["col.active_border"] = { colors = { "rgba(33ccffee)", "rgba(00ff99ee)" }, angle = 45 },
+        -- Neutral fallbacks until Matugen writes ../colors.lua.
+        ["col.active_border"] = "rgba(c8c8c8ee)",
         ["col.inactive_border"] = "rgba(59595966)",
         resize_on_border = true,
         extend_border_grab_area = 10,
@@ -33,7 +34,7 @@ hl.config({
             offset = { 0, 8 },
             scale = 0.95,
         },
-        dim_around = 0.7,
+        dim_around = 0.45,
         inactive_opacity = 1,
         active_opacity = 1,
         blur = {
