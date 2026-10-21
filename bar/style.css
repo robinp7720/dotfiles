@@ -1701,7 +1701,7 @@ window.control-center-window scale:focus-visible {
   font-feature-settings: "tnum";
 }
 
-.time-calendar label.day-number.marked {
+.time-calendar label.day-number:checked {
   color: @primary;
   font-weight: 820;
   background: alpha(@primary, 0.09);
