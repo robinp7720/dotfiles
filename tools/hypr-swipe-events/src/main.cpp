@@ -47,12 +47,20 @@ namespace {
     bool                             g_active = false;
     SSwipeSample                     g_last;
 
-    WORKSPACEID neighbourID(double progress) {
+    // Mirrors CUnifiedWorkspaceSwipeGesture::end(), which resolves neighbours
+    // the same way, against the focused monitor.
+    WORKSPACEID neighbourID(WORKSPACEID from, double progress) {
         static auto PSWIPEUSER = CConfigValue<Config::INTEGER>("gestures:workspace_swipe_use_r");
+        static auto PSWIPENEW  = CConfigValue<Config::INTEGER>("gestures:workspace_swipe_create_new");
         if (progress == 0.0)
             return WORKSPACE_INVALID;
         const auto* relative = progress < 0.0 ? (*PSWIPEUSER ? "r-1" : "m-1") : (*PSWIPEUSER ? "r+1" : "m+1");
-        return getWorkspaceIDNameFromString(relative).id;
+        const auto  id       = getWorkspaceIDNameFromString(relative).id;
+        // Past the last workspace m+1 wraps around, but the swipe creates a
+        // new workspace instead.
+        if (progress > 0.0 && id <= from && *PSWIPENEW)
+            return getWorkspaceIDNameFromString("r+1").id;
+        return id;
     }
 
     void postEnd() {
@@ -82,7 +90,7 @@ namespace {
         next.monitor  = monitor->m_name;
         next.from     = swipe->m_workspaceBegin->m_id;
         next.progress = std::clamp(swipe->m_delta / distance, -1.0, 1.0);
-        next.to       = neighbourID(next.progress);
+        next.to       = neighbourID(next.from, next.progress);
 
         if (g_active && next.monitor != g_last.monitor)
             postEnd();
