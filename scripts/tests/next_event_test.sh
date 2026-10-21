@@ -87,6 +87,32 @@ FAKE_GCALCLI
   assert_json_field "$(cat "$cache_file")" "title" "Design review"
 }
 
+test_old_cache_files_are_pruned() {
+  local workdir="$1"
+  local cache_dir="$workdir/cache/next-event"
+
+  mkdir -p "$workdir/bin" "$workdir/home" "$cache_dir"
+  cat >"$workdir/bin/gcalcli" <<'FAKE_GCALCLI'
+#!/usr/bin/env bash
+printf 'start_date\tstart_time\tend_date\tend_time\tsummary\tlocation\n'
+FAKE_GCALCLI
+  chmod +x "$workdir/bin/gcalcli"
+  printf '{}\n' >"$cache_dir/agenda_2025-01-01_2025-02-01.json"
+  printf '{}\n' >"$cache_dir/agenda_2027-01-01_2027-02-01.json"
+  : >"$cache_dir/calendar.AbC123"
+  : >"$cache_dir/next_event.kiOvJp"
+  touch -d '10 days ago' "$cache_dir/agenda_2025-01-01_2025-02-01.json" \
+    "$cache_dir/calendar.AbC123" "$cache_dir/next_event.kiOvJp"
+
+  run_script "$workdir" gcalcli --json >/dev/null
+
+  [[ ! -e "$cache_dir/agenda_2025-01-01_2025-02-01.json" ]] || fail "expected old agenda cache to be pruned"
+  [[ ! -e "$cache_dir/calendar.AbC123" ]] || fail "expected stale temp file to be pruned"
+  [[ ! -e "$cache_dir/next_event.kiOvJp" ]] || fail "expected legacy temp file to be pruned"
+  [[ -e "$cache_dir/agenda_2027-01-01_2027-02-01.json" ]] || fail "expected recent agenda cache to be kept"
+  [[ -e "$cache_dir/next_event.json" ]] || fail "expected next-event cache to be kept"
+}
+
 test_auto_falls_back_after_khal_parse_failure() {
   local workdir="$1"
   local json_output
@@ -298,6 +324,9 @@ main() {
     agenda-json)
       test_agenda_json_returns_sorted_deduplicated_events "$tmpdir/agenda-json"
       ;;
+    cache-prune)
+      test_old_cache_files_are_pruned "$tmpdir/cache-prune"
+      ;;
     all)
       test_gcalcli_json_contract "$tmpdir/gcalcli-contract"
       test_auto_falls_back_after_khal_parse_failure "$tmpdir/khal-fallback"
@@ -306,6 +335,7 @@ main() {
       test_date_only_gcalcli_rows_preserve_legacy_rendering "$tmpdir/date-only-gcalcli"
       test_control_characters_are_serialized_by_python_json "$tmpdir/control-characters"
       test_agenda_json_returns_sorted_deduplicated_events "$tmpdir/agenda-json"
+      test_old_cache_files_are_pruned "$tmpdir/cache-prune"
       ;;
     *)
       fail "unknown test case: $1"

@@ -73,6 +73,16 @@ write_cache() {
   tmp="$(mktemp "$CACHE_DIR/calendar.XXXXXX")"
   printf '%s\n' "$value" > "$tmp"
   mv "$tmp" "$CACHE_FILE"
+  prune_cache
+}
+
+# Each browsed month leaves an agenda file behind; drop old ones and orphaned temp files.
+prune_cache() {
+  find "$CACHE_DIR" -maxdepth 1 -type f \( \
+    -name 'agenda_*.json' -mtime +7 -o \
+    -name 'calendar.??????' -mmin +60 -o \
+    -name 'next_event.??????' -mmin +60 \
+  \) -delete 2>/dev/null || true
 }
 
 record_empty_json() {
