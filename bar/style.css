@@ -2193,3 +2193,31 @@ button.system-module.notifications.is-dnd {
     animation: none;
   }
 }
+
+button.system-module.bluetooth.connected {
+  color: @primary;
+}
+
+button.system-module.bluetooth.connected.warning {
+  color: @tertiary;
+}
+
+button.system-module.bluetooth.busy image {
+  animation: pending-pulse 760ms ease-in-out infinite;
+}
+
+button.system-module.bluetooth.needs-attention {
+  color: @primary;
+  background: alpha(@primary, 0.09);
+}
+
+button.system-module.bluetooth.needs-attention image {
+  animation: meaningful-pulse 1100ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.system-module.bluetooth.busy image,
+  button.system-module.bluetooth.needs-attention image {
+    animation: none;
+  }
+}

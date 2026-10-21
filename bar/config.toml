@@ -18,6 +18,7 @@ full = [
   "resources",
   "ai_usage",
   "network",
+  "bluetooth",
   "bluetooth_audio",
   "power",
   "notifications",
