@@ -106,6 +106,7 @@ assert_not_contains bar/style.css '@surface'
 
 # Warm launcher and TV sessions follow wallpaper-driven theme changes.
 assert_contains tools/launcher/src/ui/theme.rs 'monitor_file('
+assert_contains matugen/templates/luma.css '.launcher-level scale highlight {'
 assert_contains tools/tv-mode/src/ui.rs 'self.state["theme"] = theme();'
 
 printf 'Desktop UI contracts verified.\n'

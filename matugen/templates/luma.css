@@ -163,3 +163,53 @@
   border-radius: 18px;
   padding: 16px;
 }
+
+/* Level sliders mirror Vigil's quick-settings sliders. */
+.launcher-level scale {
+  min-height: 20px;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.launcher-level scale trough {
+  min-height: 20px;
+  background-color: alpha(@luma_surface_highest, 0.72);
+  border: 0;
+  border-radius: 999px;
+}
+
+.launcher-level scale highlight {
+  min-height: 20px;
+  background-color: alpha(mix(@luma_primary, @luma_on_surface, 0.20), 0.36);
+  border: 0;
+  border-radius: 999px;
+}
+
+.launcher-level scale slider {
+  min-width: 3px;
+  min-height: 14px;
+  margin: 0;
+  background-color: mix(@luma_primary, @luma_on_surface, 0.20);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.launcher-level scale:hover highlight,
+.launcher-level scale:active highlight,
+.launcher-row-level:selected .launcher-level scale highlight {
+  background-color: alpha(mix(@luma_primary, @luma_on_surface, 0.20), 0.48);
+}
+
+.launcher-level scale:hover slider,
+.launcher-level scale:active slider {
+  min-width: 5px;
+  background-color: mix(@luma_primary, @luma_on_surface, 0.28);
+}
+
+.launcher-level-value {
+  min-width: 40px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: @luma_on_surface;
+}
