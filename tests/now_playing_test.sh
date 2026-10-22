@@ -10,6 +10,17 @@ fail() {
   exit 1
 }
 
+# Keep the tests away from a live Vigil socket; playerctl tests see it as down.
+write_offline_vigil() {
+  local fake_bin="$1"
+
+  cat >"$fake_bin/vigil" <<'FAKE_VIGIL'
+#!/usr/bin/env bash
+exit 1
+FAKE_VIGIL
+  chmod +x "$fake_bin/vigil"
+}
+
 test_decodes_local_album_art_uri() {
   local workdir="$1"
   local fake_bin="$workdir/bin"
@@ -20,6 +31,7 @@ test_decodes_local_album_art_uri() {
 
   mkdir -p "$fake_bin" "$art_dir" "$workdir/home"
   printf 'fake album art\n' >"$source_art"
+  write_offline_vigil "$fake_bin"
 
   cat >"$fake_bin/playerctl" <<'FAKE_PLAYERCTL'
 #!/usr/bin/env bash
@@ -58,6 +70,7 @@ test_preserves_pipe_characters_in_metadata() {
   local output=""
 
   mkdir -p "$fake_bin" "$workdir/home"
+  write_offline_vigil "$fake_bin"
 
   cat >"$fake_bin/playerctl" <<'FAKE_PLAYERCTL'
 #!/usr/bin/env bash
@@ -82,6 +95,48 @@ FAKE_PLAYERCTL
     || fail "pipe characters in media metadata were not preserved: $output"
 }
 
+test_prefers_the_player_vigil_shows() {
+  local workdir="$1"
+  local fake_bin="$workdir/bin"
+  local output=""
+
+  mkdir -p "$fake_bin" "$workdir/home"
+
+  # playerctl would pick a different player; Vigil's choice must win.
+  cat >"$fake_bin/playerctl" <<'FAKE_PLAYERCTL'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-l" ]]; then
+  printf 'other-player\n'
+  exit 0
+fi
+printf 'Playing\x1fWrong\x1fWrong Title\x1f\n'
+FAKE_PLAYERCTL
+  cat >"$fake_bin/vigil" <<'FAKE_VIGIL'
+#!/usr/bin/env bash
+case "$*" in
+  "media get")
+    printf '%s\n' '{"type":"media","media":{"player":"spotify","status":"Paused","title":"Shown | Title","artist":"Shown Artist","art_url":null,"changed_at":0}}'
+    ;;
+  "media next")
+    printf 'next\n' >"$VIGIL_LOG"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+FAKE_VIGIL
+  chmod +x "$fake_bin/playerctl" "$fake_bin/vigil"
+
+  output="$(HOME="$workdir/home" PATH="$fake_bin:$PATH" "$SCRIPT_UNDER_TEST")"
+  [[ "$output" == '⏸ Shown Artist — Shown | Title' ]] \
+    || fail "the player Vigil shows was not used: $output"
+
+  HOME="$workdir/home" PATH="$fake_bin:$PATH" VIGIL_LOG="$workdir/vigil.log" \
+    "$SCRIPT_UNDER_TEST" --next
+  [[ "$(cat "$workdir/vigil.log" 2>/dev/null)" == "next" ]] \
+    || fail "media keys did not go through Vigil"
+}
+
 main() {
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -89,6 +144,7 @@ main() {
 
   test_decodes_local_album_art_uri "$tmpdir/encoded-art"
   test_preserves_pipe_characters_in_metadata "$tmpdir/pipe-metadata"
+  test_prefers_the_player_vigil_shows "$tmpdir/vigil-player"
 
   printf 'ok - now playing tests passed\n'
 }

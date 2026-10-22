@@ -31,54 +31,75 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# Exit silently if playerctl is unavailable.
-if ! command -v playerctl >/dev/null 2>&1; then
-  exit 0
-fi
-
-# Iterate players and pick one that has title/artist; prefer a Playing player.
-players=$(playerctl -l 2>/dev/null || true)
-if [[ -z "$players" ]]; then
-  rm -f "$OUT"
-  exit 0
-fi
-
 chosen_status=""
 chosen_artist=""
 chosen_title=""
 chosen_art_url=""
 chosen_player=""
 metadata_separator=$'\x1f'
+source="playerctl"
 
-while IFS= read -r player; do
-  # Use a control-character separator so ordinary metadata punctuation cannot
-  # shift fields and corrupt the displayed title or album-art URL.
-  info=$(playerctl --player="$player" metadata --format "{{status}}${metadata_separator}{{artist}}${metadata_separator}{{title}}${metadata_separator}{{mpris:artUrl}}" 2>/dev/null || true)
-  IFS="$metadata_separator" read -r status artist title art_url <<< "$info"
-
-  # Skip if no title (nothing meaningful to show)
-  if [[ -z "$title" ]]; then
-    continue
+# Vigil already tracks the active player for the bar; ask it first so the lock
+# screen, media keys and bar agree. Fails when Vigil is not running.
+read_from_vigil() {
+  local json fields
+  command -v vigil >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  json="$(vigil media get 2>/dev/null)" || return 1
+  fields="$(jq -r --arg sep "$metadata_separator" \
+    '.media // empty | [.player, .status, (.artist // ""), (.title // ""), (.art_url // "")] | join($sep)' \
+    <<< "$json")" || return 1
+  if [[ -n "$fields" ]]; then
+    IFS="$metadata_separator" read -r chosen_player chosen_status chosen_artist chosen_title chosen_art_url <<< "$fields"
   fi
+}
 
-  # Keep the first with status Playing; otherwise remember the first paused/stopped with metadata.
-  if [[ "$status" == "Playing" ]]; then
-    chosen_status=$status
-    chosen_artist=$artist
-    chosen_title=$title
-    chosen_art_url=$art_url
-    chosen_player=$player
-    break
-  fi
+read_from_playerctl() {
+  local players player info status artist title art_url
 
-  if [[ -z "$chosen_title" ]]; then
-    chosen_status=$status
-    chosen_artist=$artist
-    chosen_title=$title
-    chosen_art_url=$art_url
-    chosen_player=$player
-  fi
-done <<< "$players"
+  # Stay silent if playerctl is unavailable.
+  command -v playerctl >/dev/null 2>&1 || return 0
+
+  # Iterate players and pick one that has title/artist; prefer a Playing player.
+  players=$(playerctl -l 2>/dev/null || true)
+  [[ -n "$players" ]] || return 0
+
+  while IFS= read -r player; do
+    # Use a control-character separator so ordinary metadata punctuation cannot
+    # shift fields and corrupt the displayed title or album-art URL.
+    info=$(playerctl --player="$player" metadata --format "{{status}}${metadata_separator}{{artist}}${metadata_separator}{{title}}${metadata_separator}{{mpris:artUrl}}" 2>/dev/null || true)
+    IFS="$metadata_separator" read -r status artist title art_url <<< "$info"
+
+    # Skip if no title (nothing meaningful to show)
+    if [[ -z "$title" ]]; then
+      continue
+    fi
+
+    # Keep the first with status Playing; otherwise remember the first paused/stopped with metadata.
+    if [[ "$status" == "Playing" ]]; then
+      chosen_status=$status
+      chosen_artist=$artist
+      chosen_title=$title
+      chosen_art_url=$art_url
+      chosen_player=$player
+      break
+    fi
+
+    if [[ -z "$chosen_title" ]]; then
+      chosen_status=$status
+      chosen_artist=$artist
+      chosen_title=$title
+      chosen_art_url=$art_url
+      chosen_player=$player
+    fi
+  done <<< "$players"
+}
+
+if read_from_vigil; then
+  source="vigil"
+else
+  read_from_playerctl
+fi
 
 update_art() {
   local status="$1" art_url="$2"
@@ -148,7 +169,11 @@ if [[ "$chosen_status" == "Stopped" ]]; then
 fi
 
 if [[ -n "$action_mode" ]]; then
-  playerctl --player="$chosen_player" "$action_mode" >/dev/null 2>&1 || exit 0
+  if [[ "$source" == "vigil" ]]; then
+    vigil media "$action_mode" >/dev/null 2>&1 || true
+  else
+    playerctl --player="$chosen_player" "$action_mode" >/dev/null 2>&1 || true
+  fi
   exit 0
 fi
 
