@@ -18,7 +18,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver},
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 unsafe extern "C" {
     fn tv_quick_run(
@@ -53,6 +53,8 @@ struct Shell {
     hold: Option<(String, Instant)>,
     last_interaction: Instant,
     focus_at: Option<Instant>,
+    theme_checked: Instant,
+    theme_modified: Option<SystemTime>,
 }
 pub fn run(session: Session) -> Result<()> {
     run_shell(session.config().clone(), Some(session), false, true)
@@ -107,6 +109,8 @@ fn run_shell(
         hold: None,
         last_interaction: Instant::now(),
         focus_at: None,
+        theme_checked: Instant::now(),
+        theme_modified: theme_modified(),
     };
     // The C++ host invokes callbacks synchronously on this thread, never after returning.
     let code = unsafe {
@@ -217,6 +221,15 @@ impl Shell {
                         }
                     }
                 }
+            }
+        }
+        if self.theme_checked.elapsed() >= THEME_CHECK_INTERVAL {
+            self.theme_checked = Instant::now();
+            let modified = theme_modified();
+            if modified != self.theme_modified {
+                self.theme_modified = modified;
+                self.state["theme"] = theme();
+                self.dirty = true;
             }
         }
         if let Some(request) = self.library.play_request.take().filter(|_| !self.exiting) {
@@ -481,9 +494,20 @@ impl Shell {
         }
     }
 }
+/// Wallpaper changes regenerate colors.css; pick them up without a restart.
+const THEME_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+
+fn theme_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("tv-mode/colors.css"))
+}
+
+fn theme_modified() -> Option<SystemTime> {
+    std::fs::metadata(theme_path()?).ok()?.modified().ok()
+}
+
 fn theme() -> Value {
     let mut colors = json!({"primary":"#83d2e3","on_primary":"#00363e","tv_text":"#dee3e5","tv_muted":"#bfc8cb","tv_background":"#0e1416","tv_surface":"#1b2122","tertiary":"#bcc5eb"});
-    if let Some(path) = dirs::config_dir().map(|d| d.join("tv-mode/colors.css"))
+    if let Some(path) = theme_path()
         && let Ok(text) = std::fs::read_to_string(path)
     {
         for line in text.lines() {
