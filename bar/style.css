@@ -1,8 +1,8 @@
-@define-color cockpit_shell rgba(15, 20, 28, 0.84);
-@define-color cockpit_panel rgba(15, 20, 28, 0.96);
-@define-color cockpit_item rgba(238, 245, 248, 0.06);
-@define-color cockpit_item_hover rgba(238, 245, 248, 0.11);
-@define-color cockpit_border rgba(206, 220, 227, 0.18);
+@define-color cockpit_shell #171b1e;
+@define-color cockpit_panel #171b1e;
+@define-color cockpit_item #24292d;
+@define-color cockpit_item_hover #30363b;
+@define-color cockpit_border #4c555c;
 @define-color cockpit_text #eef5f8;
 @define-color cockpit_muted #9eacb4;
 /* Matugen overrides these roles when colors.css is present. */
@@ -13,74 +13,27 @@
 @define-color success #83d6a3;
 
 @keyframes cockpit-enter {
-  0% { opacity: 0; transform: translate(0, -18px) scale(0.82, 1.16); }
-  42% { opacity: 1; transform: translate(0, 4px) scale(1.06, 0.92); }
-  68% { transform: translate(0, -2px) scale(0.97, 1.03); }
-  86% { transform: translate(0, 1px) scale(1.015, 0.99); }
-  100% { opacity: 1; transform: none; }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes context-arrive {
-  0% {
-    opacity: 0;
-    transform: translate(0, 10px) scale(0.78, 1.16) rotate(-2.5deg);
-    box-shadow: 0 0 0 0 alpha(@primary, 0.52), inset 0 0 0 2px alpha(@primary, 0.52);
-  }
-  44% {
-    opacity: 1;
-    transform: translate(0, -3px) scale(1.09, 0.92) rotate(1.2deg);
-    box-shadow: 0 0 0 10px alpha(@primary, 0.18), inset 0 0 12px alpha(@primary, 0.22);
-  }
-  72% {
-    transform: translate(0, 1.5px) scale(0.96, 1.03) rotate(-0.5deg);
-    box-shadow: 0 0 0 18px alpha(@primary, 0), inset 0 0 0 0 alpha(@primary, 0);
-  }
-  88% {
-    transform: translate(0, -0.5px) scale(1.02, 0.99);
-  }
-  100% {
-    transform: none;
-    box-shadow: none;
-  }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes workspace-arrive {
-  0% { opacity: 0; transform: translateY(6px) scale(0.55, 1.25) rotate(-10deg); }
-  48% { opacity: 1; transform: translateY(-3px) scale(1.18, 0.86) rotate(4deg); }
-  74% { transform: translateY(1px) scale(0.93, 1.05) rotate(-1.5deg); }
-  100% { opacity: 1; transform: none; }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes state-pop {
-  0% {
-    transform: scale(0.66, 1.24) rotate(-14deg);
-    box-shadow: 0 0 0 0 alpha(@primary, 0.52);
-  }
-  40% {
-    transform: translateY(-3px) scale(1.26, 0.84) rotate(8deg);
-    box-shadow: 0 0 0 9px alpha(@primary, 0.18);
-  }
-  68% {
-    transform: translateY(1px) scale(0.91, 1.06) rotate(-4deg);
-    box-shadow: 0 0 0 16px alpha(@primary, 0);
-  }
-  86% {
-    transform: scale(1.05, 0.97) rotate(1.5deg);
-  }
-  100% {
-    transform: none;
-    box-shadow: none;
-  }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes meaningful-pulse {
-  0%, 100% { opacity: 0.72; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1.08); }
+  0%, 100% { opacity: 1; } 50% { opacity: 0.72; }
 }
 
 @keyframes critical-breathe {
-  0%, 100% { box-shadow: inset 0 0 alpha(@error, 0), 0 0 alpha(@error, 0); }
-  50% { box-shadow: inset 0 0 0 1px alpha(@error, 0.42), 0 0 14px alpha(@error, 0.22); }
+  0%, 100% { opacity: 1; } 50% { opacity: 0.72; }
 }
 
 @keyframes pending-pulse {
@@ -89,49 +42,15 @@
 }
 
 @keyframes success-pop {
-  0% { transform: scale(0.76, 1.18); }
-  44% { transform: translateY(-2px) scale(1.20, 0.88); }
-  72% { transform: scale(0.94, 1.04); }
-  88% { transform: scale(1.04, 0.98); }
-  100% { transform: none; }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes failure-shake {
-  0%, 100% { transform: none; }
-  18% { transform: translate(-5px, 0) rotate(-3deg); }
-  36% { transform: translate(5px, 0) rotate(3deg); }
-  54% { transform: translate(-3px, 0) rotate(-1.5deg); }
-  72% { transform: translate(3px, 0) rotate(1.5deg); }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 @keyframes popover-morph-bounce {
-  0% {
-    opacity: 0;
-    transform: translateY(-14px) scale(0.22, 0.08);
-    border-radius: 28px;
-  }
-  26% {
-    opacity: 1;
-    transform: translateY(-2px) scale(0.72, 1.18);
-    border-radius: 22px;
-  }
-  52% {
-    transform: translateY(3.5px) scale(1.09, 0.91);
-    border-radius: 15px;
-  }
-  74% {
-    transform: translateY(-2px) scale(0.95, 1.04);
-    border-radius: 20px;
-  }
-  88% {
-    transform: translateY(0.8px) scale(1.02, 0.985);
-    border-radius: 17px;
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-    border-radius: 18px;
-  }
+  from { opacity: 0.65; } to { opacity: 1; }
 }
 
 window.bar-window {
@@ -152,7 +71,7 @@ window.bar-window image {
 }
 
 .bar-root.bar-entering .bar-island {
-  animation: cockpit-enter 520ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  animation: cockpit-enter 180ms ease-out both;
 }
 
 .bar-root.bar-entering .context-island {
@@ -170,16 +89,16 @@ window.bar-window image {
   color: @cockpit_text;
   background: @cockpit_shell;
   border: 1px solid @cockpit_border;
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
-  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+  border-radius: 0;
+  box-shadow: none;
+  transition: transform 240ms ease-out,
               box-shadow 220ms ease-out,
               border-color 200ms ease-out;
 }
 
 .bar-island:hover {
   border-color: alpha(@primary, 0.32);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.36), 0 0 14px alpha(@primary, 0.10);
+  box-shadow: none;
 }
 
 .workspace-island {
@@ -191,42 +110,42 @@ button.launcher-button {
   min-height: 28px;
   padding: 0 4px;
   border: 0;
-  border-radius: 10px;
-  background: alpha(@primary, 0.12);
+  border-radius: 0;
+  background: mix(@cockpit_panel, @primary, 0.12);
   color: @primary;
   box-shadow: none;
 }
 
 button.launcher-button:hover {
-  background: alpha(@primary, 0.24);
-  transform: translateY(-1.5px) scale(1.08);
-  box-shadow: 0 4px 12px alpha(@primary, 0.22);
+  background: mix(@cockpit_panel, @primary, 0.24);
+  transform: none;
+  box-shadow: none;
 }
 
 button.launcher-button:hover image {
-  transform: rotate(-18deg) scale(1.24);
+  transform: none;
 }
 
 button.launcher-button image,
 button.system-module image,
 .title-button image {
-  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 240ms ease-out;
 }
 
-/* Use an expressive springy hover/press response in every desktop control. */
+/* Short state changes keep controls responsive without deforming geometry. */
 window.bar-window button,
 window.control-center-window button,
 window.control-center-window switch,
 popover button {
   transition: background-color 160ms ease-out, color 160ms ease-out,
               border-color 160ms ease-out, box-shadow 200ms ease-out,
-              transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+              transform 240ms ease-out;
 }
 
 button.launcher-button:active,
 window.control-center-window button:active,
 popover button:active {
-  transform: translateY(1px) scale(0.88, 0.94);
+  transform: none;
 }
 
 window.bar-window button:focus-visible {
@@ -258,7 +177,7 @@ button.system-module {
   color: @cockpit_text;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -275,19 +194,19 @@ button.system-module {
 button.system-module:hover {
   color: @cockpit_text;
   background: @cockpit_item_hover;
-  transform: translateY(-1.5px) scale(1.06);
+  transform: none;
 }
 
 button.system-module:hover image,
 .title-button:hover image {
-  transform: rotate(-8deg) scale(1.16);
+  transform: none;
 }
 
 .workspace-button:active,
 .title-button:active,
 button.system-module:active,
 .suggestion-action:active {
-  transform: translateY(1px) scale(0.86, 0.94);
+  transform: none;
 }
 
 .workspace-button.active {
@@ -298,7 +217,7 @@ button.system-module:active,
 /* The sliding pill paints the active background so it can follow swipes. */
 .workspace-pill {
   background: @primary;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .workspace-strip.has-pill .workspace-button.active {
@@ -314,12 +233,12 @@ button.system-module:active,
 }
 
 .workspace-button.workspace-new {
-  animation: workspace-arrive 460ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  animation: workspace-arrive 460ms ease-out both;
 }
 
 .workspace-button.urgent {
   color: @error;
-  background: alpha(@error, 0.12);
+  background: mix(@cockpit_panel, @error, 0.12);
   animation: meaningful-pulse 1100ms ease-in-out infinite;
 }
 
@@ -349,13 +268,13 @@ button.system-module:active,
 }
 
 .context-chip.context-arrived {
-  animation: context-arrive 600ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  animation: context-arrive 600ms ease-out both;
 }
 
 .context-chip.proactive {
   padding-right: 5px;
-  background: linear-gradient(90deg, alpha(@primary, 0.055), alpha(@tertiary, 0.045));
-  border-radius: 10px;
+  background: @cockpit_panel;
+  border-radius: 0;
 }
 
 .context-chip.suggestion {
@@ -372,7 +291,7 @@ button.system-module:active,
   color: @on_primary;
   background: @primary;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 800;
   box-shadow: none;
@@ -389,7 +308,7 @@ button.system-module:active,
   color: alpha(@cockpit_muted, 0.72);
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -406,14 +325,14 @@ button.system-module:active,
 .suggestion-action.is-success,
 .suggestion-card.is-success {
   color: @success;
-  box-shadow: inset 0 0 0 1px alpha(@success, 0.5);
-  animation: success-pop 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-shadow: none;
+  animation: success-pop 620ms ease-out both;
 }
 
 .suggestion-action.is-failure,
 .suggestion-card.is-failure {
   color: @error;
-  box-shadow: inset 0 0 0 1px alpha(@error, 0.58);
+  box-shadow: none;
   animation: failure-shake 420ms ease-out both;
 }
 
@@ -459,14 +378,14 @@ button.system-module label {
 
 .ai-usage-hero {
   padding: 16px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, alpha(@primary, 0.12), @cockpit_item);
+  border-radius: 0;
+  background: @cockpit_panel;
   border: 1px solid alpha(@primary, 0.16);
 }
 
 .ai-provider-card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 0;
   background: @cockpit_item;
   border: 1px solid @cockpit_border;
 }
@@ -512,7 +431,7 @@ button.system-module label {
 .ai-swatch {
   min-width: 8px;
   min-height: 8px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .ai-swatch.codex,
@@ -530,14 +449,14 @@ button.system-module label {
 .ai-quota-meter trough {
   min-height: 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: @cockpit_item;
 }
 
 .ai-quota-meter progress {
   min-height: 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: @primary;
   transition: 180ms ease;
 }
@@ -549,8 +468,8 @@ button.system-module label {
 .ai-estimate {
   margin-top: 4px;
   padding: 12px;
-  border-radius: 10px;
-  background: alpha(@primary, 0.07);
+  border-radius: 0;
+  background: mix(@cockpit_panel, @primary, 0.07);
 }
 
 .ai-estimate-title {
@@ -560,7 +479,7 @@ button.system-module label {
 
 .ai-estimate.pending .ai-estimate-title { font-size: 15px; }
 .ai-estimate-outlook { font-size: 12px; }
-.ai-estimate.at-risk { background: alpha(@tertiary, 0.08); }
+.ai-estimate.at-risk { background: mix(@cockpit_panel, @tertiary, 0.08); }
 .ai-estimate.at-risk .ai-estimate-title,
 .ai-estimate.at-risk .ai-estimate-outlook { color: @tertiary; }
 .ai-estimate.on-track .ai-estimate-outlook { color: @primary; }
@@ -576,7 +495,7 @@ button.system-module.disconnected {
 }
 
 button.system-module.state-changed {
-  animation: state-pop 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: state-pop 460ms ease-out both;
 }
 
 .warning-chip.warning,
@@ -601,14 +520,14 @@ popover.control-center contents {
   color: @cockpit_text;
   background: @cockpit_panel;
   border: 1px solid @cockpit_border;
-  border-radius: 18px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.44);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 popover contents {
   padding: 8px;
   transform-origin: top center;
-  animation: popover-morph-bounce 540ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  animation: popover-morph-bounce 180ms ease-out both;
 }
 
 popover.control-center contents {
@@ -636,7 +555,7 @@ window.control-center-window button {
   color: @cockpit_text;
   background: @cockpit_item;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -658,15 +577,10 @@ window.control-center-window scale:focus-visible {
   min-width: 480px;
   padding: 16px;
   color: @cockpit_text;
-  background: linear-gradient(
-    145deg,
-    mix(@cockpit_panel, @primary, 0.055),
-    @cockpit_panel 42%,
-    mix(@cockpit_panel, @tertiary, 0.025)
-  );
+  background: @cockpit_panel;
   border: 1px solid @cockpit_border;
-  border-radius: 18px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.44);
+  border-radius: 0;
+  box-shadow: none;
   border-spacing: 12px;
 }
 
@@ -756,9 +670,9 @@ window.control-center-window scale:focus-visible {
   min-height: 58px;
   padding: 8px 8px 8px 10px;
   color: @cockpit_text;
-  background: linear-gradient(115deg, alpha(@primary, 0.14), alpha(@tertiary, 0.055) 78%);
-  border-radius: 14px;
-  box-shadow: inset 3px 0 alpha(@primary, 0.62), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .suggestion-card-icon {
@@ -766,8 +680,8 @@ window.control-center-window scale:focus-visible {
   min-height: 22px;
   padding: 7px;
   color: @primary;
-  background: alpha(@primary, 0.13);
-  border-radius: 11px;
+  background: mix(@cockpit_panel, @primary, 0.13);
+  border-radius: 0;
 }
 
 .suggestion-card-title {
@@ -781,7 +695,7 @@ window.control-center-window scale:focus-visible {
   padding: 0 11px;
   color: @on_primary;
   background: @primary;
-  border-radius: 10px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 800;
 }
@@ -798,8 +712,8 @@ window.control-center-window scale:focus-visible {
   min-height: 34px;
   padding: 3px 6px 3px 10px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.035);
-  border-radius: 11px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.035);
+  border-radius: 0;
 }
 
 .section-eyebrow {
@@ -817,23 +731,15 @@ window.control-center-window scale:focus-visible {
 .quick-tile {
   min-height: 68px;
   padding: 6px 10px 6px 6px;
-  background: linear-gradient(
-    135deg,
-    alpha(@cockpit_text, 0.075),
-    alpha(@cockpit_text, 0.04)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 14px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.045);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .quick-tile.enabled {
-  background: linear-gradient(
-    135deg,
-    alpha(@primary, 0.15),
-    alpha(@primary, 0.055) 70%
-  );
-  box-shadow: inset 3px 0 alpha(@primary, 0.54), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  box-shadow: none;
 }
 
 .quick-tile-body {
@@ -844,7 +750,7 @@ window.control-center-window scale:focus-visible {
 }
 
 .quick-tile-body:hover {
-  background: alpha(@cockpit_item_hover, 0.54);
+  background: mix(@cockpit_panel, @cockpit_item_hover, 0.54);
 }
 
 .quick-tile-icon {
@@ -852,13 +758,13 @@ window.control-center-window scale:focus-visible {
   min-height: 24px;
   padding: 6px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.07);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.07);
+  border-radius: 0;
 }
 
 .quick-tile.enabled .quick-tile-icon {
   color: @primary;
-  background: alpha(@primary, 0.14);
+  background: mix(@cockpit_panel, @primary, 0.14);
 }
 
 .tile-action {
@@ -870,7 +776,7 @@ window.control-center-window scale:focus-visible {
 
 .quick-tile:disabled {
   color: alpha(@cockpit_muted, 0.62);
-  background: alpha(@cockpit_item, 0.58);
+  background: mix(@cockpit_panel, @cockpit_item, 0.58);
 }
 
 .quick-tile switch,
@@ -880,7 +786,7 @@ window.control-center-window scale:focus-visible {
   padding: 2px;
   background: @cockpit_item_hover;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .quick-tile switch:checked,
@@ -893,7 +799,7 @@ window.control-center-window scale:focus-visible {
   min-width: 16px;
   min-height: 16px;
   background: @cockpit_text;
-  border-radius: 999px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -909,14 +815,10 @@ window.control-center-window scale:focus-visible {
 .control-slider-row {
   min-height: 44px;
   padding: 5px 6px 5px 8px;
-  background: linear-gradient(
-    90deg,
-    alpha(@cockpit_text, 0.072),
-    alpha(@cockpit_text, 0.04)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 14px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .control-slider-row:hover {
@@ -928,8 +830,8 @@ window.control-center-window scale:focus-visible {
   min-height: 18px;
   padding: 6px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.07);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.07);
+  border-radius: 0;
 }
 
 .control-slider-row button.volume-mute-button {
@@ -937,18 +839,18 @@ window.control-center-window scale:focus-visible {
   min-height: 30px;
   padding: 0;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.07);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.07);
+  border-radius: 0;
 }
 
 .control-slider-row button.volume-mute-button:hover {
   color: @cockpit_text;
-  background: alpha(@primary, 0.16);
+  background: mix(@cockpit_panel, @primary, 0.16);
 }
 
 .control-slider-row button.volume-mute-button.muted {
   color: @cockpit_muted;
-  background: alpha(@cockpit_shell, 0.56);
+  background: mix(@cockpit_panel, @cockpit_shell, 0.56);
 }
 
 .control-slider-row scale {
@@ -958,16 +860,16 @@ window.control-center-window scale:focus-visible {
 
 .control-slider-row scale trough {
   min-height: 24px;
-  background: alpha(@cockpit_item_hover, 0.72);
+  background: mix(@cockpit_panel, @cockpit_item_hover, 0.72);
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .control-slider-row scale highlight {
   min-height: 24px;
-  background: alpha(mix(@primary, @cockpit_text, 0.20), 0.36);
+  background: mix(@cockpit_panel, mix(@primary, @cockpit_text, 0.20), 0.36);
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .control-slider-row scale slider {
@@ -976,13 +878,13 @@ window.control-center-window scale:focus-visible {
   margin: 0;
   background: mix(@primary, @cockpit_text, 0.20);
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .control-slider-row scale:hover highlight,
 .control-slider-row scale:active highlight {
-  background: alpha(mix(@primary, @cockpit_text, 0.20), 0.48);
+  background: mix(@cockpit_panel, mix(@primary, @cockpit_text, 0.20), 0.48);
 }
 
 .control-slider-row scale:hover slider,
@@ -996,8 +898,8 @@ window.control-center-window scale:focus-visible {
   min-height: 28px;
   padding: 0 4px;
   color: @cockpit_text;
-  background: alpha(@cockpit_shell, 0.56);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_shell, 0.56);
+  border-radius: 0;
   font-size: 12px;
   font-weight: 700;
   font-feature-settings: "tnum";
@@ -1013,41 +915,25 @@ window.control-center-window scale:focus-visible {
   min-height: 54px;
   padding: 8px 10px;
   color: @cockpit_text;
-  background: linear-gradient(
-    110deg,
-    alpha(@cockpit_text, 0.068),
-    alpha(@cockpit_text, 0.035)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 13px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .audio-output-row:hover,
 .keyboard-layout-row:hover {
-  background: linear-gradient(
-    110deg,
-    alpha(@primary, 0.12),
-    alpha(@cockpit_text, 0.045)
-  );
+  background: @cockpit_panel;
 }
 
 .audio-output-row.selected {
-  background: linear-gradient(
-    110deg,
-    alpha(@primary, 0.16),
-    alpha(@primary, 0.055) 72%
-  );
-  box-shadow: inset 3px 0 alpha(@primary, 0.62), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  box-shadow: none;
 }
 
 .keyboard-layout-row.selected {
-  background: linear-gradient(
-    110deg,
-    alpha(@primary, 0.16),
-    alpha(@primary, 0.055) 72%
-  );
-  box-shadow: inset 3px 0 alpha(@primary, 0.62), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  box-shadow: none;
 }
 
 .audio-output-icon {
@@ -1055,8 +941,8 @@ window.control-center-window scale:focus-visible {
   min-height: 20px;
   padding: 7px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.065);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.065);
+  border-radius: 0;
 }
 
 .audio-output-row.selected .audio-output-icon,
@@ -1085,8 +971,8 @@ window.control-center-window scale:focus-visible {
   min-height: 32px;
   padding: 0 4px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.065);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.065);
+  border-radius: 0;
   font-size: 11px;
   font-weight: 800;
 }
@@ -1140,34 +1026,22 @@ window.control-center-window scale:focus-visible {
   min-height: 56px;
   padding: 4px 5px 4px 4px;
   color: @cockpit_text;
-  background: linear-gradient(
-    110deg,
-    alpha(@cockpit_text, 0.068),
-    alpha(@cockpit_text, 0.035)
-  );
-  border-radius: 13px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  background: @cockpit_panel;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .bluetooth-device-row:hover {
-  background: linear-gradient(
-    110deg,
-    alpha(@primary, 0.11),
-    alpha(@cockpit_text, 0.045)
-  );
+  background: @cockpit_panel;
 }
 
 .bluetooth-device-row.connected {
-  background: linear-gradient(
-    110deg,
-    alpha(@primary, 0.16),
-    alpha(@primary, 0.055) 72%
-  );
-  box-shadow: inset 3px 0 alpha(@primary, 0.62), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  box-shadow: none;
 }
 
 .bluetooth-device-row.has-error {
-  box-shadow: inset 3px 0 alpha(@error, 0.70), inset 0 1px alpha(@cockpit_text, 0.05);
+  box-shadow: none;
 }
 
 .bluetooth-device-primary {
@@ -1176,7 +1050,7 @@ window.control-center-window scale:focus-visible {
   color: @cockpit_text;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -1185,8 +1059,8 @@ window.control-center-window scale:focus-visible {
   min-height: 20px;
   padding: 7px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.065);
-  border-radius: 10px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.065);
+  border-radius: 0;
 }
 
 .bluetooth-device-row.connected .bluetooth-device-icon,
@@ -1217,13 +1091,13 @@ window.control-center-window scale:focus-visible {
   color: alpha(@cockpit_muted, 0.62);
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .bluetooth-forget-button:hover {
   color: mix(@error, @cockpit_text, 0.22);
-  background: alpha(@error, 0.10);
+  background: mix(@cockpit_panel, @error, 0.10);
 }
 
 .bluetooth-device-row.confirming {
@@ -1236,17 +1110,17 @@ window.control-center-window scale:focus-visible {
   min-height: 30px;
   padding: 0 11px;
   color: mix(@error, @cockpit_text, 0.18);
-  background: alpha(@error, 0.11);
+  background: mix(@cockpit_panel, @error, 0.11);
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
 }
 
 .bluetooth-pairing-card {
   padding: 15px;
   color: @cockpit_text;
-  background: linear-gradient(130deg, alpha(@primary, 0.15), alpha(@cockpit_text, 0.045));
-  border-radius: 15px;
-  box-shadow: inset 3px 0 alpha(@primary, 0.68), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .bluetooth-pairing-title {
@@ -1268,18 +1142,18 @@ window.control-center-window scale:focus-visible {
   min-height: 38px;
   padding: 0 11px;
   color: @cockpit_text;
-  background: alpha(@cockpit_shell, 0.58);
+  background: mix(@cockpit_panel, @cockpit_shell, 0.58);
   border: 0;
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 .media-card {
   min-height: 140px;
   padding: 0;
   color: @cockpit_text;
-  background: linear-gradient(135deg, alpha(@primary, 0.26), alpha(@tertiary, 0.16));
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 .media-artwork {
@@ -1290,8 +1164,8 @@ window.control-center-window scale:focus-visible {
   margin: 14px;
   padding: 10px;
   color: alpha(@cockpit_text, 0.52);
-  background: alpha(@cockpit_shell, 0.38);
-  border-radius: 14px;
+  background: mix(@cockpit_panel, @cockpit_shell, 0.38);
+  border-radius: 0;
 }
 
 .media-card.has-art .media-artwork-placeholder {
@@ -1301,12 +1175,7 @@ window.control-center-window scale:focus-visible {
 .media-content {
   padding: 14px;
   color: @cockpit_text;
-  background: linear-gradient(
-    to bottom,
-    rgba(5, 8, 12, 0.04) 12%,
-    rgba(5, 8, 12, 0.42) 54%,
-    rgba(5, 8, 12, 0.88) 100%
-  );
+  background: @cockpit_panel;
 }
 
 .media-copy {
@@ -1331,20 +1200,20 @@ window.control-center-window scale:focus-visible {
 .media-card button {
   padding: 0;
   color: @cockpit_text;
-  border-radius: 999px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .media-card .media-transport-secondary {
   min-width: 38px;
   min-height: 38px;
   color: @cockpit_text;
-  background: rgba(5, 8, 12, 0.42);
+  background: mix(@cockpit_panel, rgb(5, 8, 12), 0.42);
 }
 
 .media-card .media-transport-secondary:hover {
   color: @cockpit_text;
-  background: rgba(5, 8, 12, 0.66);
+  background: mix(@cockpit_panel, rgb(5, 8, 12), 0.66);
 }
 
 .media-card .media-transport-primary {
@@ -1352,7 +1221,7 @@ window.control-center-window scale:focus-visible {
   min-height: 52px;
   color: @on_primary;
   background: @primary;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .media-card .media-transport-primary:hover {
@@ -1367,22 +1236,14 @@ window.control-center-window scale:focus-visible {
 .summary-tile {
   min-height: 56px;
   padding: 8px 9px;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.072),
-    alpha(@cockpit_text, 0.035)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 12px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .summary-tile:hover {
-  background: linear-gradient(
-    145deg,
-    alpha(@primary, 0.12),
-    alpha(@cockpit_text, 0.045)
-  );
+  background: @cockpit_panel;
 }
 
 .summary-icon {
@@ -1412,33 +1273,21 @@ window.control-center-window scale:focus-visible {
   min-height: 62px;
   padding: 10px 6px 8px;
   color: @cockpit_muted;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.068),
-    alpha(@cockpit_text, 0.035)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 13px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .power-profile-option:hover {
   color: @cockpit_text;
-  background: linear-gradient(
-    145deg,
-    alpha(@primary, 0.12),
-    alpha(@cockpit_text, 0.045)
-  );
+  background: @cockpit_panel;
 }
 
 .power-profile-option.selected {
   color: @primary;
-  background: linear-gradient(
-    145deg,
-    alpha(@primary, 0.2),
-    alpha(@primary, 0.07) 72%
-  );
-  box-shadow: inset 0 0 0 1px alpha(@primary, 0.42), inset 0 1px alpha(@cockpit_text, 0.05);
+  background: @cockpit_panel;
+  box-shadow: none;
 }
 
 .power-profile-option:disabled {
@@ -1472,11 +1321,7 @@ window.control-center-window scale:focus-visible {
 }
 
 .power-stat:hover {
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.072),
-    alpha(@cockpit_text, 0.035)
-  );
+  background: @cockpit_panel;
 }
 
 .power-stat-value {
@@ -1513,21 +1358,17 @@ window.control-center-window scale:focus-visible {
 .network-graph-card {
   min-height: 86px;
   padding: 9px 10px 8px;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.07),
-    alpha(@cockpit_text, 0.03)
-  );
-  border-radius: 13px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  background: @cockpit_panel;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .network-graph-card.download {
-  box-shadow: inset 3px 0 alpha(@primary, 0.52), inset 0 1px alpha(@cockpit_text, 0.04);
+  box-shadow: none;
 }
 
 .network-graph-card.upload {
-  box-shadow: inset 3px 0 alpha(@tertiary, 0.52), inset 0 1px alpha(@cockpit_text, 0.04);
+  box-shadow: none;
 }
 
 .network-graph-title {
@@ -1567,14 +1408,10 @@ window.control-center-window scale:focus-visible {
 .detail-hero {
   min-height: 82px;
   padding: 14px;
-  background: linear-gradient(
-    135deg,
-    alpha(@primary, 0.11),
-    alpha(@cockpit_text, 0.045) 62%
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 16px;
-  box-shadow: inset 3px 0 alpha(@primary, 0.58), inset 0 1px alpha(@cockpit_text, 0.045);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .detail-hero-icon {
@@ -1582,8 +1419,8 @@ window.control-center-window scale:focus-visible {
   min-height: 32px;
   padding: 10px;
   color: @primary;
-  background: alpha(@primary, 0.14);
-  border-radius: 14px;
+  background: mix(@cockpit_panel, @primary, 0.14);
+  border-radius: 0;
 }
 
 .detail-eyebrow {
@@ -1602,14 +1439,10 @@ window.control-center-window scale:focus-visible {
 .metric-card,
 .timer-row {
   padding: 12px 14px;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.07),
-    alpha(@cockpit_text, 0.035)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 12px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .detail-row-action,
@@ -1659,8 +1492,8 @@ window.control-center-window scale:focus-visible {
 
 .metric-segment {
   min-height: 10px;
-  background: alpha(@cockpit_item_hover, 0.64);
-  border-radius: 4px;
+  background: mix(@cockpit_panel, @cockpit_item_hover, 0.64);
+  border-radius: 0;
 }
 
 .metric-segment.active {
@@ -1690,14 +1523,10 @@ window.control-center-window scale:focus-visible {
 .time-hero {
   min-height: 58px;
   padding: 10px 12px;
-  background: linear-gradient(
-    120deg,
-    alpha(@primary, 0.13),
-    alpha(@cockpit_text, 0.045) 72%
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 14px;
-  box-shadow: inset 3px 0 alpha(@primary, 0.54), inset 0 1px alpha(@cockpit_text, 0.045);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .time-hero-icon {
@@ -1705,8 +1534,8 @@ window.control-center-window scale:focus-visible {
   min-height: 26px;
   padding: 8px;
   color: @primary;
-  background: alpha(@primary, 0.12);
-  border-radius: 11px;
+  background: mix(@cockpit_panel, @primary, 0.12);
+  border-radius: 0;
 }
 
 .time-hero-clock {
@@ -1724,8 +1553,8 @@ window.control-center-window scale:focus-visible {
 
 .time-tabs {
   padding: 3px;
-  background: alpha(@cockpit_text, 0.045);
-  border-radius: 12px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.045);
+  border-radius: 0;
 }
 
 .time-tab {
@@ -1734,14 +1563,14 @@ window.control-center-window scale:focus-visible {
   color: @cockpit_muted;
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .time-tab:checked {
   color: @cockpit_text;
-  background: alpha(@cockpit_text, 0.085);
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.05);
+  background: mix(@cockpit_panel, @cockpit_text, 0.085);
+  box-shadow: none;
 }
 
 .time-view-stack,
@@ -1755,13 +1584,9 @@ window.control-center-window scale:focus-visible {
 .time-calendar {
   padding: 8px 10px;
   color: @cockpit_text;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.065),
-    alpha(@cockpit_text, 0.03)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .time-calendar button {
@@ -1771,13 +1596,13 @@ window.control-center-window scale:focus-visible {
   color: @cockpit_muted;
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .time-calendar button:hover {
   color: @cockpit_text;
-  background: alpha(@cockpit_text, 0.06);
+  background: mix(@cockpit_panel, @cockpit_text, 0.06);
 }
 
 .time-calendar label.day-name {
@@ -1789,7 +1614,7 @@ window.control-center-window scale:focus-visible {
 .time-calendar label.day-number {
   min-width: 30px;
   min-height: 25px;
-  border-radius: 9px;
+  border-radius: 0;
   font-feature-settings: "tnum";
 }
 
@@ -1797,23 +1622,23 @@ window.control-center-window scale:focus-visible {
 .time-calendar label.day-number.events-1 {
   color: @primary;
   font-weight: 720;
-  background: alpha(@primary, 0.07);
+  background: mix(@cockpit_panel, @primary, 0.07);
 }
 
 .time-calendar label.day-number.events-2 {
   color: @primary;
   font-weight: 800;
-  background: alpha(@primary, 0.15);
+  background: mix(@cockpit_panel, @primary, 0.15);
 }
 
 .time-calendar label.day-number.events-3 {
   color: @primary;
   font-weight: 860;
-  background: alpha(@primary, 0.26);
+  background: mix(@cockpit_panel, @primary, 0.26);
 }
 
 .time-calendar label.day-number.today:not(:selected) {
-  box-shadow: inset 0 0 0 1px alpha(@primary, 0.8);
+  box-shadow: none;
 }
 
 .time-calendar label.day-number:selected {
@@ -1824,8 +1649,8 @@ window.control-center-window scale:focus-visible {
 .calendar-status {
   padding: 14px 12px;
   color: @cockpit_muted;
-  background: alpha(@cockpit_text, 0.035);
-  border-radius: 12px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.035);
+  border-radius: 0;
 }
 
 .agenda-list {
@@ -1833,14 +1658,10 @@ window.control-center-window scale:focus-visible {
 }
 
 .agenda-event {
-  background: linear-gradient(
-    110deg,
-    alpha(@cockpit_text, 0.068),
-    alpha(@cockpit_text, 0.033)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 12px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .agenda-event-header {
@@ -1849,12 +1670,12 @@ window.control-center-window scale:focus-visible {
   color: @cockpit_text;
   background: transparent;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .agenda-event-header:hover {
-  background: alpha(@primary, 0.07);
+  background: mix(@cockpit_panel, @primary, 0.07);
 }
 
 .agenda-event-time {
@@ -1886,54 +1707,46 @@ window.control-center-window scale:focus-visible {
   min-height: 34px;
   padding: 3px 8px;
   color: @cockpit_text;
-  background: alpha(@cockpit_text, 0.055);
+  background: mix(@cockpit_panel, @cockpit_text, 0.055);
   border: 0;
-  border-radius: 11px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .timer-preset:hover {
   color: @primary;
-  background: alpha(@primary, 0.11);
+  background: mix(@cockpit_panel, @primary, 0.11);
 }
 
 .timer-composer {
   min-height: 44px;
   padding: 7px;
-  background: linear-gradient(
-    110deg,
-    alpha(@cockpit_text, 0.068),
-    alpha(@cockpit_text, 0.035)
-  );
-  border-radius: 13px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  background: @cockpit_panel;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .timer-composer entry,
 .timer-composer spinbutton {
   min-height: 30px;
   color: @cockpit_text;
-  background: alpha(@cockpit_panel, 0.55);
+  background: mix(@cockpit_panel, @cockpit_panel, 0.55);
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .timer-composer .primary-action {
   min-height: 30px;
   padding: 2px 12px;
-  border-radius: 9px;
+  border-radius: 0;
 }
 
 .empty-state {
   padding: 18px 12px;
   color: @cockpit_muted;
-  background: linear-gradient(
-    145deg,
-    alpha(@cockpit_text, 0.052),
-    alpha(@cockpit_text, 0.026)
-  );
-  border-radius: 12px;
+  background: @cockpit_panel;
+  border-radius: 0;
 }
 
 .control-error-slot {
@@ -1942,27 +1755,27 @@ window.control-center-window scale:focus-visible {
   color: transparent;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 0;
 }
 
 .control-error-slot.has-error {
   color: @error;
-  background: alpha(@error, 0.12);
+  background: mix(@cockpit_panel, @error, 0.12);
   border-color: alpha(@error, 0.26);
 }
 
 .control-error-slot.is-pending {
   color: @cockpit_muted;
-  background: alpha(@cockpit_item, 0.72);
+  background: mix(@cockpit_panel, @cockpit_item, 0.72);
   border-color: transparent;
   animation: pending-pulse 760ms ease-in-out infinite;
 }
 
 .control-error-slot.is-success {
   color: @success;
-  background: alpha(@success, 0.10);
+  background: mix(@cockpit_panel, @success, 0.10);
   border-color: alpha(@success, 0.24);
-  animation: success-pop 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: success-pop 620ms ease-out both;
 }
 
 .control-error-slot.has-error {
@@ -1973,22 +1786,14 @@ window.control-center-window scale:focus-visible {
   min-height: 36px;
   padding: 0 12px;
   color: @cockpit_text;
-  background: linear-gradient(
-    90deg,
-    alpha(@primary, 0.075),
-    alpha(@cockpit_text, 0.05)
-  );
+  background: @cockpit_panel;
   border: 0;
-  border-radius: 11px;
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.04);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .control-footer:hover {
-  background: linear-gradient(
-    90deg,
-    alpha(@primary, 0.14),
-    alpha(@cockpit_text, 0.065)
-  );
+  background: @cockpit_panel;
 }
 
 .control-footer-icon {
@@ -2002,7 +1807,7 @@ window.control-center-window scale:focus-visible {
 
 .control-footer:hover .control-footer-arrow {
   color: @cockpit_text;
-  transform: translateX(2px);
+  transform: none;
 }
 
 window.notification-window {
@@ -2022,12 +1827,10 @@ window.osd-window {
 
 .osd-card {
   padding: 12px 16px;
-  background: alpha(@cockpit_panel, 0.95);
+  background: mix(@cockpit_panel, @cockpit_panel, 0.95);
   border: 1px solid alpha(@cockpit_border, 0.78);
-  border-radius: 18px;
-  box-shadow:
-    inset 0 1px alpha(@cockpit_text, 0.04),
-    0 20px 48px alpha(black, 0.36);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .osd-icon {
@@ -2045,14 +1848,14 @@ window.osd-window {
 
 .osd-bar trough {
   min-height: 6px;
-  background: alpha(@cockpit_text, 0.09);
-  border-radius: 4px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.09);
+  border-radius: 0;
 }
 
 .osd-bar progress {
   min-height: 6px;
   background: @primary;
-  border-radius: 4px;
+  border-radius: 0;
   transition: min-width 160ms ease-out;
 }
 
@@ -2062,7 +1865,7 @@ window.osd-muted .osd-title {
 }
 
 window.osd-muted .osd-bar progress {
-  background: alpha(@cockpit_muted, 0.5);
+  background: mix(@cockpit_panel, @cockpit_muted, 0.5);
 }
 
 window.osd-countdown .osd-icon,
@@ -2082,17 +1885,11 @@ window.osd-countdown .osd-icon {
 .notification-card {
   padding: 11px 12px 11px 13px;
   color: @cockpit_text;
-  background: linear-gradient(
-    135deg,
-    alpha(@cockpit_panel, 0.995),
-    alpha(@cockpit_shell, 0.985)
-  );
+  background: @cockpit_panel;
   border: 1px solid alpha(@cockpit_border, 0.78);
   border-left-width: 3px;
-  border-radius: 14px;
-  box-shadow:
-    inset 0 1px alpha(@cockpit_text, 0.04),
-    0 8px 24px alpha(black, 0.3);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .notification-toast {
@@ -2101,8 +1898,8 @@ window.osd-countdown .osd-icon {
 
 .notification-inbox-card {
   padding: 13px 14px 13px 15px;
-  background: alpha(@cockpit_item, 0.72);
-  box-shadow: inset 0 1px alpha(@cockpit_text, 0.035);
+  background: mix(@cockpit_panel, @cockpit_item, 0.72);
+  box-shadow: none;
 }
 
 .notification-card.urgency-low {
@@ -2118,10 +1915,7 @@ window.osd-countdown .osd-icon {
 .notification-card.urgency-critical {
   border-color: alpha(@cockpit_border, 0.78);
   border-left-color: @error;
-  box-shadow:
-    inset 3px 0 alpha(@error, 0.07),
-    inset 0 1px alpha(@cockpit_text, 0.04),
-    0 8px 26px alpha(black, 0.32);
+  box-shadow: none;
 }
 
 .notification-app {
@@ -2152,9 +1946,9 @@ window.osd-countdown .osd-icon {
 }
 
 .notification-avatar-frame {
-  background: alpha(black, 0.18);
+  background: mix(@cockpit_panel, black, 0.18);
   border: 1px solid alpha(@cockpit_text, 0.08);
-  border-radius: 11px;
+  border-radius: 0;
 }
 
 .notification-avatar {
@@ -2168,8 +1962,8 @@ window.osd-countdown .osd-icon {
 }
 
 .notification-image {
-  border-radius: 10px;
-  background: alpha(black, 0.18);
+  border-radius: 0;
+  background: mix(@cockpit_panel, black, 0.18);
 }
 
 .notification-duplicate {
@@ -2177,8 +1971,8 @@ window.osd-countdown .osd-icon {
   min-height: 20px;
   padding: 0 5px;
   color: @primary;
-  background: alpha(@primary, 0.11);
-  border-radius: 999px;
+  background: mix(@cockpit_panel, @primary, 0.11);
+  border-radius: 0;
   font-size: 10px;
   font-weight: 800;
 }
@@ -2196,12 +1990,12 @@ window.osd-countdown .osd-icon {
   color: @cockpit_muted;
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
 }
 
 .notification-dismiss:hover {
   color: @cockpit_text;
-  background: alpha(@error, 0.16);
+  background: mix(@cockpit_panel, @error, 0.16);
 }
 
 .notification-actions {
@@ -2212,9 +2006,9 @@ window.osd-countdown .osd-icon {
   min-height: 32px;
   padding: 2px 9px;
   color: @primary;
-  background: alpha(@primary, 0.085);
+  background: mix(@cockpit_panel, @primary, 0.085);
   border: 1px solid alpha(@primary, 0.14);
-  border-radius: 9px;
+  border-radius: 0;
   font-weight: 700;
 }
 
@@ -2225,14 +2019,14 @@ window.osd-countdown .osd-icon {
 
 .notification-card progressbar trough {
   min-height: 6px;
-  background: alpha(@cockpit_text, 0.09);
-  border-radius: 4px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.09);
+  border-radius: 0;
 }
 
 .notification-card progressbar progress {
   min-height: 6px;
   background: @primary;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .notification-card progressbar text {
@@ -2245,8 +2039,8 @@ window.osd-countdown .osd-icon {
 .notification-controls {
   min-height: 38px;
   padding: 6px 9px;
-  background: alpha(@cockpit_text, 0.055);
-  border-radius: 12px;
+  background: mix(@cockpit_panel, @cockpit_text, 0.055);
+  border-radius: 0;
 }
 
 .notification-list {
@@ -2259,8 +2053,8 @@ window.osd-countdown .osd-icon {
 
 button.system-module.notifications.has-unread {
   color: @primary;
-  background: alpha(@primary, 0.09);
-  animation: state-pop 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  background: mix(@cockpit_panel, @primary, 0.09);
+  animation: state-pop 560ms ease-out both;
 }
 
 button.system-module.notifications.has-unread label {
@@ -2269,14 +2063,14 @@ button.system-module.notifications.has-unread label {
   padding: 0 5px;
   color: @on_primary;
   background: @primary;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 10px;
   font-weight: 800;
 }
 
 button.system-module.notifications.is-dnd {
   color: @cockpit_muted;
-  background: alpha(@cockpit_muted, 0.065);
+  background: mix(@cockpit_panel, @cockpit_muted, 0.065);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2300,7 +2094,7 @@ button.system-module.bluetooth.busy image {
 
 button.system-module.bluetooth.needs-attention {
   color: @primary;
-  background: alpha(@primary, 0.09);
+  background: mix(@cockpit_panel, @primary, 0.09);
 }
 
 button.system-module.bluetooth.needs-attention image {
@@ -2312,4 +2106,64 @@ button.system-module.bluetooth.needs-attention image {
   button.system-module.bluetooth.needs-attention image {
     animation: none;
   }
+}
+
+/* Industrial shell: opaque backplates, structural separators, explicit focus. */
+window.bar-window {
+  background: @cockpit_shell;
+}
+.bar-root {
+  outline: 1px solid @cockpit_border;
+  outline-offset: -1px;
+}
+.bar-island, .bar-island:hover {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.workspace-island, .context-island {
+  border-right: 1px solid @cockpit_border;
+}
+.ai-provider-card, .suggestion-card, .quick-tile, .media-card,
+.summary-tile, .network-graph-card, .detail-hero, .time-hero {
+  border: 0;
+  border-bottom: 1px solid @cockpit_border;
+  background: @cockpit_panel;
+}
+button:focus-visible {
+  outline: 2px solid @primary;
+  outline-offset: -2px;
+}
+.workspace-button.active {
+  border-bottom: 2px solid @primary;
+}
+.clock-chip, button.clock label, button.resources label,
+.workspace-button label, .resource-chip,
+.control-center-clock, .time-hero-clock, .slider-value, .osd-value {
+  font-family: "0xProto", monospace;
+}
+
+.control-center-root switch {
+  background: @cockpit_item;
+  border: 1px solid @cockpit_border;
+  border-radius: 0;
+}
+.control-center-root switch:checked {
+  background: @primary;
+}
+.control-center-root switch slider {
+  background: @cockpit_text;
+  border-radius: 0;
+  box-shadow: none;
+}
+.control-center-root switch:checked slider {
+  background: @on_primary;
+}
+
+tooltip {
+  background: @cockpit_panel;
+  color: @cockpit_text;
+  border: 1px solid @cockpit_border;
+  border-radius: 0;
+  box-shadow: none;
 }

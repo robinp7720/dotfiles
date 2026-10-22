@@ -39,10 +39,10 @@ assert_not_contains() {
 }
 
 assert_contains matugen/templates/luma.css \
-  'background-image: linear-gradient(180deg, alpha(@luma_surface_high, 0.94), alpha(@luma_surface, 0.96));'
+  'background-image: none;'
 assert_contains matugen/templates/luma.css \
-  'background-color: alpha(@luma_surface_highest, 0.66);'
-assert_count matugen/templates/luma.css 3 \
+  'background-color: mix(@luma_surface, @luma_surface_highest, 0.66);'
+assert_count matugen/templates/luma.css 1 \
   'background-color: transparent;'
 assert_contains hypr/hyprlock.conf \
   'source = ~/.config/hypr/hyprlock-colors.conf'
@@ -77,9 +77,9 @@ assert_not_contains hypr/hyprlock.conf 'JetBrains Mono'
 assert_not_contains matugen/templates/greetd.css 'JetBrains Mono'
 
 assert_contains bar/style.css \
-  '@define-color cockpit_shell rgba(15, 20, 28, 0.84);'
+  '@define-color cockpit_shell #171b1e;'
 assert_contains bar/style.css \
-  '@define-color cockpit_panel rgba(15, 20, 28, 0.96);'
+  '@define-color cockpit_panel #171b1e;'
 assert_contains bar/style.css \
   '@define-color cockpit_text #eef5f8;'
 assert_contains bar/style.css \
@@ -108,5 +108,22 @@ assert_not_contains bar/style.css '@surface'
 assert_contains tools/launcher/src/ui/theme.rs 'monitor_file('
 assert_contains matugen/templates/luma.css '.launcher-level scale highlight {'
 assert_contains tools/tv-mode/src/ui.rs 'self.state["theme"] = theme();'
+
+# Industrial core shell keeps actual backplates opaque and native geometry aligned.
+assert_contains matugen/templates/bar-colors.css '@define-color cockpit_shell @surface_container;'
+assert_contains matugen/templates/bar-colors.css '@define-color cockpit_panel @surface;'
+assert_not_contains bar/style.css 'linear-gradient('
+assert_not_contains matugen/templates/luma.css 'linear-gradient('
+assert_not_contains tools/launcher/src/ui/theme.rs 'linear-gradient('
+assert_not_contains tools/launcher/src/ui/interaction.css 'rotate('
+assert_contains bar/config.toml 'motion = "calm"'
+assert_contains tools/bar/src/ui/stage.rs 'SURFACE_MARGIN: i32 = 0;'
+assert_contains tools/bar/src/ui/stage.rs 'PANEL_STAGE_MARGIN_X: i32 = 0;'
+assert_contains tools/bar/src/ui/stage.rs 'CONTROL_CENTER_RADIUS: f32 = 0.0;'
+assert_contains bar/style.css 'font-family: "0xProto", monospace;'
+assert_contains matugen/templates/luma.css 'border-left: 2px solid @luma_primary;'
+assert_contains tools/launcher/src/ui/interaction.css 'border-bottom-color: @luma_primary;'
+assert_contains hypr/hyprland-config/base.lua 'rounding = 0'
+assert_contains niri/config.kdl 'geometry-corner-radius 0'
 
 printf 'Desktop UI contracts verified.\n'

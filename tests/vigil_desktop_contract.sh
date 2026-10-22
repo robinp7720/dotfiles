@@ -316,7 +316,7 @@ require_fixed 'hl.exec_cmd("systemctl --user restart vigil.service")' "hypr/hypr
 require_fixed 'hl.exec_cmd("systemctl --user restart awww-daemon.service awww-wallpaper.service")' "hypr/hyprland-config/startup.lua"
 require_fixed 'hl.exec_cmd("systemctl --user restart hypridle.service")' "hypr/hyprland-config/startup.lua"
 require_order 'hl.exec_cmd("dbus-update-activation-environment --all")' 'hl.exec_cmd("systemctl --user restart vigil.service")' "hypr/hyprland-config/startup.lua"
-require_fixed 'name = "vigil-blur", match = { namespace = "vigil" }, blur = true' "hypr/hyprland-config/base.lua"
+require_fixed 'name = "vigil-blur", match = { namespace = "vigil" }, blur = false' "hypr/hyprland-config/base.lua"
 require_fixed 'name = "vigil-ignore_alpha", match = { namespace = "vigil" }, ignore_alpha = 0.20' "hypr/hyprland-config/base.lua"
 
 require_fixed 'systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY' "niri/config.kdl"
@@ -342,7 +342,7 @@ require_fixed 'root.set_size_request(480, -1);' "tools/bar/src/ui/control_center
 require_fixed 'window.set_namespace(Some("vigil-control-center"));' "tools/bar/src/ui/control_center.rs"
 require_fixed 'window.set_layer(Layer::Overlay);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'window.set_exclusive_zone(-1);' "tools/bar/src/ui/control_center.rs"
-require_fixed 'panel_morph.set_child(Some(&root));' "tools/bar/src/ui/control_center.rs"
+require_fixed 'panel_morph.set_child(Some(&panel_scroll));' "tools/bar/src/ui/control_center.rs"
 require_fixed 'stage::track_input(&window' "tools/bar/src/ui/control_center.rs"
 require_fixed 'stack.set_hhomogeneous(true);' "tools/bar/src/ui/control_center.rs"
 require_fixed 'page_morph.set_child(Some(&stack));' "tools/bar/src/ui/control_center.rs"

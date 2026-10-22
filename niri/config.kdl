@@ -217,7 +217,7 @@ layout {
         // off
 
         // How many logical pixels the ring extends out from the windows.
-        width 3
+        width 2
 
         // Colors can be set in a variety of ways:
         // - CSS named colors: "red"
@@ -225,8 +225,7 @@ layout {
         // - CSS-like notation: "rgb(255, 127, 0)", rgba(), hsl() and a few others.
 
         // Color of the ring on the active monitor.
-        active-gradient from="#82d3e1" to="#bbc6ea" angle=135 relative-to="workspace-view"
-        // active-color "#82d3e1"
+        active-color "#82d3e1"
 
         // Color of the ring on inactive monitors.
         //
@@ -273,8 +272,8 @@ layout {
 
     // You can enable drop shadows for windows.
     shadow {
-        // Uncomment the next line to enable shadows.
-        on
+        // Industrial window decoration uses borders rather than shadows.
+        off
 
         // By default, the shadow draws only around its window, and not behind it.
         // Uncomment this setting to make the shadow draw behind its window.
@@ -396,10 +395,9 @@ window-rule {
     // block-out-from "screencast"
 }
 
-// Example: enable rounded corners for all windows.
-// (This example rule is commented out with a "/-" in front.)
+// Industrial frames clip client content to square window geometry.
 window-rule {
-    geometry-corner-radius 12
+    geometry-corner-radius 0
     clip-to-geometry true
     // draw-border-with-background true
 }
@@ -703,9 +701,9 @@ overview {
 }
 
 recent-windows {
-    // Round the corners on the highlight.
+    // Keep the recent-window highlight square.
     highlight {
-        corner-radius 12
+        corner-radius 0
     }
 }
 
@@ -746,11 +744,11 @@ animations {
     }
 
     config-notification-open-close {
-        spring damping-ratio=0.6 stiffness=1000 epsilon=0.001
+        spring damping-ratio=1.0 stiffness=1000 epsilon=0.001
     }
 
     exit-confirmation-open-close {
-        spring damping-ratio=0.6 stiffness=500 epsilon=0.01
+        spring damping-ratio=1.0 stiffness=500 epsilon=0.01
     }
 
     screenshot-ui-open {

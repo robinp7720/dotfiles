@@ -1,53 +1,52 @@
 # Shared desktop design and interaction
 
-Wayland system surfaces use a visible, Matugen-driven glass treatment. Colors
-come from Material roles; geometry and depth follow this shared scale:
+The core Wayland shell uses an industrial design: opaque surfaces, square geometry,
+structural separators, and restrained morphing motion. This covers Vigil, Luma,
+notifications, OSD, and compositor window decoration. Lock screen, greeter,
+TV mode, and application interiors retain their existing styling for this pass.
 
 - Spacing: 4, 8, 12, 16, and 24 px.
-- Radii: 10 px for compact controls, 14 px for windows, bar islands, and rows,
-  and 18 px for cards, Luma, and quick settings. Filter pills remain fully rounded.
-- Borders: 1 px using a low-contrast `outline_variant` role.
-- Opacity: bar islands use 86%; Luma and quick settings use 94-96% so text
-  stays readable over busy windows. Inner cards and controls use lighter tints.
-- Shadows: ambient cards use `0 12px 28px` at 25% black; overlays use
-  `0 20px 48px` at 36% black.
-- Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback; use `on_surface_variant` for supporting text.
-- States: `primary` marks focus and selection, `tertiary` marks warnings, and
-  `error` is reserved for critical, failed, urgent, or destructive states.
-  Inactive window borders use `outline_variant`, leaving focus easy to locate.
+- Geometry: 0 px corner radius for panels, rows, controls, and compositor frames.
+  Circular application artwork may keep its intrinsic shape.
+- Structure: one continuous 44 px bar at the top edge of every monitor. Quick
+  settings attaches to the right edge directly below the bar; Luma stays centered.
+  Notifications keep 10 px clearance below the bar.
+- Borders: 1 px structural separators, with 2 px accent focus indicators.
+  Separate settings sections with dividers rather than nested cards.
+- Opacity: visible shell backplates are fully opaque. Internal tints use opaque
+  color mixes. Transparent layer-shell stage windows remain necessary around
+  morphing content; they do not receive pointer input outside visible shapes.
+- Depth: flat fills, no gradients, glow, or ambient shadows.
+- Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback;
+  use 0xProto for clocks, workspace numbers, resource readings, and shortcut hints.
+- Color: Matugen supplies wallpaper-derived neutral surfaces and primary accents.
+  `primary` marks focus and selection, `tertiary` marks warnings, and `error`
+  marks critical, failed, urgent, or destructive states. Inactive borders use
+  `outline_variant`. Supporting text uses `on_surface_variant`.
 
-Vigil's `cockpit_*` aliases and Luma's `luma_*` aliases come from the same
-Matugen Material roles. Edit templates before generated files. Theme generation
-sends Vigil SIGHUP to update existing surfaces; Luma reads the theme on opening.
+Vigil's `cockpit_*` aliases and Luma's `luma_*` aliases use the same Material
+roles. Edit templates before generated files. Fallback styles follow the same
+opaque, square design. Theme generation sends Vigil SIGHUP; Luma also watches
+its generated theme so warm instances update after wallpaper changes.
 
-Motion communicates an action: an expressive spring on arrival, a short press response,
-and a quicker departure. Hover and focus changes take 160 ms, presses settle in
-180 ms, and surfaces arrive in 320 ms and depart in 180 ms. Workspace changes
-keep their direction with limited travel. Infinite motion is reserved for live
-pending or urgent states. Avoid continuous decorative motion while idle.
-Luma and windows arrive from 92% scale with a small overshoot. Selecting a filter
-gives its pill a single 240 ms bounce; hovering a result lifts and tilts its icon.
-Quick settings springs in from the bar corner, and compact controls compress on
-press. These gestures add expression without extending the opening durations.
+Motion preserves spatial continuity: panels and notifications still morph from
+and back into their originating bar controls. Vigil uses its existing `calm`
+critically damped springs: no elastic overshoot, squash-and-stretch, or oscillation.
+Interrupted morphs reverse smoothly. Hover and focus colors take 160 ms; launcher
+and window arrivals use short eased transitions without tilt or bounce. Infinite
+motion is reserved for pending or urgent states. Avoid idle decorative animation.
 
-Hyprland owns Luma's layer entry and exit. Vigil owns its bar and quick-settings
-animations, with compositor animation disabled for those two namespaces. This
-avoids applying two entrance transforms to one surface. GTK controls respect
-reduced motion; compositor motion can separately be disabled with
-`animations = { enabled = false }` in `hypr/hyprland-config/base.lua`. Vigil also offers
-`experience.motion = "calm"` and `experience.ambient_motion = "off"`.
+Hyprland owns Luma's layer entry and exit. Vigil owns its bar, quick-settings,
+and toast transitions, with compositor animation disabled for those namespaces.
+GTK controls respect reduced motion; compositor animations can separately be
+turned off with `animations = { enabled = false }`. Vigil retains `bold` as an
+optional configuration mode; this desktop selects `experience.motion = "calm"`.
 
-Every monitor has a visible search button. Left-click opens Luma there;
-right-click opens window search. Luma keeps the query when switching filters,
-supports Ctrl+1 through Ctrl+5, and keeps focus inside its controls. Enter opens
-the selected result and Escape closes the surface. Repeating a launcher shortcut
-closes that launcher; a different shortcut switches its purpose. Quick settings
-close on a repeated general toggle; requesting a specific page switches there
-first if needed. Opening either surface respects the chosen monitor.
-
-The motion vocabulary follows the supported
-[Hyprland animation tree](https://wiki.hypr.land/0.54.0/Configuring/Animations/)
-and [GTK CSS properties](https://docs.gtk.org/gtk4/css-properties.html).
+Every monitor retains a visible search button. Left-click opens Luma there;
+right-click opens window search. Query preservation, Ctrl+1 through Ctrl+5,
+Enter, Escape, launcher toggling, and monitor selection remain unchanged.
+Quick settings closes on a repeated general toggle; requesting a specific page
+switches there first if needed.
 
 Renderer-specific limitations may require equivalent values rather than exact
 syntax. Document any deliberate visual exception next to the affected rule.

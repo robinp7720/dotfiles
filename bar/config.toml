@@ -50,7 +50,7 @@ calendar_seconds = 30
 activity_seconds = 5
 
 [experience]
-motion = "bold"
+motion = "calm"
 ambient_motion = "meaningful"
 suggestions = true
 

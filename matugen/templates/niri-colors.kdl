@@ -2,12 +2,12 @@
 // This file is included by niri/config.kdl.
 layout {
     focus-ring {
-        active-gradient from="{{ colors.primary.default.hex }}" to="{{ colors.tertiary.default.hex }}" angle=135 relative-to="workspace-view"
+        active-color "{{ colors.primary.default.hex }}"
         inactive-color "{{ colors.outline.default.hex }}"
     }
 
     border {
-        active-gradient from="{{ colors.primary.default.hex }}" to="{{ colors.tertiary.default.hex }}" angle=135 relative-to="workspace-view"
+        active-color "{{ colors.primary.default.hex }}"
         inactive-color "{{ colors.outline.default.hex }}"
         urgent-color "{{ colors.error.default.hex }}"
     }
