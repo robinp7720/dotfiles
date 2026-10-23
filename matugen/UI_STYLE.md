@@ -25,8 +25,8 @@ TV mode, and application interiors retain their existing styling for this pass.
   `outline_variant`. Supporting text uses `on_surface_variant`.
 
 Vigil's `cockpit_*` aliases and Luma's `luma_*` aliases use the same Material
-roles. Edit templates before generated files. Fallback styles follow the same
-opaque, square design. Theme generation sends Vigil SIGHUP; Luma also watches
+roles. Edit templates before generated files. Application defaults retain their earlier rounded styling. This desktop selects
+the opaque, square design through user configuration. Theme generation sends Vigil SIGHUP; Luma also watches
 its generated theme so warm instances update after wallpaper changes.
 
 Motion preserves spatial continuity: panels and notifications still morph from
@@ -50,3 +50,18 @@ switches there first if needed.
 
 Renderer-specific limitations may require equivalent values rather than exact
 syntax. Document any deliberate visual exception next to the affected rule.
+
+## User styling
+
+Vigil reads `~/.config/vigil/style.css` (tracked as `bar/style.css` here) and
+Matugen's `colors.css`. Native layer margins, bar padding, panel/card/context
+radii, and morph shadows come from `[style]` in `bar/config.toml`. Omitted values
+restore Vigil's original floating, rounded geometry. Restart `vigil.service`
+after changing native geometry; CSS and colors reload with SIGHUP.
+
+Luma loads its original fallback and interaction CSS first, then Matugen's
+`~/.config/Luma/theme.css`, then `~/.config/Luma/style.css`. Setup links only the
+last file from `Luma/style.css`, preserving personal `config.json` preferences.
+Both CSS files reload while Luma is running. Keep generated colors and panel
+styling in `matugen/templates/luma.css`, and stable interaction overrides in
+`Luma/style.css`. Removing both overrides restores Luma's original appearance.

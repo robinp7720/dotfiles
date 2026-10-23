@@ -154,6 +154,10 @@ legacy_directories=(
 for dir in "${legacy_directories[@]}"; do
   remove_managed_symlink "$HOME/.config/$dir" "$DIR/$dir"
 done
+# Keep Luma's user preferences and generated palette; only manage our style file.
+mkdir -p "$HOME/.config/Luma"
+link_path "$DIR/Luma/style.css" "$HOME/.config/Luma/style.css"
+
 echo "Linking Vigil configuration"
 link_path "$DIR/bar" "$HOME/.config/vigil"
 remove_managed_symlink "$HOME/.config/cockpit-bar" "$DIR/bar"

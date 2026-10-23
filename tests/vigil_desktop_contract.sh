@@ -92,9 +92,10 @@ make_setup_fixture() {
   chmod +x "$repo_root/tools/launcher/target/release/luma-mail-eds"
 
   local dir
-  for dir in hypr kitty matugen niri nvim nwg-hello greetd bar tv-mode; do
+  for dir in hypr kitty matugen niri nvim nwg-hello greetd bar tv-mode Luma; do
     mkdir -p "$repo_root/$dir"
   done
+  touch "$repo_root/Luma/style.css"
 }
 
 verify_legacy_desktop_links_cleanup() {
@@ -141,9 +142,18 @@ verify_luma_binary_link() {
 
   make_setup_fixture "$fixture_root"
   make_stub_commands "$stub_root"
-  mkdir -p "$test_home"
+  mkdir -p "$test_home/.config/Luma"
+  printf 'personal preferences' > "$test_home/.config/Luma/config.json"
+  printf 'generated palette' > "$test_home/.config/Luma/theme.css"
 
   PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+
+  [[ "$(readlink "$test_home/.config/Luma/style.css")" == "$fixture_root/Luma/style.css" ]] \
+    || { printf 'setup should link persistent Luma styling\n' >&2; exit 1; }
+  [[ "$(cat "$test_home/.config/Luma/config.json")" == 'personal preferences' ]] \
+    || { printf 'setup should preserve personal Luma preferences\n' >&2; exit 1; }
+  [[ "$(cat "$test_home/.config/Luma/theme.css")" == 'generated palette' ]] \
+    || { printf 'setup should preserve the generated Luma theme\n' >&2; exit 1; }
 
   if [[ ! -L "$test_home/.local/bin/Luma" ]] \
     || [[ "$(readlink "$test_home/.local/bin/Luma")" != "$fixture_root/tools/launcher/target/release/Luma" ]]; then
@@ -494,6 +504,8 @@ reject_fixed '.control-center-root.control-center-entering {' "bar/style.css"
 reject_fixed '.control-center-root.control-center-exiting {' "bar/style.css"
 require_fixed '@media (prefers-reduced-motion: reduce) {' "bar/style.css"
 reject_fixed 'border: 2px solid @primary;' "bar/style.css"
+require_fixed 'link_path "$DIR/Luma/style.css" "$HOME/.config/Luma/style.css"' "setup.sh"
+require_fixed 'style_path.as_deref()' "tools/launcher/src/ui/theme.rs"
 require_fixed 'center_for_click.current_page() == focus' "tools/bar/src/ui/surface.rs"
 require_fixed 'if !popover.is_visible() {' "tools/bar/src/ui/surface.rs"
 require_fixed 'fn show_managed_window(' "tools/bar/src/ui/surface.rs"

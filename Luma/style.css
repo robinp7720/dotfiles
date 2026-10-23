@@ -1,0 +1,73 @@
+/* User-defined interaction styling overrides Luma defaults. */
+/* Matugen supplies panel styling and color roles through theme.css. */
+.launcher-navigation {
+  padding: 0 2px;
+}
+
+button.launcher-mode {
+  min-height: 28px;
+  padding: 2px 12px;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: @luma_surface;
+  color: @luma_on_surface_variant;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button.launcher-mode:hover {
+  background: @luma_surface_high;
+  color: @luma_on_surface;
+}
+
+button.launcher-mode:checked {
+  background: @luma_surface;
+  border-bottom-color: @luma_primary;
+  color: @luma_primary;
+}
+
+.launcher-hints {
+  color: @luma_on_surface_variant;
+  font-size: 12px;
+  padding: 4px 4px 0;
+}
+
+.launcher-entry,
+.launcher-row,
+button.launcher-mode,
+.launcher-context-open {
+  transition: background-color 160ms ease-out, border-color 160ms ease-out,
+              color 160ms ease-out;
+}
+
+.launcher-row:hover {
+  background-color: @luma_surface_high;
+}
+
+button.launcher-mode:focus-visible,
+.launcher-context-open:focus-visible {
+  outline: 2px solid @luma_primary;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-shell * {
+    transition: none;
+    animation: none;
+    transform: none;
+  }
+}
+
+.launcher-icon-wrap.has-thumbnail {
+  padding: 0;
+}
+
+.launcher-row:hover .launcher-icon-wrap,
+button.launcher-mode:hover,
+button.launcher-mode:active,
+.launcher-context-open:active {
+  transform: none;
+}
+button.launcher-mode:checked { animation: none; }

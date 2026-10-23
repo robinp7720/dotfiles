@@ -74,6 +74,8 @@ def check(failure='', missing_submodule=''):
         for directory in (repo, home, stubs):
             directory.mkdir()
         shutil.copy2(root / 'setup.sh', repo / 'setup.sh')
+        (repo / 'Luma').mkdir()
+        (repo / 'Luma/style.css').touch()
         (repo / 'zshrc').touch()
         (home / '.zshrc').write_text('original shell config\n')
         for tool in ('bar', 'launcher', 'tv-mode', 'hypr-swipe-events'):
@@ -103,6 +105,8 @@ def check(failure='', missing_submodule=''):
             assert result.returncode == 0, result.stderr
             for binary in ('vigil', 'Luma', 'luma-mail-eds', 'tv-mode'):
                 assert (home / '.local/bin' / binary).is_file(), binary
+            assert (home / '.config/Luma/style.css').is_file()
+            assert (home / '.config/Luma/style.css').resolve() == repo / 'Luma/style.css'
             assert (base / 'data/hyprland/plugins/hypr-swipe-events.so').is_file()
             assert len([line for line in commands if line.startswith('cargo ')]) == 3
             assert any(line.startswith('git ') for line in commands) == bool(missing_submodule)

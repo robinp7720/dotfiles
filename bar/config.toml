@@ -98,3 +98,15 @@ prefixes = ["pytest"]
 [[command_activity.allowlist]]
 label = "Make"
 prefixes = ["make"]
+
+# Native clipping and layer-shell geometry; GTK appearance lives in style.css.
+# Restart Vigil after changing these values.
+[style]
+surface_margin = 0
+bar_padding = 0
+panel_margin = 0
+panel_bottom_margin = 0
+panel_radius = 0
+card_radius = 0
+context_radius = 0
+shadows = false
