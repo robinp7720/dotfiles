@@ -78,3 +78,10 @@ Bluetooth, audio, power, notifications, and time remain on the primary rail.
 Luma uses a 20 px panel inset, a compact search field, unframed icons, and a tinted
 selected row with a fixed-width leading accent. Thin dividers separate filters
 and hints; hover must preserve the selected row fill.
+
+Quick settings shares the neutral rail backplate. Its header and footer use thin
+dividers; enabled tiles have a restrained accent fill, with unframed icons and
+compact square switches. Level tracks are 6 px with distinct 12 px handles while
+the interactive scale remains at least 28 px tall. Selected device rows use a
+leading accent, and power profiles use an inset underline. Use window-scoped
+selectors so GTK button defaults cannot override transparent navigation buttons.

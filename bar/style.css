@@ -2285,3 +2285,237 @@ tooltip {
   border-radius: 0;
   box-shadow: none;
 }
+
+/* Quick settings shares the rail's neutral surface and clear state hierarchy. */
+window.control-center-window .control-center-root {
+  padding: 20px;
+  background: @cockpit_shell;
+  border-color: mix(@cockpit_shell, @cockpit_text, 0.14);
+  border-spacing: 12px;
+}
+window.control-center-window .control-header {
+  min-height: 44px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid mix(@cockpit_shell, @cockpit_text, 0.12);
+}
+window.control-center-window .control-center-title {
+  font-size: 20px;
+  font-weight: 650;
+}
+window.control-center-window .supporting-text {
+  color: @cockpit_muted;
+  font-size: 12px;
+}
+window.control-center-window .section-eyebrow {
+  min-height: 18px;
+  margin-top: 4px;
+  color: @cockpit_muted;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+}
+window.control-center-window button {
+  background: mix(@cockpit_shell, @cockpit_text, 0.06);
+}
+window.control-center-window button:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.12);
+}
+window.control-center-window button:focus-visible,
+window.control-center-window switch:focus-visible,
+window.control-center-window scale:focus-visible {
+  outline: 2px solid @primary;
+  outline-offset: -2px;
+}
+window.control-center-window .quick-tile {
+  min-height: 60px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid mix(@cockpit_shell, @cockpit_text, 0.08);
+  background: mix(@cockpit_shell, @cockpit_text, 0.035);
+}
+window.control-center-window .quick-tile.enabled {
+  background: mix(@cockpit_shell, @primary, 0.10);
+  border-color: mix(@cockpit_shell, @primary, 0.24);
+}
+window.control-center-window button.quick-tile-body {
+  min-height: 44px;
+  padding: 4px;
+  background: transparent;
+}
+window.control-center-window button.quick-tile-body:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.06);
+}
+window.control-center-window .quick-tile-icon {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 4px;
+  background: transparent;
+}
+window.control-center-window .quick-tile.enabled .quick-tile-icon {
+  color: @primary;
+  background: transparent;
+}
+window.control-center-window button.control-close,
+window.control-center-window button.control-back,
+window.control-center-window button.tile-action,
+window.control-center-window button.suggestion-card-dismiss,
+window.control-center-window button.bluetooth-forget-button {
+  background: transparent;
+  color: @cockpit_muted;
+}
+window.control-center-window button.control-close:hover,
+window.control-center-window button.control-back:hover,
+window.control-center-window button.tile-action:hover,
+window.control-center-window button.suggestion-card-dismiss:hover,
+window.control-center-window button.bluetooth-forget-button:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.10);
+  color: @cockpit_text;
+}
+window.control-center-window switch {
+  min-width: 32px;
+  min-height: 18px;
+  padding: 2px;
+  border: 1px solid mix(@cockpit_shell, @cockpit_text, 0.18);
+  background: mix(@cockpit_shell, @cockpit_text, 0.10);
+}
+window.control-center-window switch:checked {
+  background: @primary;
+  border-color: @primary;
+}
+window.control-center-window switch slider {
+  min-width: 14px;
+  min-height: 14px;
+  background: @cockpit_muted;
+  border: 0;
+  box-shadow: none;
+}
+window.control-center-window switch:checked slider {
+  background: @on_primary;
+}
+window.control-center-window .control-slider-row {
+  min-height: 36px;
+  padding: 4px 0;
+  background: transparent;
+}
+window.control-center-window .control-slider-icon,
+window.control-center-window button.volume-mute-button {
+  background: transparent;
+  color: @cockpit_muted;
+}
+window.control-center-window button.volume-mute-button:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.10);
+}
+window.control-center-window .control-slider-row scale {
+  min-height: 28px;
+  padding: 0 6px;
+}
+window.control-center-window .control-slider-row scale trough {
+  min-height: 6px;
+  background: mix(@cockpit_shell, @cockpit_text, 0.14);
+}
+window.control-center-window .control-slider-row scale highlight {
+  min-height: 6px;
+  background: @primary;
+}
+window.control-center-window .control-slider-row scale slider {
+  min-width: 12px;
+  min-height: 18px;
+  margin: -6px 0;
+  background: @cockpit_text;
+}
+window.control-center-window .slider-value {
+  min-width: 44px;
+  padding: 0;
+  background: transparent;
+  font-weight: 500;
+}
+window.control-center-window .suggestion-card,
+window.control-center-window .routine-controls,
+window.control-center-window .detail-hero,
+window.control-center-window .media-card,
+window.control-center-window .time-hero,
+window.control-center-window .network-graph-card,
+window.control-center-window .ai-provider-card,
+window.control-center-window .bluetooth-pairing-card {
+  background: mix(@cockpit_shell, @cockpit_text, 0.035);
+  border: 0;
+}
+window.control-center-window .suggestion-card {
+  min-height: 48px;
+  padding: 8px;
+  border-left: 2px solid mix(@cockpit_shell, @primary, 0.60);
+}
+window.control-center-window .suggestion-card-icon,
+window.control-center-window .audio-output-icon,
+window.control-center-window .bluetooth-device-icon {
+  background: transparent;
+}
+window.control-center-window button.suggestion-card-action {
+  color: @primary;
+  background: mix(@cockpit_shell, @primary, 0.14);
+  font-size: 12px;
+  font-weight: 600;
+}
+window.control-center-window button.suggestion-card-action:hover {
+  color: @on_primary;
+  background: @primary;
+}
+window.control-center-window .routine-controls {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+window.control-center-window button.summary-tile {
+  padding: 10px;
+  background: mix(@cockpit_shell, @cockpit_text, 0.045);
+  border: 0;
+}
+window.control-center-window button.summary-tile:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.10);
+}
+window.control-center-window .audio-output-row,
+window.control-center-window .keyboard-layout-row,
+window.control-center-window .bluetooth-device-row {
+  background: mix(@cockpit_shell, @cockpit_text, 0.035);
+  border: 0;
+  border-left: 2px solid transparent;
+}
+window.control-center-window .audio-output-row.selected,
+window.control-center-window .keyboard-layout-row.selected,
+window.control-center-window .bluetooth-device-row.connected {
+  background: mix(@cockpit_shell, @primary, 0.10);
+  border-left-color: @primary;
+}
+window.control-center-window button.bluetooth-device-primary {
+  background: transparent;
+}
+window.control-center-window button.control-footer {
+  min-height: 36px;
+  padding: 8px 0 0;
+  background: transparent;
+  border-top: 1px solid mix(@cockpit_shell, @cockpit_text, 0.12);
+}
+window.control-center-window button.control-footer:hover {
+  color: @primary;
+  background: transparent;
+}
+window.control-center-window button.power-profile-option.selected {
+  background: mix(@cockpit_shell, @primary, 0.12);
+  box-shadow: inset 0 -2px @primary;
+}
+window.control-center-window button.destructive-action {
+  color: @error;
+  background: mix(@cockpit_shell, @error, 0.10);
+}
+window.control-center-window button.destructive-action:hover {
+  background: mix(@cockpit_shell, @error, 0.20);
+}
+window.control-center-window .summary-tile,
+window.control-center-window .power-stat {
+  background: mix(@cockpit_shell, @cockpit_text, 0.045);
+  border: 0;
+}
+window.control-center-window .detail-hero-icon,
+window.control-center-window .time-hero-icon {
+  color: @primary;
+  background: transparent;
+}
