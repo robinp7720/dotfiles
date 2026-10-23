@@ -88,6 +88,9 @@ local settings = {
     -- Hyprspace registers under plugin.overview
     overview = {
         disableGestures = false,
+        -- Overlay the workspace strip without shrinking or reflowing tiled windows.
+        affectStrut = false,
+        overrideGaps = false,
     },
     hyprexpo = {
         columns = 3,
