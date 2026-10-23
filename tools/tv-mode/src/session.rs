@@ -240,20 +240,46 @@ fn preflight(config: &mut Config) -> Result<()> {
 
     wait_for_display_modes(config, DISPLAY_WAIT, || hypr_json("monitors"))?;
 
-    let cards = output("pactl", &["list", "cards"])?;
-    let cards = String::from_utf8_lossy(&cards.stdout);
-    ensure!(
-        cards.contains(&format!("Name: {}", config.audio.card)),
-        "audio card {} is unavailable",
-        config.audio.card
-    );
-    ensure!(
-        cards.contains(&format!("{}:", config.audio.tv_profile)),
-        "audio profile {} is unavailable on {}",
-        config.audio.tv_profile,
-        config.audio.card
-    );
-    Ok(())
+    wait_for_audio_profile(config, DISPLAY_WAIT, || {
+        let cards = output_text("pactl", &["-f", "json", "list", "cards"])?;
+        serde_json::from_str(&cards).context("failed to parse pactl card JSON")
+    })
+}
+
+fn wait_for_audio_profile(
+    config: &Config,
+    wait: Duration,
+    mut read_cards: impl FnMut() -> Result<Value>,
+) -> Result<()> {
+    let deadline = Instant::now() + wait;
+    loop {
+        let cards = read_cards()?;
+        let cards = cards
+            .as_array()
+            .context("pactl cards did not return an array")?;
+        let card = cards
+            .iter()
+            .find(|card| string(card, "name") == Some(&config.audio.card));
+        let profile = card
+            .and_then(|card| card.get("profiles"))
+            .and_then(|profiles| profiles.get(&config.audio.tv_profile));
+        if profile
+            .and_then(|profile| profile.get("available"))
+            .and_then(Value::as_bool)
+            == Some(true)
+        {
+            return Ok(());
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        ensure!(
+            !remaining.is_zero(),
+            "TV audio profile {} on {} is not available after {} seconds; turn on the TV and select the connected HDMI input, then retry",
+            config.audio.tv_profile,
+            config.audio.card,
+            wait.as_secs()
+        );
+        thread::sleep(remaining.min(Duration::from_millis(250)));
+    }
 }
 
 fn wait_for_display_modes(
@@ -941,6 +967,43 @@ mod tests {
 
     fn display_config() -> Config {
         toml::from_str(include_str!("../../../tv-mode/config.toml")).unwrap()
+    }
+
+    #[test]
+    fn audio_readiness_waits_for_configured_card_and_profile() {
+        let config = display_config();
+        let card = |available| {
+            serde_json::json!([{
+                "name": config.audio.card,
+                "profiles": {config.audio.tv_profile.clone(): {"available": available}}
+            }])
+        };
+        let mut observations = [serde_json::json!([]), card(false), card(true)].into_iter();
+        wait_for_audio_profile(&config, Duration::from_secs(2), || {
+            Ok(observations.next().expect("unexpected audio query"))
+        })
+        .unwrap();
+        assert!(observations.next().is_none());
+    }
+
+    #[test]
+    fn audio_readiness_rejects_unavailable_profile_and_wrong_card() {
+        let config = display_config();
+        for cards in [
+            serde_json::json!([{"name": config.audio.card, "profiles": {
+                config.audio.tv_profile.clone(): {"available": false}
+            }}]),
+            serde_json::json!([{"name": "another-card", "profiles": {
+                config.audio.tv_profile.clone(): {"available": true}
+            }}]),
+        ] {
+            let error =
+                wait_for_audio_profile(&config, Duration::ZERO, || Ok(cards.clone())).unwrap_err();
+            assert!(error.to_string().contains("connected HDMI input"));
+        }
+        assert!(
+            wait_for_audio_profile(&config, Duration::ZERO, || Ok(serde_json::json!({}))).is_err()
+        );
     }
 
     #[test]

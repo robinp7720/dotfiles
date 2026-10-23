@@ -105,9 +105,9 @@ fn start_service() -> Result<()> {
     if !status.success() {
         anyhow::bail!("systemctl failed to start tv-mode.service");
     }
-    // Display negotiation can outlast the old four-second socket timeout.
+    // Display and HDMI audio negotiation each have a readiness timeout.
     // Starting an already active service is a no-op, including during preflight.
-    let deadline = Instant::now() + session::DISPLAY_WAIT + Duration::from_secs(10);
+    let deadline = Instant::now() + session::DISPLAY_WAIT * 2 + Duration::from_secs(10);
     loop {
         match control::send(ControlCommand::Show, Duration::from_millis(250)) {
             Ok(()) => return Ok(()),

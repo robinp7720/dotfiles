@@ -44,7 +44,8 @@ Display modes are matched by resolution and the nearest advertised refresh
 rate within 0.2%, so nominal 30/60/120 Hz settings also accept fractional
 29.97/59.94/119.88 Hz timings. The selected advertised mode is applied and
 used by the fullscreen home screen. Startup waits up to 30 seconds for the TV to
-reconnect and advertise all configured modes, before changing the desktop. If
+reconnect and advertise all configured modes, then up to 30 seconds for the
+configured HDMI audio profile to become available, before changing the desktop. If
 the TV remains unavailable or a mode is unsupported, startup fails with a message
 in `journalctl --user -u tv-mode.service`; turn on the TV, select its connected
 input, and retry.
