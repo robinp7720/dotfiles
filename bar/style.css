@@ -708,14 +708,6 @@ window.control-center-window scale:focus-visible {
   background: transparent;
 }
 
-.routine-controls {
-  min-height: 34px;
-  padding: 3px 6px 3px 10px;
-  color: @cockpit_muted;
-  background: mix(@cockpit_panel, @cockpit_text, 0.035);
-  border-radius: 0;
-}
-
 .section-eyebrow {
   min-height: 14px;
   color: alpha(@cockpit_muted, 0.82);
@@ -2429,7 +2421,6 @@ window.control-center-window .slider-value {
   font-weight: 500;
 }
 window.control-center-window .suggestion-card,
-window.control-center-window .routine-controls,
 window.control-center-window .detail-hero,
 window.control-center-window .media-card,
 window.control-center-window .time-hero,
@@ -2458,11 +2449,6 @@ window.control-center-window button.suggestion-card-action {
 window.control-center-window button.suggestion-card-action:hover {
   color: @on_primary;
   background: @primary;
-}
-window.control-center-window .routine-controls {
-  min-height: 28px;
-  padding: 4px 8px;
-  font-size: 12px;
 }
 window.control-center-window button.summary-tile {
   padding: 10px;

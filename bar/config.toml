@@ -53,6 +53,8 @@ ambient_motion = "meaningful"
 suggestions = true
 
 [routines]
+# Controls learning and routine suggestions; reload Vigil with SIGHUP.
+# Clear saved history with `vigil routines clear`.
 enabled = true
 context = "rich"
 minimum_repetitions = 3
