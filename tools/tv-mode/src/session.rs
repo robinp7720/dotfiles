@@ -658,9 +658,48 @@ fn switch_audio_to_tv(config: &Config) -> Result<()> {
             &config.audio.tv_profile,
         ],
     )?;
-    wait_for_sink(&config.audio.tv_sink)?;
-    run("pactl", &["set-default-sink", &config.audio.tv_sink])?;
-    move_all_streams(&config.audio.tv_sink)
+    let deadline = Instant::now() + SINK_WAIT;
+    let sink = loop {
+        let sinks: Value =
+            serde_json::from_str(&output_text("pactl", &["-f", "json", "list", "sinks"])?)?;
+        if let Some(sink) = resolve_tv_sink(config, &sinks) {
+            break sink.to_owned();
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "timed out waiting for TV audio on {}",
+            config.audio.card
+        );
+        thread::sleep(Duration::from_millis(75));
+    };
+    run("pactl", &["set-default-sink", &sink])?;
+    move_all_streams(&sink)
+}
+
+fn resolve_tv_sink<'a>(config: &Config, sinks: &'a Value) -> Option<&'a str> {
+    let profile = config.audio.tv_profile.strip_prefix("output:")?;
+    let matches: Vec<_> = sinks
+        .as_array()?
+        .iter()
+        .filter(|sink| {
+            sink.get("properties").is_some_and(|properties| {
+                string(properties, "device.name") == Some(&config.audio.card)
+                    && string(properties, "device.profile.name") == Some(profile)
+            })
+        })
+        .filter_map(|sink| string(sink, "name"))
+        .collect();
+    matches
+        .iter()
+        .copied()
+        .find(|name| *name == config.audio.tv_sink)
+        .or_else(|| {
+            if matches.len() == 1 {
+                Some(matches[0])
+            } else {
+                None
+            }
+        })
 }
 
 fn move_all_streams(sink: &str) -> Result<()> {
@@ -967,6 +1006,29 @@ mod tests {
 
     fn display_config() -> Config {
         toml::from_str(include_str!("../../../tv-mode/config.toml")).unwrap()
+    }
+
+    #[test]
+    fn tv_sink_uses_card_and_profile_despite_pipewire_suffix() {
+        let config = display_config();
+        let sink = |name: &str, card: &str, profile: &str| {
+            serde_json::json!({
+                "name": name, "properties": {"device.name": card, "device.profile.name": profile}
+            })
+        };
+        let name = format!("{}.5", config.audio.tv_sink);
+        let sinks = serde_json::json!([
+            sink(&config.audio.tv_sink, "wrong-card", "hdmi-stereo-extra2"),
+            sink("wrong-profile", &config.audio.card, "hdmi-stereo-extra1"),
+            sink(&name, &config.audio.card, "hdmi-stereo-extra2")
+        ]);
+        assert_eq!(resolve_tv_sink(&config, &sinks), Some(name.as_str()));
+        assert_eq!(resolve_tv_sink(&config, &serde_json::json!([])), None);
+        let ambiguous = serde_json::json!([
+            sink("one", &config.audio.card, "hdmi-stereo-extra2"),
+            sink("two", &config.audio.card, "hdmi-stereo-extra2")
+        ]);
+        assert_eq!(resolve_tv_sink(&config, &ambiguous), None);
     }
 
     #[test]
