@@ -42,7 +42,7 @@ assert_contains matugen/templates/luma.css \
   'background-image: none;'
 assert_contains matugen/templates/luma.css \
   'background-color: mix(@luma_surface, @luma_surface_highest, 0.66);'
-assert_count matugen/templates/luma.css 1 \
+assert_count matugen/templates/luma.css 2 \
   'background-color: transparent;'
 assert_contains hypr/hyprlock.conf \
   'source = ~/.config/hypr/hyprlock-colors.conf'

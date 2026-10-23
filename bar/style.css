@@ -2113,8 +2113,7 @@ window.bar-window {
   background: @cockpit_shell;
 }
 .bar-root {
-  outline: 1px solid @cockpit_border;
-  outline-offset: -1px;
+  border-bottom: 1px solid @cockpit_border;
 }
 .bar-island, .bar-island:hover {
   background: transparent;
@@ -2122,8 +2121,31 @@ window.bar-window {
   box-shadow: none;
 }
 .workspace-island, .context-island {
-  border-right: 1px solid @cockpit_border;
+  border-right: 1px solid mix(@cockpit_shell, @cockpit_border, 0.55);
 }
+/* Inset controls keep the continuous rail visible around hover/selection. */
+.workspace-button, button.launcher-button, button.system-module,
+.title-button {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+button.launcher-button {
+  background: transparent;
+}
+.workspace-button {
+  min-width: 24px;
+}
+.workspace-pill {
+  background: mix(@cockpit_shell, @primary, 0.18);
+}
+.workspace-button.active,
+.workspace-strip.pill-moving .workspace-button.under-pill {
+  color: @primary;
+}
+.workspace-button.active {
+  background: mix(@cockpit_shell, @primary, 0.18);
+}
+
 .ai-provider-card, .suggestion-card, .quick-tile, .media-card,
 .summary-tile, .network-graph-card, .detail-hero, .time-hero {
   border: 0;
@@ -2134,8 +2156,11 @@ button:focus-visible {
   outline: 2px solid @primary;
   outline-offset: -2px;
 }
+.workspace-button {
+  box-shadow: inset 0 -2px transparent;
+}
 .workspace-button.active {
-  border-bottom: 2px solid @primary;
+  box-shadow: inset 0 -2px @primary;
 }
 .clock-chip, button.clock label, button.resources label,
 .workspace-button label, .resource-chip,

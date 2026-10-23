@@ -40,7 +40,7 @@ tooltip {
   border: 1px solid alpha(@luma_outline_variant, 0.64);
   border-radius: 0;
   box-shadow: none;
-  padding: 16px;
+  padding: 20px;
 }
 
 .launcher-context {
@@ -100,10 +100,10 @@ tooltip {
 }
 
 .launcher-entry {
-  min-height: 54px;
-  padding: 6px 40px 6px 12px;
+  min-height: 40px;
+  padding: 6px 40px 6px 16px;
   border-radius: 0;
-  border: 1px solid alpha(@luma_outline_variant, 0.68);
+  border: 1px solid @luma_outline_variant;
   background-color: mix(@luma_surface, @luma_surface_highest, 0.66);
   color: @luma_on_surface;
   box-shadow: none;
@@ -123,14 +123,15 @@ tooltip {
 .launcher-row {
   margin-bottom: 4px;
   border-radius: 0;
-  border: 1px solid transparent;
+  border: 0;
+  border-left: 2px solid transparent;
   background-color: transparent;
 }
 
 .launcher-row:selected {
   background-color: mix(@luma_surface, @luma_primary_container, 0.76);
-  background-color: @luma_surface; background-image: none;
-  border-color: alpha(@luma_primary, 0.52);
+  background-image: none;
+  border-left-color: @luma_primary;
 }
 
 .launcher-row-status {
@@ -145,8 +146,8 @@ tooltip {
 .launcher-icon-wrap {
   min-width: 34px;
   border-radius: 0;
-  background-color: mix(@luma_surface, @luma_surface_highest, 0.62);
-  border: 1px solid alpha(@luma_outline_variant, 0.54);
+  background-color: transparent;
+  border: 0;
   padding: 6px;
 }
 
@@ -237,8 +238,8 @@ tooltip {
   border-left: 2px solid @luma_primary;
 }
 .launcher-entry:focus-within {
-  outline: 2px solid @luma_primary;
-  outline-offset: -2px;
+  outline: none;
+  border-color: @luma_primary;
 }
 .settings-card, .launcher-context {
   border: 0;

@@ -5,7 +5,7 @@ structural separators, and restrained morphing motion. This covers Vigil, Luma,
 notifications, OSD, and compositor window decoration. Lock screen, greeter,
 TV mode, and application interiors retain their existing styling for this pass.
 
-- Spacing: 4, 8, 12, 16, and 24 px.
+- Spacing: 4, 8, 12, 16, 20, and 24 px.
 - Geometry: 0 px corner radius for panels, rows, controls, and compositor frames.
   Circular application artwork may keep its intrinsic shape.
 - Structure: one continuous 44 px bar at the top edge of every monitor. Quick
@@ -65,3 +65,9 @@ last file from `Luma/style.css`, preserving personal `config.json` preferences.
 Both CSS files reload while Luma is running. Keep generated colors and panel
 styling in `matugen/templates/luma.css`, and stable interaction overrides in
 `Luma/style.css`. Removing both overrides restores Luma's original appearance.
+
+The bar keeps 4 px vertical clearance around controls, with a subdued workspace
+fill and inset accent underline that does not change allocation. Luma uses a
+20 px panel inset, a compact search field, unframed icons, and a tinted selected
+row with a fixed-width leading accent. Thin dividers separate filters and hints;
+hover must preserve the selected row fill.

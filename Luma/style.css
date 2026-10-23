@@ -1,7 +1,8 @@
 /* User-defined interaction styling overrides Luma defaults. */
 /* Matugen supplies panel styling and color roles through theme.css. */
 .launcher-navigation {
-  padding: 0 2px;
+  padding: 0 0 4px;
+  border-bottom: 1px solid @luma_outline_variant;
 }
 
 button.launcher-mode {
@@ -31,7 +32,8 @@ button.launcher-mode:checked {
 .launcher-hints {
   color: @luma_on_surface_variant;
   font-size: 12px;
-  padding: 4px 4px 0;
+  padding: 12px 4px 0;
+  border-top: 1px solid @luma_outline_variant;
 }
 
 .launcher-entry,
@@ -42,7 +44,7 @@ button.launcher-mode,
               color 160ms ease-out;
 }
 
-.launcher-row:hover {
+.launcher-row:hover:not(:selected) {
   background-color: @luma_surface_high;
 }
 
