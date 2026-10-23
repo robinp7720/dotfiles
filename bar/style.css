@@ -1170,8 +1170,18 @@ window.control-center-window scale:focus-visible {
   background: @cockpit_panel;
 }
 
+/* Keep the full-card overlay clear when artwork is present. */
+.media-card.has-art .media-content {
+  background: transparent;
+}
+
 .media-copy {
   padding: 0 0 2px 0;
+}
+
+.media-card.has-art .media-copy {
+  padding: 6px 8px;
+  background: @cockpit_panel;
 }
 
 .media-title {

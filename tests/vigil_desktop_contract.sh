@@ -409,6 +409,8 @@ require_fixed 'play.add_css_class("media-transport-primary");' "tools/bar/src/ui
 require_fixed 'root.set_vexpand(false);' "tools/bar/src/ui/control_center/audio.rs"
 require_fixed 'root.set_size_request(-1, 140);' "tools/bar/src/ui/control_center/audio.rs"
 require_fixed 'artwork.set_content_fit(gtk::ContentFit::Cover);' "tools/bar/src/ui/control_center/audio.rs"
+require_fixed 'root.set_measure_overlay(&artwork, false);' "tools/bar/src/ui/control_center/audio.rs"
+require_fixed 'root.set_clip_overlay(&artwork, true);' "tools/bar/src/ui/control_center/audio.rs"
 require_fixed 'self.artwork.show(' "tools/bar/src/ui/control_center.rs"
 require_fixed '{{mpris:artUrl}}' "tools/bar/src/sources/media.rs"
 require_fixed '&& same_track(previous, &event)' "tools/bar/src/sources/media.rs"
