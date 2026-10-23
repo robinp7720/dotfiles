@@ -87,7 +87,7 @@ local settings = {
     },
     -- Hyprspace registers under plugin.overview
     overview = {
-        disableGestures = false,
+        disableGestures = true,
         -- Overlay the workspace strip without shrinking or reflowing tiled windows.
         affectStrut = false,
         overrideGaps = false,
@@ -114,16 +114,23 @@ for _, plugin in ipairs(hl.get_loaded_plugins()) do
     end
 end
 
--- 1:1 Continuous finger-tracked gestures:
--- 3 fingers VERTICAL:
---   Swipe UP animates all windows on the pointer's monitor into Mission Control;
---   swipe DOWN closes it. Use configured scope so other monitors stay untouched.
---   When hymission is closed, swipe DOWN is passed to Hyprspace which tracks 1:1 from the top.
+-- Directional swipes animate into their requested scope, including when switching
+-- from the other overview. The continuous `recommand` mode hardcodes ForceAll
+-- across every monitor, so use native directional gestures for monitor-local scope.
 if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.gesture then
-    pcall(hl.plugin.hymission.gesture, {
+    hl.gesture({
         fingers = 3,
-        direction = "vertical",
-        action = "hymission:toggle",
+        direction = "down",
+        action = function()
+            hl.plugin.hymission.open("onlycurrentworkspace")
+        end,
+    })
+    hl.gesture({
+        fingers = 3,
+        direction = "up",
+        action = function()
+            hl.plugin.hymission.open()
+        end,
     })
 
     -- 3 fingers HORIZONTAL: hymission-aware 1:1 continuous workspace swipe
