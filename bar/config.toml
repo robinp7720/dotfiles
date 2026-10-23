@@ -14,8 +14,6 @@ full = [
   "focused_app",
   "focused_title",
   "context",
-  "keyboard_layout",
-  "resources",
   "ai_usage",
   "network",
   "bluetooth",

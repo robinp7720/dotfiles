@@ -110,7 +110,7 @@ assert_contains matugen/templates/luma.css '.launcher-level scale highlight {'
 assert_contains tools/tv-mode/src/ui.rs 'self.state["theme"] = theme();'
 
 # Industrial core shell keeps actual backplates opaque and native geometry aligned.
-assert_contains matugen/templates/bar-colors.css '@define-color cockpit_shell @surface_container;'
+assert_contains matugen/templates/bar-colors.css '@define-color cockpit_shell mix(#111317, @surface, 0.24);'
 assert_contains matugen/templates/bar-colors.css '@define-color cockpit_panel @surface;'
 assert_not_contains bar/style.css 'linear-gradient('
 assert_not_contains matugen/templates/luma.css 'linear-gradient('

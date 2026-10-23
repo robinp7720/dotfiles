@@ -66,8 +66,15 @@ Both CSS files reload while Luma is running. Keep generated colors and panel
 styling in `matugen/templates/luma.css`, and stable interaction overrides in
 `Luma/style.css`. Removing both overrides restores Luma's original appearance.
 
-The bar keeps 4 px vertical clearance around controls, with a subdued workspace
-fill and inset accent underline that does not change allocation. Luma uses a
-20 px panel inset, a compact search field, unframed icons, and a tinted selected
-row with a fixed-width leading accent. Thin dividers separate filters and hints;
-hover must preserve the selected row fill.
+The bar uses a near-neutral dark rail with a small wallpaper tint and a single
+bottom hairline. Launcher, workspace strip, and system controls have 6 px vertical
+clearance; workspace buttons have no vertical margins or horizontal padding so
+the native moving marker matches the entire tab. Accent fills mark the active
+workspace; the launcher and clock use quieter fills. No vertical cell dividers.
+The center context uses supporting text, while critical states retain semantic
+colors. CPU/memory and keyboard layout live in quick settings; AI usage, network,
+Bluetooth, audio, power, notifications, and time remain on the primary rail.
+
+Luma uses a 20 px panel inset, a compact search field, unframed icons, and a tinted
+selected row with a fixed-width leading accent. Thin dividers separate filters
+and hints; hover must preserve the selected row fill.

@@ -2108,42 +2108,141 @@ button.system-module.bluetooth.needs-attention image {
   }
 }
 
-/* Industrial shell: opaque backplates, structural separators, explicit focus. */
+/* The desktop rail: three calm zones on one opaque backplate. */
 window.bar-window {
   background: @cockpit_shell;
+  font-size: 14px;
 }
 .bar-root {
-  border-bottom: 1px solid @cockpit_border;
+  border-bottom: 1px solid mix(@cockpit_shell, @cockpit_text, 0.10);
 }
 .bar-island, .bar-island:hover {
+  min-height: 0;
+  padding: 0 12px;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
-.workspace-island, .context-island {
-  border-right: 1px solid mix(@cockpit_shell, @cockpit_border, 0.55);
+.workspace-island {
+  border-spacing: 12px;
 }
-/* Inset controls keep the continuous rail visible around hover/selection. */
-.workspace-button, button.launcher-button, button.system-module,
-.title-button {
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-button.launcher-button {
-  background: transparent;
+/* Inset the strip, not its buttons: the animated marker follows strip origin. */
+.workspace-strip {
+  margin-top: 6px;
+  margin-bottom: 6px;
+  border-spacing: 4px;
 }
 .workspace-button {
-  min-width: 24px;
+  min-width: 36px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: @cockpit_muted;
+  border: 0;
+  box-shadow: none;
 }
-.workspace-pill {
-  background: mix(@cockpit_shell, @primary, 0.18);
+.workspace-button:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.08);
+}
+.workspace-pill, .workspace-button.active {
+  background: @primary;
 }
 .workspace-button.active,
 .workspace-strip.pill-moving .workspace-button.under-pill {
-  color: @primary;
+  color: @on_primary;
 }
-.workspace-button.active {
-  background: mix(@cockpit_shell, @primary, 0.18);
+button.launcher-button {
+  min-width: 32px;
+  min-height: 30px;
+  margin: 6px 0;
+  padding: 0 4px;
+  color: @primary;
+  background: mix(@cockpit_shell, @primary, 0.14);
+}
+button.launcher-button:hover {
+  color: @on_primary;
+  background: @primary;
+}
+.app-label {
+  margin: 0 12px;
+  color: @cockpit_text;
+  font-size: 13px;
+  font-weight: 500;
+}
+.context-island {
+  padding: 0 16px;
+}
+.title-button {
+  min-height: 30px;
+  margin: 6px 0;
+  padding: 0 12px;
+}
+.title-label, .context-chip {
+  color: @cockpit_muted;
+  font-size: 13px;
+  font-weight: 400;
+}
+.context-chip {
+  margin: 6px 0;
+  padding: 0 12px;
+}
+.context-chip.proactive {
+  background: transparent;
+}
+.system-items, .system-cluster {
+  border-spacing: 4px;
+}
+button.system-module {
+  min-height: 30px;
+  margin: 6px 0;
+  padding: 0 10px;
+  color: @cockpit_text;
+}
+button.system-module label {
+  font-size: 13px;
+  font-weight: 500;
+}
+button.system-module:hover, .title-button:hover {
+  background: mix(@cockpit_shell, @cockpit_text, 0.09);
+}
+button.system-module.disconnected,
+button.system-module.inactive, button.system-module.stale {
+  color: @cockpit_muted;
+}
+button.system-module.critical {
+  color: @error;
+}
+button.system-module.ai-usage {
+  color: @cockpit_muted;
+  margin-right: 8px;
+}
+button.system-module.clock, .clock-chip {
+  padding: 0 16px;
+  margin-left: 8px;
+  color: @cockpit_text;
+  background: mix(@cockpit_shell, @cockpit_text, 0.07);
+}
+button.system-module.clock label, .clock-chip {
+  font-size: 14px;
+  font-weight: 600;
+}
+button.system-module.notifications.has-unread {
+  background: transparent;
+}
+button.system-module.notifications.has-unread label {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  color: @primary;
+  font-size: 12px;
+}
+window.compact-bar .bar-island {
+  padding: 0 8px;
+}
+window.compact-bar button.system-module {
+  padding: 0 6px;
 }
 
 .ai-provider-card, .suggestion-card, .quick-tile, .media-card,
@@ -2155,12 +2254,6 @@ button.launcher-button {
 button:focus-visible {
   outline: 2px solid @primary;
   outline-offset: -2px;
-}
-.workspace-button {
-  box-shadow: inset 0 -2px transparent;
-}
-.workspace-button.active {
-  box-shadow: inset 0 -2px @primary;
 }
 .clock-chip, button.clock label, button.resources label,
 .workspace-button label, .resource-chip,
