@@ -59,8 +59,8 @@ local settings = {
         switch_release_key = "Super_L",
         one_workspace_per_row = 0,
         only_active_workspace = 0,
-        only_active_monitor = 0,
-        show_special = 0,
+        only_active_monitor = 1,
+        show_special = 1,
         workspace_change_keeps_overview = 1,
         hide_hyprbars_during_overview = 0,
         workspace_strip_anchor = "left",
@@ -116,14 +116,14 @@ end
 
 -- 1:1 Continuous finger-tracked gestures:
 -- 3 fingers VERTICAL:
---   Swipe UP opens hymission (Mission Control) with 1:1 tracking; swipe DOWN closes it.
+--   Swipe UP animates all windows on the pointer's monitor into Mission Control;
+--   swipe DOWN closes it. Use configured scope so other monitors stay untouched.
 --   When hymission is closed, swipe DOWN is passed to Hyprspace which tracks 1:1 from the top.
 if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.gesture then
     pcall(hl.plugin.hymission.gesture, {
         fingers = 3,
         direction = "vertical",
         action = "hymission:toggle",
-        args = "forceall",
     })
 
     -- 3 fingers HORIZONTAL: hymission-aware 1:1 continuous workspace swipe
