@@ -32,10 +32,34 @@ return {
     },
   },
   {
+    "nvim-neo-tree/neo-tree.nvim",
+    branch = "v3.x",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "MunifTanjim/nui.nvim",
+      "nvim-tree/nvim-web-devicons",
+    },
+    cmd = "Neotree",
+    keys = {
+      { "<C-n>", "<cmd>Neotree toggle<cr>", desc = "Toggle file tree" },
+    },
+    opts = {
+      window = {
+        position = "left",
+        width = 32,
+      },
+      filesystem = {
+        hijack_netrw_behavior = "disabled",
+        follow_current_file = { enabled = true },
+        use_libuv_file_watcher = true,
+      },
+    },
+  },
+  {
     "stevearc/oil.nvim",
     cmd = "Oil",
     keys = {
-      { "<C-n>", "<cmd>Oil<cr>", desc = "File explorer" },
+      { "-", "<cmd>Oil<cr>", desc = "Open parent directory" },
     },
     opts = {
       default_file_explorer = true,
