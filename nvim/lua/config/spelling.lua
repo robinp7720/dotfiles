@@ -3,28 +3,24 @@ local M = {}
 local function use_fzf_select()
   local ok, fzf = pcall(require, "fzf-lua")
   if ok and fzf.register_ui_select then
-    pcall(fzf.register_ui_select)
+    pcall(fzf.register_ui_select, nil, true)
   end
-end
-
-local function replace_word(choice)
-  if not choice then
-    return
-  end
-
-  local row = vim.api.nvim_win_get_cursor(0)[1]
-  local start_col = vim.fn.searchpos([[\<]], "bcn", row)[2] - 1
-  local end_col = vim.fn.searchpos([[\>]], "cn", row)[2]
-
-  if start_col < 0 or end_col <= start_col then
-    return
-  end
-
-  vim.api.nvim_buf_set_text(0, row - 1, start_col, row - 1, end_col, { choice })
 end
 
 function M.fix_word()
-  local word = vim.fn.expand("<cword>")
+  local buf = vim.api.nvim_get_current_buf()
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local row, col = cursor[1] - 1, cursor[2]
+  local line = vim.api.nvim_get_current_line()
+  -- Like <cword>, select the keyword under or after the cursor. matchstrpos
+  -- returns zero-based byte offsets with an exclusive end, as set_text needs.
+  local word, start_col, end_col
+  local offset = 0
+  repeat
+    word, start_col, end_col = unpack(vim.fn.matchstrpos(line, [[\k\+]], offset))
+    offset = end_col
+  until start_col < 0 or end_col > col
+
   if word == "" then
     vim.notify("No word under cursor", vim.log.levels.INFO)
     return
@@ -36,10 +32,22 @@ function M.fix_word()
     return
   end
 
+  local changedtick = vim.api.nvim_buf_get_changedtick(buf)
   use_fzf_select()
   vim.ui.select(suggestions, {
     prompt = "Replace " .. word .. " with",
-  }, replace_word)
+  }, function(choice)
+    if not choice or not vim.api.nvim_buf_is_loaded(buf) then
+      return
+    end
+    -- Selection is asynchronous: never apply a stale range to an edited buffer
+    -- or use the picker/current window as the replacement target.
+    if vim.api.nvim_buf_get_changedtick(buf) ~= changedtick or not vim.bo[buf].modifiable then
+      vim.notify("Spelling correction skipped: buffer changed or is not editable", vim.log.levels.INFO)
+      return
+    end
+    vim.api.nvim_buf_set_text(buf, row, start_col, row, end_col, { choice })
+  end)
 end
 
 function M.fix_next()
