@@ -38,6 +38,9 @@ assert_not_contains() {
   fi
 }
 
+# Terminal opacity follows the shared Kitty config on every compositor.
+assert_not_contains scripts/launch_kitty.sh 'background_opacity='
+
 assert_contains matugen/templates/luma.css \
   'background-image: none;'
 assert_contains matugen/templates/luma.css \
