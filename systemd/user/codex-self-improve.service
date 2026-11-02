@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Codex against the dotfiles repo for one automatic improvement
+Description=Commit existing dotfiles changes and validate one Codex improvement
 After=default.target
 
 [Service]
@@ -7,6 +7,7 @@ Type=oneshot
 WorkingDirectory=%h/.dotfiles
 ExecStart=%h/.dotfiles/scripts/codex_self_improve.sh
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+EnvironmentFile=-%h/.config/codex-self-improve/environment
 Nice=10
 TimeoutStartSec=2h
 

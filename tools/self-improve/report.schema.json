@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {"type": "string", "enum": ["changed", "no_change", "failed"]},
+    "title": {"type": "string", "pattern": "^[^\\r\\n]+$"},
+    "summary": {"type": "string"},
+    "files": {"type": "array", "items": {"type": "string"}},
+    "validation": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["status", "title", "summary", "files", "validation"]
+}

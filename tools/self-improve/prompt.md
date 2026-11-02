@@ -1,31 +1,28 @@
-You are running automatically after login inside the `~/.dotfiles` repository.
+You are the improvement phase of automatic dotfiles maintenance. Existing work
+has already been grouped and committed by a separate Codex invocation. You are
+working in an isolated checkout, not the live desktop configuration.
 
-Choose exactly one small but meaningful improvement, implement it end-to-end, validate it, and stop.
+Identify at most one small, evidenced reliability improvement, implement it,
+validate it, and stop. Prefer a reproducible script/configuration bug or a
+setup/documentation mismatch. If there is no worthwhile supported change, leave
+the repository untouched and report no_change. Do not invent cosmetic work.
 
-Priority order:
-1. User-visible polish for the desktop surface.
-2. Reliability fixes in shell scripts, startup hooks, or user services.
-3. Setup or documentation mismatches that can break the configured environment.
-4. Small cleanup that removes friction without changing the overall design.
+Follow AGENTS.md and README.md, with these explicit automation constraints:
+- Work only inside the supplied checkout. Never use ~/.dotfiles or ~/.config
+  to modify or validate the live desktop. Do not reload services or use sudo.
+- Do not commit, push, send notifications, add dependencies, or edit Git config.
+  The wrapper owns validation, committing the improvement, and integration.
+- Do not initialize or modify submodules, .gitmodules, generated outputs, or
+  symlinks. Do not modify the automation, its prompts, schemas or tests.
+- Keep changes to shell helpers under scripts/ or hypr/scripts/, user systemd
+  units, niri/*.kdl, hypr/hyprland-config/*.lua, README.md or docs/*.md.
+  The wrapper rejects unsupported paths instead of guessing their validation.
+- Run the relevant existing tests. If a runtime check requires the live session,
+  choose a different improvement or report failed; do not claim it was verified.
+- Report failed if validation fails, even when you have already edited files.
 
-Constraints:
-- Follow the repository guidance in `AGENTS.md` and `README.md`.
-- Work only inside this repository.
-- Do not use sudo, do not edit files outside the repo, and do not add new external package requirements.
-- Avoid destructive or high-risk changes, large refactors, or changes that would interrupt the current session.
-- Do not edit generated theme outputs such as `bar/colors.css`; edit the Matugen source templates or code instead.
-- Prefer touching a small number of files.
-- Do not send notifications and do not create git commits; the wrapper handles that.
-
-Required workflow:
-1. Inspect the repo and identify one worthwhile improvement.
-2. Implement it completely.
-3. Run the narrowest relevant validation commands for the files you changed.
-4. If nothing is worth changing, leave the repo untouched.
-
-Your final response must be plain text with exactly these single-line fields:
-STATUS: changed|no_change|failed
-TITLE: short change title
-SUMMARY: one sentence explaining the improvement or why nothing changed
-FILES: comma-separated repo-relative paths, or none
-VALIDATION: semicolon-separated commands you ran, or none
+Return JSON matching the provided schema. The files array must contain every
+changed repo-relative path, including deletions and new files. The validation
+array must list only commands actually run. Use an empty files array when there
+are no changes. For a changed result, use a relevant Conventional Commit message
+as the title, such as `fix(media): preserve pipes in track titles`.

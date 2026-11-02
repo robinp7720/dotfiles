@@ -1,382 +1,231 @@
 #!/usr/bin/env bash
-
+# Commit existing work first; improve and validate in an independent checkout.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ASSET_DIR="$SCRIPT_DIR/../tools/self-improve"
 REPO_DIR="${CODEX_SELF_IMPROVE_REPO_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/codex-self-improve"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-LOCK_FILE="$RUNTIME_DIR/codex-self-improve.lock"
-PROMPT_FILE="${CODEX_SELF_IMPROVE_PROMPT_FILE:-$REPO_DIR/tools/self-improve/prompt.md}"
 CODEX_BIN="${CODEX_SELF_IMPROVE_CODEX_BIN:-codex}"
+PROMPT_FILE="${CODEX_SELF_IMPROVE_PROMPT_FILE:-$ASSET_DIR/prompt.md}"
 COOLDOWN_HOURS="${CODEX_SELF_IMPROVE_COOLDOWN_HOURS:-24}"
+TIMEOUT_SECONDS="${CODEX_SELF_IMPROVE_TIMEOUT_SECONDS:-1800}"
 AUTO_COMMIT="${CODEX_SELF_IMPROVE_AUTO_COMMIT:-1}"
-NOTIFY_FAILURES="${CODEX_SELF_IMPROVE_NOTIFY_FAILURES:-1}"
 FORCE_RUN=false
-
-REPORT_FILE="$STATE_DIR/last-report.txt"
-SUMMARY_FILE="$STATE_DIR/last-summary.txt"
-LOG_FILE="$STATE_DIR/last-run.log"
-LAST_BOOT_FILE="$STATE_DIR/last-boot-id"
-LAST_RUN_FILE="$STATE_DIR/last-run-epoch"
-
-usage() {
-  cat <<'USAGE'
-Usage: codex_self_improve.sh [--force] [--no-commit]
-
-Runs a guarded Codex pass against this dotfiles repository.
-
-Options:
-  --force      Ignore the per-boot and cooldown gates.
-  --no-commit  Keep successful changes in the working tree.
-  --help       Show this message.
-USAGE
-}
 
 while (($# > 0)); do
   case "$1" in
-    --force)
-      FORCE_RUN=true
-      ;;
-    --no-commit)
-      AUTO_COMMIT=0
-      ;;
+    --force) FORCE_RUN=true ;;
+    --no-commit) AUTO_COMMIT=0 ;;
     --help|-h)
-      usage
+      cat <<'USAGE'
+Usage: codex_self_improve.sh [--force] [--no-commit]
+
+Group and commit existing changes, then validate one isolated improvement.
+  --force      Ignore the per-boot and cooldown gates (other checks still apply).
+  --no-commit  Skip dirty repositories; retain improvements in an isolated checkout.
+USAGE
       exit 0
       ;;
-    *)
-      printf 'Unknown argument: %s\n' "$1" >&2
-      exit 1
-      ;;
+    *) printf 'Unknown argument: %s\n' "$1" >&2; exit 1 ;;
   esac
   shift
 done
 
-mkdir -p "$STATE_DIR"
-
-if [[ ! "$COOLDOWN_HOURS" =~ ^[0-9]+$ ]]; then
-  COOLDOWN_HOURS=24
-fi
-
-timestamp() {
-  date +"%Y-%m-%d %H:%M:%S"
-}
-
-log() {
-  printf '[%s] %s\n' "$(timestamp)" "$*" >>"$LOG_FILE"
-}
-
-send_notification() {
-  local urgency="$1"
-  local title="$2"
-  local body="$3"
-
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a "Codex Self Improve" -u "$urgency" "$title" "$body" >/dev/null 2>&1 || true
-  fi
-}
-
-trim() {
-  local value="${1:-}"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "$value"
-}
-
-report_field() {
-  local key="$1"
-  local value=""
-
-  if [[ -f "$REPORT_FILE" ]]; then
-    value="$(sed -n "s/^${key}: //p" "$REPORT_FILE" | head -n1)"
-  fi
-
-  trim "$value"
-}
-
-current_boot_id() {
-  if [[ -r /proc/sys/kernel/random/boot_id ]]; then
-    cat /proc/sys/kernel/random/boot_id
-  fi
-}
-
-collect_changed_files() {
-  (
-    cd "$REPO_DIR"
-    {
-      git diff --name-only --relative HEAD --
-      git ls-files --others --exclude-standard
-    } | sed '/^$/d' | sort -u
-  )
-}
-
-format_changed_files() {
-  local -a files=("$@")
-  local joined=""
-  local shown=0
-  local file
-
-  for file in "${files[@]}"; do
-    if ((shown == 3)); then
-      joined+=", +$(( ${#files[@]} - shown )) more"
-      break
-    fi
-
-    if [[ -n "$joined" ]]; then
-      joined+=", "
-    fi
-    joined+="$file"
-    shown=$((shown + 1))
-  done
-
-  printf '%s' "$joined"
-}
-
-write_summary() {
-  local status="$1"
-  local title="$2"
-  local summary="$3"
-  local files="$4"
-  local validation="$5"
-  local commit_ref="${6:-}"
-
-  cat >"$SUMMARY_FILE" <<EOF
-status=$status
-title=$title
-summary=$summary
-files=$files
-validation=$validation
-commit=$commit_ref
-timestamp=$(timestamp)
-EOF
-}
-
-commit_changes() {
-  local title="$1"
-  local commit_message="chore(self-improve): $title"
-  local commit_output
-
-  commit_output="$(mktemp)"
-  trap 'rm -f "$commit_output"' RETURN
-
-  (
-    cd "$REPO_DIR"
-    git add -A
-    GIT_AUTHOR_NAME="Codex Self Improve" \
-    GIT_AUTHOR_EMAIL="codex-self-improve@localhost" \
-    GIT_COMMITTER_NAME="Codex Self Improve" \
-    GIT_COMMITTER_EMAIL="codex-self-improve@localhost" \
-      git commit -m "$commit_message"
-  ) >"$commit_output" 2>&1 || {
-    log "git commit failed"
-    cat "$commit_output" >>"$LOG_FILE"
-    return 1
-  }
-
-  cat "$commit_output" >>"$LOG_FILE"
-  (
-    cd "$REPO_DIR"
-    git rev-parse --short HEAD
-  )
-}
-
-exec 9>"$LOCK_FILE"
-if command -v flock >/dev/null 2>&1; then
-  if ! flock -n 9; then
-    exit 0
-  fi
-fi
-
+# Refuse to run without the lock; do not silently lose concurrency protection.
+mkdir -p "$STATE_DIR/runs" "$RUNTIME_DIR"
+exec 9>"$RUNTIME_DIR/codex-self-improve.lock"
+command -v flock >/dev/null || { printf 'flock is required\n' >&2; exit 1; }
+flock -n 9 || exit 0
+umask 077
+RUN_DIR="$(mktemp -d "$STATE_DIR/runs/$(date +%Y%m%dT%H%M%S)-XXXXXX")"
+LOG_FILE="$RUN_DIR/run.log"
 : >"$LOG_FILE"
-log "starting codex self-improve run"
+: >"$RUN_DIR/report.json"
+ln -sfn "$LOG_FILE" "$STATE_DIR/last-run.log"
+ln -sfn "$RUN_DIR/summary.txt" "$STATE_DIR/last-summary.txt"
+ln -sfn "$RUN_DIR/report.json" "$STATE_DIR/last-report.txt"
+PHASE=preflight
+FINISHED=false
+WORK_DIR=""
+COMMIT_REF=""
 
-if [[ "${CODEX_SELF_IMPROVE_DISABLED:-0}" == "1" ]]; then
-  log "run disabled by environment"
-  exit 0
-fi
-
-if ! git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  log "repository not found or not a git worktree: $REPO_DIR"
-  exit 1
-fi
-
-if [[ ! -f "$PROMPT_FILE" ]]; then
-  log "prompt file missing: $PROMPT_FILE"
-  exit 1
-fi
-
-if ! command -v git >/dev/null 2>&1; then
-  log "git is unavailable"
-  exit 1
-fi
-
-if ! command -v "$CODEX_BIN" >/dev/null 2>&1; then
-  log "codex binary is unavailable: $CODEX_BIN"
-  if [[ "$NOTIFY_FAILURES" == "1" ]]; then
-    send_notification "critical" "Codex self-improve skipped" "The codex CLI was not found in PATH."
+log() { printf '[%s] %s\n' "$(date -Is)" "$*" >>"$LOG_FILE"; }
+finish() {
+  local status="$1" message="$2"
+  message="${message//$'\n'/ }"
+  message="${message//$'\r'/ }"
+  log "$status: $message"
+  printf 'status=%s\nsummary=%s\nphase=%s\ncommit=%s\ncheckout=%s\nrun=%s\ntimestamp=%s\n' \
+    "$status" "$message" "$PHASE" "$COMMIT_REF" "$WORK_DIR" "$RUN_DIR" "$(date -Is)" >"$RUN_DIR/summary.txt"
+  FINISHED=true
+  if [[ "$status" == failed && "${CODEX_SELF_IMPROVE_NOTIFY_FAILURES:-1}" == 1 ]]; then
+    notify-send -a 'Codex Self Improve' -u critical 'Codex self-improve failed' "$message. See $LOG_FILE" >/dev/null 2>&1 || true
+  elif [[ "$status" == changed || "$status" == pending_review ]]; then
+    notify-send -a 'Codex Self Improve' 'Codex self-improve' "$message" >/dev/null 2>&1 || true
   fi
-  exit 1
-fi
+}
+cleanup() {
+  local rc=$?
+  if ! "$FINISHED"; then
+    finish failed "$PHASE stopped (exit $rc); retained artifacts in $RUN_DIR"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+fail() { finish failed "$*"; exit 1; }
+skip() { finish skipped "$*"; exit 0; }
 
-boot_id="$(current_boot_id || true)"
-last_boot_id=""
-last_run_epoch=0
-
-if [[ -f "$LAST_BOOT_FILE" ]]; then
-  last_boot_id="$(cat "$LAST_BOOT_FILE")"
-fi
-
-if [[ -f "$LAST_RUN_FILE" ]]; then
-  last_run_epoch="$(cat "$LAST_RUN_FILE")"
-fi
-
-if [[ ! "$last_run_epoch" =~ ^[0-9]+$ ]]; then
-  log "ignoring invalid last-run timestamp: $last_run_epoch"
-  last_run_epoch=0
-fi
-
+[[ "${CODEX_SELF_IMPROVE_DISABLED:-0}" != 1 ]] || skip 'Disabled by environment'
+for binary in git jq timeout "$CODEX_BIN"; do
+  command -v "$binary" >/dev/null || fail "Required command unavailable: $binary"
+done
+[[ "$COOLDOWN_HOURS" =~ ^[0-9]{1,4}$ ]] || COOLDOWN_HOURS=24
+[[ "$TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Invalid timeout seconds'
+REPO_DIR="$(git -C "$REPO_DIR" rev-parse --show-toplevel)"
+[[ -f "$PROMPT_FILE" ]] || fail "Missing prompt: $PROMPT_FILE"
+boot_id="$(cat /proc/sys/kernel/random/boot_id)"
 now_epoch="$(date +%s)"
-cooldown_seconds=$((COOLDOWN_HOURS * 3600))
-
+last_boot_id="$(cat "$STATE_DIR/last-boot-id" 2>/dev/null || true)"
+last_run_epoch="$(cat "$STATE_DIR/last-run-epoch" 2>/dev/null || true)"
+[[ "$last_run_epoch" =~ ^[0-9]{1,12}$ ]] || last_run_epoch=0
 if ! "$FORCE_RUN"; then
-  if [[ -n "$boot_id" && "$boot_id" == "$last_boot_id" ]]; then
-    log "skipping: already ran for this boot"
+  [[ "$boot_id" != "$last_boot_id" ]] || skip 'Already completed a run this boot'
+  ((now_epoch - 10#$last_run_epoch >= 10#$COOLDOWN_HOURS * 3600)) || skip 'Cooldown still active'
+fi
+
+# Snapshot the policy before the agent can edit any repository files.
+cp "$PROMPT_FILE" "$RUN_DIR/prompt.md"
+cp "$ASSET_DIR/commit-prompt.md" "$ASSET_DIR/report.schema.json" "$ASSET_DIR/validate.sh" "$RUN_DIR/"
+codex_cmd=("$CODEX_BIN" -a never exec --sandbox workspace-write --color never)
+[[ -z "${CODEX_SELF_IMPROVE_PROFILE:-}" ]] || codex_cmd+=(-p "$CODEX_SELF_IMPROVE_PROFILE")
+[[ -z "${CODEX_SELF_IMPROVE_MODEL:-}" ]] || codex_cmd+=(-m "$CODEX_SELF_IMPROVE_MODEL")
+# Parsing help checks compatibility without sending a prompt or spending tokens.
+"${codex_cmd[@]}" --output-schema "$RUN_DIR/report.schema.json" --help >>"$LOG_FILE" 2>&1 || fail 'Codex CLI is incompatible'
+
+run_codex() {
+  local directory="$1" prompt="$2" report="$3"
+  shift 3
+  log "Starting $PHASE in $directory"
+  timeout --kill-after=15s "${TIMEOUT_SECONDS}s" "${codex_cmd[@]}" \
+    -C "$directory" --output-schema "$RUN_DIR/report.schema.json" -o "$report" "$@" - \
+    <"$prompt" >>"$LOG_FILE" 2>&1
+}
+read_report() {
+  local report="$1"
+  # Validate locally as well: an absent/invalid/failed model response never succeeds.
+  jq -e '
+    type == "object" and
+    (keys == ["files", "status", "summary", "title", "validation"]) and
+    (.status == "changed" or .status == "no_change") and
+    (.title | type == "string" and length > 0 and (test("[\\r\\n]") | not)) and
+    (.summary | type == "string" and length > 0) and
+    ([.files, .validation] | all(type == "array" and all(type == "string" and length > 0)))
+  ' "$report" >/dev/null || fail "Invalid or failed report during $PHASE"
+}
+clean() {
+  local status
+  status="$(git -C "$1" status --porcelain --untracked-files=all --ignore-submodules=none)" || return 1
+  [[ -z "$status" ]]
+}
+
+# Compare file contents/modes using a temporary index, including untracked files.
+# Gitlinks are checked separately in their own initialized repositories.
+fingerprint() {
+  local repo="$1" index_file
+  index_file="$(mktemp "$RUN_DIR/index-XXXXXX")"
+  rm -- "$index_file"
+  GIT_INDEX_FILE="$index_file" git -C "$repo" read-tree HEAD || return 1
+  GIT_INDEX_FILE="$index_file" git -C "$repo" add -A || return 1
+  GIT_INDEX_FILE="$index_file" git -C "$repo" ls-files --stage -z |
+    { grep -zv '^160000 ' || [[ $? == 1 ]]; } | sha256sum || return 1
+  rm -f -- "$index_file"
+}
+
+# An explicit commit-only invocation comes BEFORE the improvement pass.
+if ! clean "$REPO_DIR"; then
+  [[ "$AUTO_COMMIT" == 1 ]] || skip 'Local changes present; --no-commit leaves them untouched'
+  PHASE=commit_existing
+  repos=("$REPO_DIR")
+  git -C "$REPO_DIR" submodule foreach --quiet --recursive 'printf "%s\0" "$PWD"' >"$RUN_DIR/submodules"
+  while IFS= read -r -d '' nested; do repos+=("$nested"); done <"$RUN_DIR/submodules"
+  heads=() fingerprints=()
+  for repo in "${repos[@]}"; do
+    [[ -z "$(git -C "$repo" diff --name-only --diff-filter=U)" ]] || fail "Unresolved conflicts in $repo"
+    heads+=("$(git -C "$repo" rev-parse HEAD)")
+    fingerprints+=("$(fingerprint "$repo")")
+  done
+  git_dir="$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-common-dir)"
+  run_codex "$REPO_DIR" "$RUN_DIR/commit-prompt.md" "$RUN_DIR/commit-report.json" \
+    --add-dir "$git_dir" || fail 'Commit-only Codex invocation failed'
+  read_report "$RUN_DIR/commit-report.json"
+  for i in "${!repos[@]}"; do
+    [[ "${fingerprints[$i]}" == "$(fingerprint "${repos[$i]}")" ]] || fail "Files changed during commit-only pass: ${repos[$i]}"
+    git -C "${repos[$i]}" merge-base --is-ancestor "${heads[$i]}" HEAD || fail 'Commit pass rewrote history'
+    clean "${repos[$i]}" || fail "Commit pass left uncommitted changes: ${repos[$i]}"
+  done
+fi
+clean "$REPO_DIR" || fail 'Repository must be clean before improvement'
+base="$(git -C "$REPO_DIR" rev-parse HEAD)"
+branch="$(git -C "$REPO_DIR" symbolic-ref -q HEAD)" || fail 'Main repository has a detached HEAD'
+printf '%s\n' "$base" >"$RUN_DIR/base-commit"
+
+PHASE=improve
+# Independent Git metadata and objects; the agent cannot alter the live index/refs.
+WORK_DIR="$RUN_DIR/checkout"
+git init -q "$WORK_DIR"
+git -C "$WORK_DIR" -c core.hooksPath=/dev/null fetch -q --depth=1 "$REPO_DIR" "$base" >>"$LOG_FILE" 2>&1
+git -C "$WORK_DIR" -c core.hooksPath=/dev/null checkout -q --detach FETCH_HEAD
+run_codex "$WORK_DIR" "$RUN_DIR/prompt.md" "$RUN_DIR/report.json" || fail 'Improvement Codex invocation failed'
+read_report "$RUN_DIR/report.json"
+[[ "$(git -C "$WORK_DIR" rev-parse HEAD)" == "$base" ]] || fail 'Improvement pass created or rewrote commits'
+git -C "$WORK_DIR" add -A
+# Paths are always NUL-delimited, including paths supplied by the model.
+git -C "$WORK_DIR" diff --cached --name-only --no-renames -z "$base" >"$RUN_DIR/changed-files"
+jq -j '.files[] | ., "\u0000"' "$RUN_DIR/report.json" | sort -zu >"$RUN_DIR/reported-files"
+sort -zu "$RUN_DIR/changed-files" >"$RUN_DIR/actual-files"
+cmp -s "$RUN_DIR/reported-files" "$RUN_DIR/actual-files" || fail 'Report files do not match the actual changes'
+status="$(jq -r .status "$RUN_DIR/report.json")"
+if [[ ! -s "$RUN_DIR/changed-files" ]]; then
+  [[ "$status" == no_change ]] || fail 'Report claims changes but checkout is unchanged'
+else
+  [[ "$status" == changed ]] || fail 'Report claims no change but checkout is modified'
+  jq -e '.validation | length > 0' "$RUN_DIR/report.json" >/dev/null || fail 'No validation reported'
+  PHASE=validate
+  tree="$(git -C "$WORK_DIR" write-tree)"
+  timeout --kill-after=15s "${TIMEOUT_SECONDS}s" bash "$RUN_DIR/validate.sh" "$WORK_DIR" "$base" \
+    >>"$LOG_FILE" 2>&1 || fail 'Independent validation failed'
+  git -C "$WORK_DIR" add -A
+  [[ "$(git -C "$WORK_DIR" write-tree)" == "$tree" && "$(git -C "$WORK_DIR" rev-parse HEAD)" == "$base" ]] || fail 'Validation modified the candidate'
+  git -C "$WORK_DIR" diff --cached --binary "$base" >"$RUN_DIR/change.patch"
+  if [[ "$AUTO_COMMIT" != 1 ]]; then
+    finish pending_review "Validated improvement retained in $WORK_DIR (--no-commit)"
     exit 0
   fi
-
-  if ((cooldown_seconds > 0 && now_epoch - last_run_epoch < cooldown_seconds)); then
-    log "skipping: cooldown still active"
+  PHASE=integrate
+  # Never stage live files. Git's fast-forward also refuses overwritten local edits.
+  [[ "$(git -C "$REPO_DIR" rev-parse HEAD)" == "$base" && "$(git -C "$REPO_DIR" symbolic-ref -q HEAD)" == "$branch" ]] && clean "$REPO_DIR" || {
+    finish pending_review "Live checkout changed; validated improvement retained in $WORK_DIR"
     exit 0
-  fi
+  }
+  title="$(jq -r .title "$RUN_DIR/report.json")"
+  [[ "$title" =~ ^(fix|feat|docs|style|refactor|perf|test|build|ci|chore)(\([^\)]+\))?:\ .+ ]] || fail 'Improvement title must be a Conventional Commit message'
+  git -C "$WORK_DIR" -c core.hooksPath=/dev/null -c commit.gpgsign=false \
+    -c user.name='Codex Self Improve' -c user.email=codex-self-improve@localhost \
+    commit -qm "$title"
+  COMMIT_REF="$(git -C "$WORK_DIR" rev-parse HEAD)"
+  git -C "$REPO_DIR" -c core.hooksPath=/dev/null fetch --no-write-fetch-head "$WORK_DIR" "$COMMIT_REF" >>"$LOG_FILE" 2>&1
+  [[ "$(git -C "$REPO_DIR" rev-parse HEAD)" == "$base" && "$(git -C "$REPO_DIR" symbolic-ref -q HEAD)" == "$branch" ]] && clean "$REPO_DIR" || {
+    finish pending_review "Live checkout changed before integration; candidate retained in $WORK_DIR"
+    exit 0
+  }
+  git -C "$REPO_DIR" -c core.hooksPath=/dev/null -c merge.autostash=false merge --ff-only "$COMMIT_REF" >>"$LOG_FILE" 2>&1 || fail 'Fast-forward refused; candidate retained'
 fi
 
-if [[ -n "$(git -C "$REPO_DIR" status --porcelain)" ]]; then
-  log "skipping: repository has local changes"
-  if [[ "$NOTIFY_FAILURES" == "1" ]]; then
-    send_notification "normal" \
-      "Codex self-improve skipped" \
-      "The dotfiles repo has local changes, so the automatic run left it untouched."
-  fi
-  exit 0
-fi
-
-report_tmp="$(mktemp)"
-log_tmp="$(mktemp)"
-trap 'rm -f "$report_tmp" "$log_tmp"' EXIT
-
-codex_cmd=(
-  "$CODEX_BIN"
-  exec
-  --full-auto
-  --color never
-  -C "$REPO_DIR"
-  -o "$report_tmp"
-)
-
-if [[ -n "${CODEX_SELF_IMPROVE_PROFILE:-}" ]]; then
-  codex_cmd+=(-p "$CODEX_SELF_IMPROVE_PROFILE")
-fi
-
-if [[ -n "${CODEX_SELF_IMPROVE_MODEL:-}" ]]; then
-  codex_cmd+=(-m "$CODEX_SELF_IMPROVE_MODEL")
-fi
-
-log "running: ${codex_cmd[*]}"
-codex_exit=0
-if ! "${codex_cmd[@]}" - <"$PROMPT_FILE" >"$log_tmp" 2>&1; then
-  codex_exit=${PIPESTATUS[0]}
-fi
-
-cp "$report_tmp" "$REPORT_FILE"
-cat "$log_tmp" >>"$LOG_FILE"
-
-mapfile -t changed_files < <(collect_changed_files)
-changed_files_display="$(format_changed_files "${changed_files[@]}")"
-
-status="$(report_field STATUS)"
-title="$(report_field TITLE)"
-summary="$(report_field SUMMARY)"
-validation="$(report_field VALIDATION)"
-
-if [[ -z "$status" ]]; then
-  if ((codex_exit == 0)); then
-    status="no_change"
-  else
-    status="failed"
-  fi
-fi
-
-if ((codex_exit != 0)); then
-  status="failed"
-fi
-
-if [[ -z "$title" ]]; then
-  if ((${#changed_files[@]} > 0)); then
-    title="Automatic dotfiles improvement"
-  else
-    title="No dotfiles changes"
-  fi
-fi
-
-if [[ -z "$summary" ]]; then
-  if ((${#changed_files[@]} > 0)); then
-    summary="Codex applied one automatic improvement to the dotfiles repository."
-  elif [[ "$status" == "failed" ]]; then
-    summary="The Codex run failed before it could finish cleanly."
-  else
-    summary="Codex inspected the repo and left it unchanged."
-  fi
-fi
-
-if ((codex_exit != 0)); then
-  write_summary "$status" "$title" "$summary" "$changed_files_display" "$validation"
-
-  if [[ "$NOTIFY_FAILURES" == "1" ]]; then
-    send_notification "critical" \
-      "Codex self-improve failed" \
-      "$summary"
-  fi
-  exit 1
-fi
-
-if ((${#changed_files[@]} == 0)); then
-  log "run completed without changes"
-  write_summary "no_change" "$title" "$summary" "" "$validation"
-
-  printf '%s\n' "$boot_id" >"$LAST_BOOT_FILE"
-  printf '%s\n' "$now_epoch" >"$LAST_RUN_FILE"
-  exit 0
-fi
-
-commit_ref=""
-if [[ "$AUTO_COMMIT" == "1" ]]; then
-  if ! commit_ref="$(commit_changes "$title")"; then
-    write_summary "failed" "$title" "$summary" "$changed_files_display" "$validation"
-
-    if [[ "$NOTIFY_FAILURES" == "1" ]]; then
-      send_notification "critical" \
-        "Codex self-improve failed" \
-        "Codex changed files, but the automatic commit failed. Review $REPO_DIR manually."
-    fi
-    exit 1
-  fi
-fi
-
-write_summary "changed" "$title" "$summary" "$changed_files_display" "$validation" "$commit_ref"
-log "run completed with changes"
-
-printf '%s\n' "$boot_id" >"$LAST_BOOT_FILE"
-printf '%s\n' "$now_epoch" >"$LAST_RUN_FILE"
-
-notification_body="$summary"
-if [[ -n "$changed_files_display" ]]; then
-  notification_body+="
-Files: $changed_files_display"
-fi
-if [[ -n "$commit_ref" ]]; then
-  notification_body+="
-Commit: $commit_ref"
-fi
-
-send_notification "normal" "$title" "$notification_body"
+printf '%s\n' "$boot_id" >"$STATE_DIR/last-boot-id"
+date +%s >"$STATE_DIR/last-run-epoch"
+finish "$status" "$(jq -r .summary "$RUN_DIR/report.json")"
+# Keep reports, logs and patches; successful checkouts can be recreated from Git.
+rm -rf -- "$WORK_DIR"
