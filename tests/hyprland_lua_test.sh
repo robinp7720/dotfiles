@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+lua "$ROOT/tests/hyprland_plugin_abi_test.lua" "$ROOT"
 TEMP_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "$TEMP_ROOT"' EXIT
 

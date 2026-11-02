@@ -51,12 +51,12 @@ builds and installs its `hymission-search-input` helper:
 hyprpm add https://github.com/gfhdhytghd/hymission
 hyprpm enable hymission
 git clone https://github.com/KZDKM/Hyprspace.git ~/Hyprspace
-git -C ~/Hyprspace checkout cf08bed82621c1fb943ef4934ff0ba36540fea77
+git -C ~/Hyprspace checkout 258b7b8bcea177e99da74946cf5cddd1dfe0e1ab # Hyprland 0.57.0
 ./scripts/install_hyprland_plugins.sh ~/Hyprspace
 ```
 
-The patch matches the Hyprspace revision above; the installed hymission revision
-at the time of this audit was `f1394d72e1a203f2a3faf6711e1d62714b466de8`.
+The patch matches the Hyprspace revision above. Hymission revision
+`a022307005087f3f5ab2efd1ffba558304c08273` also builds with Hyprland 0.57.0.
 Plugins must be rebuilt against the headers matching the installed Hyprland.
 The build requires `make`, a C++23 compiler, and development files for Hyprland,
 Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon, and Lua;
@@ -64,6 +64,15 @@ hymission also uses CMake, GTK 4, gtk4-layer-shell, and libadwaita.
 Setup already builds and installs the swipe-event plugin. Running
 `./scripts/install_hyprland_plugins.sh` alone rebuilds and installs that plugin.
 Restart Hyprland after installing plugins.
+
+After upgrading Hyprland, run `hyprpm update` and rebuild local plugins. The Lua
+config skips plugins whose build ABI does not match the running compositor,
+including local binaries without an `.abi` file; stale plugins can crash inside
+their static initializers before their own version checks run. The installer
+checks development headers and writes the ABI files only after successful builds.
+It also accepts a hymission checkout as its second argument to build both overview
+plugins locally: `./scripts/install_hyprland_plugins.sh ~/Hyprspace ~/hymission`.
+Compatible local builds take precedence over Hyprpm's copies.
 
 Restart the session after initial installation. When migrating an existing Hyprland session from `.conf` to Lua, use `hyprctl reload full-reset` once to switch parsers. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
 

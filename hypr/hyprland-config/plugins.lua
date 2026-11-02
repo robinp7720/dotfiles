@@ -4,27 +4,55 @@ local data_home = os.getenv("XDG_DATA_HOME") or (home .. "/.local/share")
 local plugin_dir = data_home .. "/hyprland/plugins/"
 local hyprpm_dir = "/var/cache/hyprpm/" .. assert(os.getenv("USER"), "USER is required") .. "/"
 
-local function resolve_hyprspace()
-    local custom_path = plugin_dir .. "Hyprspace.so"
-    local f = io.open(custom_path, "r")
-    if f then
-        f:close()
+local function read_file(path)
+    local file = io.open(path, "r")
+    if not file then return nil end
+    local contents = file:read("*a")
+    file:close()
+    return contents
+end
+
+-- Check before dlopen: incompatible C++ static initializers can crash before
+-- a plugin's own version check runs. Use this process's executable so reloading
+-- after a package upgrade still checks against the running compositor.
+local pid = (read_file("/proc/self/stat") or ""):match("^(%d+)")
+local version = pid and io.popen("/proc/" .. pid .. "/exe --version 2>/dev/null", "r")
+local abi = version and version:read("*a"):match("Version ABI string: (%S+)")
+if version then version:close() end
+local hyprpm_abi = (read_file(hyprpm_dir .. "state.toml") or ""):match("\nhash%s*=%s*['\"]([^'\"]+)['\"]")
+
+local function compatible(path)
+    local file = io.open(path, "r")
+    if not file then return false end
+    file:close()
+    local built_abi
+    if path:sub(1, #hyprpm_dir) == hyprpm_dir then
+        built_abi = hyprpm_abi
+    else
+        built_abi = (read_file(path .. ".abi") or ""):match("^(%S+)")
+    end
+    if abi and built_abi == abi then return true end
+    print("Skipping incompatible or unverified plugin: " .. path .. "; rebuild it for this Hyprland version")
+    return false
+end
+
+local function resolve_plugin(name)
+    local custom_path = plugin_dir .. name .. ".so"
+    if compatible(custom_path) then
         return custom_path
     end
-    return hyprpm_dir .. "Hyprspace/Hyprspace.so"
+    return hyprpm_dir .. name .. "/" .. name .. ".so"
 end
 
 local plugin_paths = {
-    resolve_hyprspace(),
-    hyprpm_dir .. "hymission/hymission.so",
+    resolve_plugin("Hyprspace"),
+    resolve_plugin("hymission"),
     -- Live workspace swipe progress for Vigil (tools/hypr-swipe-events).
     plugin_dir .. "hypr-swipe-events.so",
 }
 
 for _, path in ipairs(plugin_paths) do
-    local f = io.open(path, "r")
-    if f then
-        f:close()
+    if compatible(path) then
         hl.plugin.load(path)
     end
 end
