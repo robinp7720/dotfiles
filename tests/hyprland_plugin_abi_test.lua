@@ -71,14 +71,14 @@ local function gestures(patched)
         -- Like Hyprland, report unknown keys as config errors even under pcall.
         config = function(values)
             local options = values.plugin.hymission
-            if options.forceall_only_active_monitor ~= nil and not patched then
+            if (options.forceall_only_active_monitor ~= nil or options.search_enabled ~= nil) and not patched then
                 table.insert(config, {error = "unknown hymission option"})
                 error("unknown hymission option")
             end
             for key, value in pairs(options) do config[key] = value end
         end,
         get_config = function(key)
-            if key == "plugin.hymission.forceall_only_active_monitor" then
+            if key == "plugin.hymission.forceall_only_active_monitor" or key == "plugin.hymission.search_enabled" then
                 return patched and 0 or nil
             end
         end,
@@ -93,6 +93,8 @@ assert(#native == 0, "patched hymission must not register discrete overview swip
 assert(config.gesture_invert_vertical == 1, "swiping up must open the current-workspace side")
 assert(config.forceall_only_active_monitor == 1, "swiping down must stay on the cursor's monitor")
 assert(config.only_active_monitor == 1, "default overview scope must stay on one monitor")
+assert(config.search_enabled == 0, "the overview must not offer window search")
+assert(config.workspace_strip_anchor == "top", "workspaces must line up along the top")
 assert(#plugin == 2 and plugin[1].direction == "vertical" and plugin[1].action == "toggle"
     and plugin[1].recommand == true and plugin[1].fingers == 3,
     "vertical swipes must use the finger-tracked two-sided toggle")

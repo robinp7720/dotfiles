@@ -58,7 +58,7 @@ end
 
 local settings = {
     hymission = {
-        outer_padding_top = 92,
+        outer_padding_top = 32,
         outer_padding_right = 32,
         outer_padding_bottom = 32,
         outer_padding_left = 32,
@@ -93,7 +93,8 @@ local settings = {
         show_special = 1,
         workspace_change_keeps_overview = 1,
         hide_hyprbars_during_overview = 0,
-        workspace_strip_anchor = "left",
+        -- Workspaces line up along the top, like Spaces in Mission Control.
+        workspace_strip_anchor = "top",
         workspace_strip_empty_mode = "existing",
         workspace_strip_thickness = 160,
         workspace_strip_gap = 24,
@@ -133,14 +134,19 @@ end
 --   down -> windows from every workspace on the monitor under the cursor
 -- Swiping the opposite way closes the overview; keep going to switch views.
 -- `recommand` names its wide side `forceall`, which spans every monitor unless
--- hymission carries hypr/patches/hymission-monitor-forceall.patch.
+-- hymission carries hypr/patches/hymission-mission-control.patch. The patch
+-- also lets the overview drop its window search.
 local hymission = hl.plugin and hl.plugin.hymission
 if hymission and hymission.gesture then
     -- Probe with get_config: an unknown key passed to hl.config is reported as
     -- a config error even when the call is protected.
-    local monitor_scoped = hl.get_config("plugin.hymission.forceall_only_active_monitor") ~= nil
-    if monitor_scoped then
-        hl.config({ plugin = { hymission = { forceall_only_active_monitor = 1 } } })
+    local function set_if_known(key, value)
+        if hl.get_config("plugin.hymission." .. key) == nil then return false end
+        hl.config({ plugin = { hymission = { [key] = value } } })
+        return true
+    end
+    set_if_known("search_enabled", 0)
+    if set_if_known("forceall_only_active_monitor", 1) then
         hymission.gesture({
             fingers = 3,
             direction = "vertical",

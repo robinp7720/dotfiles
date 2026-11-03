@@ -35,7 +35,7 @@ apply_patch() {
 
 if [[ $# -eq 1 ]]; then
   source_dir="$(cd -- "$1" && pwd)"
-  apply_patch "$source_dir" "$ROOT/hypr/patches/hymission-monitor-forceall.patch"
+  apply_patch "$source_dir" "$ROOT/hypr/patches/hymission-mission-control.patch"
   cmake -S "$source_dir" -B "$source_dir/build-cmake" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$source_dir/build-cmake" --clean-first --target hymission hymission-search-input -j 4
   install_plugin "$source_dir/build-cmake/libhymission.so" hymission

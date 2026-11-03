@@ -43,16 +43,19 @@ Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prom
 ### Hyprland gesture plugins
 
 Three-finger swipes drive a Mission Control overview from hymission. Swiping up
-gathers the windows of the current workspace; swiping down gathers the windows
-from every workspace on the monitor under the cursor. Both track the fingers
-and settle on release, and swiping the opposite way closes the overview.
-Horizontal swipes switch workspaces, inside the overview as well.
+gathers the windows of the current workspace below a row of workspaces along
+the top; swiping down gathers the windows from every workspace on the monitor
+under the cursor. Both track the fingers and settle on release, and swiping the
+opposite way closes the overview. Horizontal swipes switch workspaces, inside
+the overview as well.
 
-hymission's two-sided gesture spans every monitor on its wide side. The tracked
-`hypr/patches/hymission-monitor-forceall.patch` adds a
-`forceall_only_active_monitor` option that keeps it on one monitor. Without the
+hymission's two-sided gesture spans every monitor on its wide side, and its
+overview always reserves room for window search. The tracked
+`hypr/patches/hymission-mission-control.patch` adds a
+`forceall_only_active_monitor` option that keeps the wide side on one monitor
+and a `search_enabled` option that removes search and its header. Without the
 patch, the config falls back to the same scopes on discrete swipes that do not
-follow the fingers. Build the patched plugin, and its
+follow the fingers, and search stays. Build the patched plugin, and its
 `hymission-search-input` helper, from a checkout:
 
 ```bash
