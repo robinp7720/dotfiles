@@ -134,8 +134,8 @@ end
 --   down -> windows from every workspace on the monitor under the cursor
 -- Swiping the opposite way closes the overview; keep going to switch views.
 -- `recommand` names its wide side `forceall`, which spans every monitor unless
--- hymission carries hypr/patches/hymission-mission-control.patch. The patch
--- also lets the overview drop its window search.
+-- hymission is the tools/hymission fork. The fork also lets the overview drop
+-- its window search.
 local hymission = hl.plugin and hl.plugin.hymission
 if hymission and hymission.gesture then
     -- Probe with get_config: an unknown key passed to hl.config is reported as
@@ -154,7 +154,7 @@ if hymission and hymission.gesture then
             recommand = true,
         })
     else
-        -- Unpatched hymission: keep the scopes, but open without finger tracking.
+        -- Upstream hymission: keep the scopes, but open without finger tracking.
         hl.gesture({
             fingers = 3,
             direction = "up",

@@ -49,28 +49,27 @@ under the cursor. Both track the fingers and settle on release, and swiping the
 opposite way closes the overview. Horizontal swipes switch workspaces, inside
 the overview as well.
 
-hymission's two-sided gesture spans every monitor on its wide side, and its
-overview always reserves room for window search. The tracked
-`hypr/patches/hymission-mission-control.patch` adds a
+hymission comes from a fork at `tools/hymission`
+([robinp7720/hymission](https://github.com/robinp7720/hymission), tracking
+[gfhdhytghd/hymission](https://github.com/gfhdhytghd/hymission) as `upstream`).
+Upstream's two-sided gesture spans every monitor on its wide side, and its
+overview always reserves room for window search. The fork adds a
 `forceall_only_active_monitor` option that keeps the wide side on one monitor
-and a `search_enabled` option that removes search and its header. Without the
-patch, the config falls back to the same scopes on discrete swipes that do not
-follow the fingers, and search stays. Build the patched plugin, and its
-`hymission-search-input` helper, from a checkout:
+and a `search_enabled` option that removes search and its header. With an
+upstream build, the config falls back to the same scopes on discrete swipes
+that do not follow the fingers, and search stays. Build the fork, its
+`hymission-search-input` helper, and the local swipe-event plugin with:
 
 ```bash
-git clone https://github.com/gfhdhytghd/hymission ~/hymission
-git -C ~/hymission checkout a022307005087f3f5ab2efd1ffba558304c08273 # Hyprland 0.57.0
-./scripts/install_hyprland_plugins.sh ~/hymission
+./scripts/install_hyprland_plugins.sh
 ```
 
-The patch also applies to hymission 0.12.1. Plugins must be rebuilt against the
-headers matching the installed Hyprland. The build requires `make`, CMake, a
-C++23 compiler, GTK 4, gtk4-layer-shell, libadwaita, and development files for
-Hyprland, Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon,
-and Lua. Setup already builds and installs the local swipe-event plugin;
-running `./scripts/install_hyprland_plugins.sh` without a checkout rebuilds
-only that plugin. Restart Hyprland after installing plugins.
+Plugins must be rebuilt against the headers matching the installed Hyprland.
+The build requires `make`, CMake, a C++23 compiler, GTK 4, gtk4-layer-shell,
+libadwaita, and development files for Hyprland, Pixman, libdrm, Pango/Cairo,
+libinput, libudev, Wayland, xkbcommon, and Lua. Setup builds and installs only
+the swipe-event plugin, so run the installer for hymission. Restart Hyprland
+after installing plugins.
 
 After upgrading Hyprland, rebuild the local plugins. The Lua config skips
 plugins whose build ABI does not match the running compositor, including local
@@ -92,6 +91,7 @@ Restart the session after initial installation. When migrating an existing Hyprl
 - `wallpapers/` — the four images used by the active wallpaper mapping
 - `systemd/user/` — Vigil, wallpaper, TV-mode, Spotify, and Codex units
 - `tools/bar`, `tools/launcher` — Vigil and Luma Git submodules
+- `tools/hymission` — Git submodule with the Mission Control overview plugin fork
 - `tools/tv-mode` — controller-first couch-session tool
 - `tv-mode/` — TV-mode configuration and theme
 - `tests/` — desktop, theme, lock, wallpaper, and service contracts

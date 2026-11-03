@@ -5,3 +5,7 @@
 	path = tools/bar
 	url = ../Vigil.git
 	branch = master
+[submodule "hymission"]
+	path = tools/hymission
+	url = ../hymission.git
+	branch = master

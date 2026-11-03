@@ -89,7 +89,7 @@ local function gestures(patched)
 end
 
 local native, plugin, config = gestures(true)
-assert(#native == 0, "patched hymission must not register discrete overview swipes")
+assert(#native == 0, "forked hymission must not register discrete overview swipes")
 assert(config.gesture_invert_vertical == 1, "swiping up must open the current-workspace side")
 assert(config.forceall_only_active_monitor == 1, "swiping down must stay on the cursor's monitor")
 assert(config.only_active_monitor == 1, "default overview scope must stay on one monitor")
@@ -103,13 +103,13 @@ assert(plugin[2].direction == "horizontal" and plugin[2].action == "workspace",
 
 native, plugin, config = gestures(false)
 assert(#plugin == 1 and plugin[1].direction == "horizontal",
-    "unpatched hymission must not use the all-monitor two-sided toggle")
-assert(#native == 2, "unpatched hymission must fall back to discrete swipes")
+    "upstream hymission must not use the all-monitor two-sided toggle")
+assert(#native == 2, "upstream hymission must fall back to discrete swipes")
 local by_direction = {}
 for _, spec in ipairs(native) do by_direction[spec.direction] = spec end
 by_direction.up.action()
 by_direction.down.action()
-assert(not config[1].error, "probing an unpatched hymission must not raise a config error")
+assert(not config[1].error, "probing an upstream hymission must not raise a config error")
 assert(config[1].opened == "onlycurrentworkspace" and config[2].opened == "default",
     "discrete swipes must open the current workspace (up) and the monitor (down)")
 
