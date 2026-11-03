@@ -1,6 +1,8 @@
 [Unit]
 Description=Apply wallpapers and follow output changes
-After=awww-daemon.service
+# Match the daemon's target ordering so the target cannot pull the watcher
+# before itself and create a cycle that prevents session shutdown.
+After=graphical-session.target awww-daemon.service
 Requires=awww-daemon.service
 PartOf=graphical-session.target
 

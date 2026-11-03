@@ -13,13 +13,7 @@ else
 end
 
 hl.on("hyprland.start", function()
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
-    hl.exec_cmd("dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE")
-    hl.exec_cmd("dbus-update-activation-environment --all")
-    hl.exec_cmd("systemctl --user restart vigil.service")
-    hl.exec_cmd("systemctl --user restart awww-daemon.service awww-wallpaper.service")
-    hl.exec_cmd("systemctl --user restart hypridle.service")
-    hl.exec_cmd("systemctl --user restart cliphist.service")
+    hl.exec_cmd("~/.dotfiles/scripts/start_desktop_services.sh hyprland")
     hl.exec_cmd("~/.dotfiles/scripts/album_art_watcher.sh &")
     hl.exec_cmd("setsid -f ~/.dotfiles/scripts/center_tws_login.sh")
     hl.exec_cmd("firefox")

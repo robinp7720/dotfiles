@@ -325,12 +325,7 @@ layout {
 // which may be more convenient to use.
 // See the binds section below for more spawn examples.
 
-spawn-sh-at-startup "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
-spawn-sh-at-startup "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET XDG_RUNTIME_DIR XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS DISPLAY"
-spawn-sh-at-startup "systemctl --user restart vigil.service"
-spawn-sh-at-startup "systemctl --user restart awww-daemon.service awww-wallpaper.service"
-spawn-sh-at-startup "systemctl --user restart hypridle.service"
-spawn-sh-at-startup "systemctl --user restart cliphist.service"
+spawn-sh-at-startup "~/.dotfiles/scripts/start_desktop_services.sh niri"
 
 spawn-at-startup "~/.dotfiles/scripts/album_art_watcher.sh"
 spawn-at-startup "~/.dotfiles/scripts/start_codex_self_improve_service.sh"
