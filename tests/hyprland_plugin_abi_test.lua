@@ -95,6 +95,7 @@ assert(config.forceall_only_active_monitor == 1, "swiping down must stay on the 
 assert(config.only_active_monitor == 1, "default overview scope must stay on one monitor")
 assert(config.search_enabled == 0, "the overview must not offer window search")
 assert(config.workspace_strip_anchor == "top", "workspaces must line up along the top")
+assert(config.hide_bar_when_strip == 0, "the overview strip must keep Vigil visible")
 assert(#plugin == 2 and plugin[1].direction == "vertical" and plugin[1].action == "toggle"
     and plugin[1].recommand == true and plugin[1].fingers == 3,
     "vertical swipes must use the finger-tracked two-sided toggle")

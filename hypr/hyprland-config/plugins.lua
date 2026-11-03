@@ -98,7 +98,8 @@ local settings = {
         workspace_strip_empty_mode = "existing",
         workspace_strip_thickness = 160,
         workspace_strip_gap = 24,
-        hide_bar_when_strip = 1,
+        -- Keep Vigil visible; the strip already respects its reserved top edge.
+        hide_bar_when_strip = 0,
         hide_bar_animation = 1,
         hide_bar_animation_blur = 1,
         hide_bar_animation_move_multiplier = 0.8,
