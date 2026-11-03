@@ -5,6 +5,11 @@ initialized nested Git submodules. Group related changes by concern and commit
 all changes with relevant Conventional Commit messages. Use separate commits
 for unrelated changes. Commit submodules before their parent pointers.
 
+Create these local automation commits with `git -c commit.gpgsign=false commit`
+(including submodule commits), matching the wrapper's improvement commits.
+Signing agents are unavailable inside the sandbox. Do not change persistent Git
+configuration or request access to signing keys.
+
 This invocation only records existing work. Do not implement improvements,
 modify file contents, discard changes, amend existing commits, rewrite history,
 change Git configuration, reload services, or send notifications. Do not include

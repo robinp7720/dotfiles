@@ -96,6 +96,20 @@ if ! "$FORCE_RUN"; then
   ((now_epoch - 10#$last_run_epoch >= 10#$COOLDOWN_HOURS * 3600)) || skip 'Cooldown still active'
 fi
 
+# Unregistered checkouts cannot be recorded without changing repository structure.
+# Catch them before fingerprinting or asking Codex to commit any existing work.
+repos=("$REPO_DIR")
+git -C "$REPO_DIR" submodule foreach --quiet --recursive 'printf "%s\0" "$PWD"' >"$RUN_DIR/submodules"
+while IFS= read -r -d '' nested; do repos+=("$nested"); done <"$RUN_DIR/submodules"
+for repo in "${repos[@]}"; do
+  git -C "$repo" ls-files --others --exclude-standard -z >"$RUN_DIR/untracked-files"
+  while IFS= read -r -d '' path; do
+    if [[ -e "$repo/${path%/}/.git" ]]; then
+      skip "Unregistered Git checkout: $repo/${path%/}; register it as a submodule or exclude it from the containing repository"
+    fi
+  done <"$RUN_DIR/untracked-files"
+done
+
 # Snapshot the policy before the agent can edit any repository files.
 cp "$PROMPT_FILE" "$RUN_DIR/prompt.md"
 cp "$ASSET_DIR/commit-prompt.md" "$ASSET_DIR/report.schema.json" "$ASSET_DIR/validate.sh" "$RUN_DIR/"
@@ -115,15 +129,16 @@ run_codex() {
 }
 read_report() {
   local report="$1"
-  # Validate locally as well: an absent/invalid/failed model response never succeeds.
+  # Validate structure first so a valid failure retains the agent's explanation.
   jq -e '
     type == "object" and
     (keys == ["files", "status", "summary", "title", "validation"]) and
-    (.status == "changed" or .status == "no_change") and
+    (.status == "changed" or .status == "no_change" or .status == "failed") and
     (.title | type == "string" and length > 0 and (test("[\\r\\n]") | not)) and
     (.summary | type == "string" and length > 0) and
     ([.files, .validation] | all(type == "array" and all(type == "string" and length > 0)))
-  ' "$report" >/dev/null || fail "Invalid or failed report during $PHASE"
+  ' "$report" >/dev/null || fail "Invalid report during $PHASE"
+  [[ "$(jq -r .status "$report")" != failed ]] || fail "$PHASE: $(jq -r .summary "$report")"
 }
 clean() {
   local status
@@ -148,9 +163,6 @@ fingerprint() {
 if ! clean "$REPO_DIR"; then
   [[ "$AUTO_COMMIT" == 1 ]] || skip 'Local changes present; --no-commit leaves them untouched'
   PHASE=commit_existing
-  repos=("$REPO_DIR")
-  git -C "$REPO_DIR" submodule foreach --quiet --recursive 'printf "%s\0" "$PWD"' >"$RUN_DIR/submodules"
-  while IFS= read -r -d '' nested; do repos+=("$nested"); done <"$RUN_DIR/submodules"
   heads=() fingerprints=()
   for repo in "${repos[@]}"; do
     [[ -z "$(git -C "$repo" diff --name-only --diff-filter=U)" ]] || fail "Unresolved conflicts in $repo"

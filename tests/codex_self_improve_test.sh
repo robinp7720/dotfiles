@@ -13,7 +13,7 @@ import tempfile
 root = Path(sys.argv[1])
 wrapper = root / 'scripts/codex_self_improve.sh'
 FAKE = r'''#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, re, shlex, subprocess, sys, time
 args = sys.argv[1:]
 assert '--full-auto' not in args
 assert args[:3] == ['-a', 'never', 'exec']
@@ -25,17 +25,28 @@ repo = pathlib.Path(args[args.index('-C') + 1])
 report = pathlib.Path(args[args.index('-o') + 1])
 prompt = sys.stdin.read()
 phase = 'commit' if 'commit-only phase' in prompt else 'improve'
+commit_options = ['-c', 'commit.gpgsign=false']
+if phase == 'commit':
+    # Exercise the actual commit recipe supplied to Codex against signed repos.
+    recipe = re.search(r'`(git -c commit\.gpgsign=false commit)`', prompt)
+    assert recipe, 'commit-only prompt must supply the sandbox-compatible recipe'
+    commit_options = shlex.split(recipe.group(1))[1:-1]
 case = os.environ['TEST_CASE']
 live = pathlib.Path(os.environ['TEST_REPO'])
 with open(os.environ['TEST_CALLS'], 'a') as f:
     f.write(json.dumps({'phase': phase, 'cwd': str(repo), 'args': args}) + '\n')
 def git(*args, cwd=repo):
-    return subprocess.check_output(['git', '-C', str(cwd), '-c', 'commit.gpgsign=false',
+    return subprocess.check_output(['git', '-C', str(cwd), *commit_options,
         '-c', 'user.name=Test', '-c', 'user.email=test@localhost', *args], stderr=subprocess.STDOUT)
 status, files = 'no_change', []
 if phase == 'commit':
     if case == 'commit_failed':
         sys.exit(42)
+    if case == 'commit_failed_report':
+        report.write_text(json.dumps(dict(status='failed', title='Commit blocked',
+            summary='Signing agent unavailable.\nExisting changes preserved.\r\n',
+            files=['other.txt'], validation=[])))
+        sys.exit(0)
     if case == 'commit_edit':
         (repo / 'README.md').write_text('not authorized by commit phase\n')
     if (repo / 'nested/.git').exists():
@@ -99,8 +110,11 @@ else:
             (repo / 'tools/self-improve/validate.sh').write_text('exit 0\n')
             files.append('tools/self-improve/validate.sh')
 validation = [] if case == 'no_validation' else ['git diff --check']
+summary = 'Independent check failed.\nCandidate retained.' if status == 'failed' else 'Updated documentation.'
+if case == 'multiline_summary':
+    summary += '\n\n'
 report.write_text(json.dumps(dict(status=status, title='fix(docs): clarify setup',
-    summary='Updated documentation.\n\n' if case == 'multiline_summary' else 'Updated documentation.', files=files, validation=validation)))
+    summary=summary, files=files, validation=validation)))
 '''
 
 def git(repo, *args):
@@ -163,6 +177,8 @@ class Fixture:
         assert (self.repo/'README.md').read_text() == 'initial\n'
         assert not git(self.repo, 'status', '--porcelain')
         assert self.phases() == ['improve']
+        if self.case == 'failed_report':
+            assert summary['summary'] == 'improve: Independent check failed. Candidate retained.'
 
 with tempfile.TemporaryDirectory(prefix='codex-self-improve-tests-') as tmp:
     directory = Path(tmp)
@@ -195,18 +211,80 @@ with tempfile.TemporaryDirectory(prefix='codex-self-improve-tests-') as tmp:
             git(f.repo, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', str(child), 'nested')
             git(f.repo, 'commit', '-qm', 'test: add submodule')
             (f.repo/'nested/README.md').write_text('nested user work\n')
+            git(f.repo/'nested', 'config', 'commit.gpgsign', 'true')
+            git(f.repo/'nested', 'config', 'gpg.program', '/bin/false')
+        git(f.repo, 'config', 'commit.gpgsign', 'true')
+        git(f.repo, 'config', 'gpg.program', '/bin/false')
         result, summary = f.run()
         assert result.returncode == 0, (case, summary, result.stderr, (f.state/'last-run.log').read_text())
         assert f.phases() == ['commit', 'improve']
         assert (f.repo/'README.md').read_text() == 'existing user work\n'
         assert not git(f.repo, 'status', '--porcelain')
         assert int(git(f.repo, 'rev-list', '--count', f.before+'..HEAD')) >= 2
-    for case in ['commit_failed', 'commit_dirty', 'commit_edit']:
+        assert git(f.repo, 'config', 'commit.gpgsign') == 'true'
+        if case == 'nested_first':
+            assert git(f.repo/'nested', 'config', 'commit.gpgsign') == 'true'
+    for case in ['commit_failed', 'commit_failed_report', 'commit_dirty', 'commit_edit']:
         f = Fixture(directory, case)
         (f.repo/'other.txt').write_text('user work\n')
         result, summary = f.run()
         assert result.returncode != 0 and summary['status'] == 'failed'
         assert f.phases() == ['commit']
+        if case == 'commit_failed_report':
+            assert summary['summary'].rstrip() == 'commit_existing: Signing agent unavailable. Existing changes preserved.', summary
+            assert (f.repo/'other.txt').read_text() == 'user work\n'
+            assert git(f.repo, 'rev-parse', 'HEAD') == f.before
+    # Embedded repositories must be caught before the commit-only agent can touch
+    # them, including .git files, unusual paths, and checkouts inside submodules.
+    for case in ['unregistered', 'unregistered_worktree', 'unregistered_in_submodule']:
+        f = Fixture(directory, case)
+        container = f.repo
+        if case == 'unregistered_in_submodule':
+            source = f.dir/'source'
+            source.mkdir()
+            f.init(source)
+            git(f.repo, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', str(source), 'nested')
+            git(f.repo, 'commit', '-qm', 'test: add submodule')
+            container = f.repo/'nested'
+        nested = container/'tools'/'local checkout\nwith newline'
+        nested.parent.mkdir()
+        if case == 'unregistered_worktree':
+            source = f.dir/'source'
+            source.mkdir()
+            f.init(source)
+            git(source, 'worktree', 'add', '-q', '--detach', str(nested))
+        else:
+            nested.mkdir()
+            f.init(nested)
+        (nested/'README.md').write_text('unrelated local changes\n')
+        (f.repo/'pending.txt').write_text('existing work\n')
+        before_head = git(f.repo, 'rev-parse', 'HEAD')
+        before_status = git(f.repo, 'status', '--porcelain')
+        nested_head = git(nested, 'rev-parse', 'HEAD')
+        nested_status = git(nested, 'status', '--porcelain')
+        result, summary = f.run()
+        assert result.returncode == 0 and summary['status'] == 'skipped', (case, summary, result.stderr)
+        assert summary['phase'] == 'preflight' and 'Unregistered Git checkout' in summary['summary']
+        assert f.phases() == []
+        assert git(f.repo, 'rev-parse', 'HEAD') == before_head
+        assert git(f.repo, 'status', '--porcelain') == before_status
+        assert git(nested, 'rev-parse', 'HEAD') == nested_head
+        assert git(nested, 'status', '--porcelain') == nested_status
+        assert (nested/'README.md').read_text() == 'unrelated local changes\n'
+        assert not (f.state/'last-run-epoch').exists()
+    # Intentionally ignored checkouts remain independent and do not block a run.
+    f = Fixture(directory, 'ignored_checkout')
+    nested = f.repo/'local'
+    nested.mkdir()
+    f.init(nested)
+    (nested/'README.md').write_text('private work\n')
+    with (f.repo/'.git/info/exclude').open('a') as exclude:
+        exclude.write('\n/local/\n')
+    f.case = 'no_change'
+    result, summary = f.run()
+    assert result.returncode == 0 and summary['status'] == 'no_change', summary
+    assert f.phases() == ['improve']
+    assert (nested/'README.md').read_text() == 'private work\n'
     for case in ['concurrent', 'head_changed']:
         f = Fixture(directory, case)
         result, summary = f.run()
