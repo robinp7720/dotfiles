@@ -92,6 +92,7 @@ Restart the session after initial installation. When migrating an existing Hyprl
 - `systemd/user/` — Vigil, wallpaper, TV-mode, Spotify, and Codex units
 - `tools/bar`, `tools/launcher` — Vigil and Luma Git submodules
 - `tools/hymission` — Git submodule with the Mission Control overview plugin fork
+- `tools/logiops` — Git submodule with the Logitech device support fork; built and installed separately from `setup.sh`
 - `tools/tv-mode` — controller-first couch-session tool
 - `tv-mode/` — TV-mode configuration and theme
 - `tests/` — desktop, theme, lock, wallpaper, and service contracts

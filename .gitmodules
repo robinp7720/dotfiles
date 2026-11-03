@@ -9,3 +9,6 @@
 	path = tools/hymission
 	url = ../hymission.git
 	branch = master
+[submodule "logiops"]
+	path = tools/logiops
+	url = ../logiops.git

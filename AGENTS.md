@@ -6,7 +6,7 @@ This repository mirrors the Wayland desktop config it installs, built around Hyp
 - `hypr/` — Hyprland Lua config. `hyprland.lua` picks a profile (`desktop` or `laptop`) from `hyprland-config/`; shared settings live in `base.lua`, `bindings.lua`, `startup.lua`, and `plugins.lua`. `monitors.lua` is written by nwg-displays and `hypr/scripts/modes/`; do not edit it by hand.
 - `niri/` — Niri config. Keep its shortcuts in step with `hypr/hyprland-config/bindings.lua`; `tests/compositor_binding_parity_test.sh` checks the shared ones.
 - `bar/` — Vigil runtime config (`config.toml`) and CSS.
-- `tools/bar` (Vigil), `tools/launcher` (Luma), and `tools/hymission` (fork of the hymission overview plugin; `upstream` remote points at the original) are Git submodules with their own history; commit inside the submodule first, then bump it here. `tools/tv-mode` is a Rust + Qt Quick couch-session tool configured from `tv-mode/`.
+- `tools/bar` (Vigil), `tools/launcher` (Luma), `tools/hymission` (fork of the hymission overview plugin; `upstream` remote points at the original), and `tools/logiops` (Logitech device support fork) are Git submodules with their own history; commit inside the submodule first, then bump it here. `tools/tv-mode` is a Rust + Qt Quick couch-session tool configured from `tv-mode/`.
 - `scripts/` — shell helpers for screenshots, locking, wallpapers, media, and calendar context.
 - `systemd/user/` — user services for Vigil, wallpapers, TV mode, Spotify, and Codex.
 - `matugen/templates/` — theme sources. Edit templates, never generated outputs such as `bar/colors.css`, `hypr/colors.lua`, or `tv-mode/colors.css`. `matugen/UI_STYLE.md` defines the shared spacing, radii, opacity, and motion scale.
