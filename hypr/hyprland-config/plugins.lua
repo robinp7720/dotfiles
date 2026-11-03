@@ -45,7 +45,6 @@ local function resolve_plugin(name)
 end
 
 local plugin_paths = {
-    resolve_plugin("Hyprspace"),
     resolve_plugin("hymission"),
     -- Live workspace swipe progress for Vigil (tools/hypr-swipe-events).
     plugin_dir .. "hypr-swipe-events.so",
@@ -78,6 +77,9 @@ local settings = {
         expand_selected_window = 1,
         overview_focus_follows_mouse = 1,
         multi_workspace_sort_recent_first = 1,
+        -- Swipe up for the current workspace, down for the whole monitor.
+        gesture_invert_vertical = 1,
+        gesture_close_restores_focus = 1,
         niri_mode = 0,
         niri_scroll_pixels_per_delta = 1.0,
         niri_workspace_scale = 1.0,
@@ -113,19 +115,6 @@ local settings = {
         debug_logs = 0,
         debug_surface_logs = 0,
     },
-    -- Hyprspace registers under plugin.overview
-    overview = {
-        disableGestures = true,
-        -- Overlay the workspace strip without shrinking or reflowing tiled windows.
-        affectStrut = false,
-        overrideGaps = false,
-    },
-    hyprexpo = {
-        columns = 3,
-        gap_size = 10,
-        bg_col = "rgb(111111)",
-        enable_gesture = true,
-    },
     hyprscrolling = {
         column_width = 0.7,
         fullscreen_on_one_column = false,
@@ -137,32 +126,43 @@ for _, plugin in ipairs(hl.get_loaded_plugins()) do
     if settings[plugin.name] then
         hl.config({ plugin = { [plugin.name] = settings[plugin.name] } })
     end
-    if plugin.name == "Hyprspace" and settings.overview then
-        hl.config({ plugin = { overview = settings.overview } })
-    end
 end
 
--- Directional swipes animate into their requested scope, including when switching
--- from the other overview. The continuous `recommand` mode hardcodes ForceAll
--- across every monitor, so use native directional gestures for monitor-local scope.
-if hl.plugin and hl.plugin.hymission and hl.plugin.hymission.gesture then
-    hl.gesture({
-        fingers = 3,
-        direction = "down",
-        action = function()
-            hl.plugin.hymission.open("onlycurrentworkspace")
-        end,
-    })
-    hl.gesture({
-        fingers = 3,
-        direction = "up",
-        action = function()
-            hl.plugin.hymission.open()
-        end,
-    })
+-- Mission Control on three-finger vertical swipes, tracking the fingers 1:1:
+--   up   -> windows on the current workspace
+--   down -> windows from every workspace on the monitor under the cursor
+-- Swiping the opposite way closes the overview; keep going to switch views.
+-- `recommand` names its wide side `forceall`, which spans every monitor unless
+-- hymission carries hypr/patches/hymission-monitor-forceall.patch.
+local hymission = hl.plugin and hl.plugin.hymission
+if hymission and hymission.gesture then
+    -- Probe with get_config: an unknown key passed to hl.config is reported as
+    -- a config error even when the call is protected.
+    local monitor_scoped = hl.get_config("plugin.hymission.forceall_only_active_monitor") ~= nil
+    if monitor_scoped then
+        hl.config({ plugin = { hymission = { forceall_only_active_monitor = 1 } } })
+        hymission.gesture({
+            fingers = 3,
+            direction = "vertical",
+            action = "toggle",
+            recommand = true,
+        })
+    else
+        -- Unpatched hymission: keep the scopes, but open without finger tracking.
+        hl.gesture({
+            fingers = 3,
+            direction = "up",
+            action = function() hymission.open("onlycurrentworkspace") end,
+        })
+        hl.gesture({
+            fingers = 3,
+            direction = "down",
+            action = function() hymission.open() end,
+        })
+    end
 
-    -- 3 fingers HORIZONTAL: hymission-aware 1:1 continuous workspace swipe
-    pcall(hl.plugin.hymission.gesture, {
+    -- Workspace swipes that also move between workspaces inside the overview.
+    pcall(hymission.gesture, {
         fingers = 3,
         direction = "horizontal",
         action = "workspace",

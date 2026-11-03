@@ -42,37 +42,39 @@ Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prom
 
 ### Hyprland gesture plugins
 
-The desktop loads Hyprspace and hymission when installed. Their upstream sources
-are external dependencies; the local swipe-event plugin and Hyprspace gesture
-coordination patch are stored here. Install hymission through Hyprpm, which also
-builds and installs its `hymission-search-input` helper:
+Three-finger swipes drive a Mission Control overview from hymission. Swiping up
+gathers the windows of the current workspace; swiping down gathers the windows
+from every workspace on the monitor under the cursor. Both track the fingers
+and settle on release, and swiping the opposite way closes the overview.
+Horizontal swipes switch workspaces, inside the overview as well.
+
+hymission's two-sided gesture spans every monitor on its wide side. The tracked
+`hypr/patches/hymission-monitor-forceall.patch` adds a
+`forceall_only_active_monitor` option that keeps it on one monitor. Without the
+patch, the config falls back to the same scopes on discrete swipes that do not
+follow the fingers. Build the patched plugin, and its
+`hymission-search-input` helper, from a checkout:
 
 ```bash
-hyprpm add https://github.com/gfhdhytghd/hymission
-hyprpm enable hymission
-git clone https://github.com/KZDKM/Hyprspace.git ~/Hyprspace
-git -C ~/Hyprspace checkout 258b7b8bcea177e99da74946cf5cddd1dfe0e1ab # Hyprland 0.57.0
-./scripts/install_hyprland_plugins.sh ~/Hyprspace
+git clone https://github.com/gfhdhytghd/hymission ~/hymission
+git -C ~/hymission checkout a022307005087f3f5ab2efd1ffba558304c08273 # Hyprland 0.57.0
+./scripts/install_hyprland_plugins.sh ~/hymission
 ```
 
-The patch matches the Hyprspace revision above. Hymission revision
-`a022307005087f3f5ab2efd1ffba558304c08273` also builds with Hyprland 0.57.0.
-Plugins must be rebuilt against the headers matching the installed Hyprland.
-The build requires `make`, a C++23 compiler, and development files for Hyprland,
-Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon, and Lua;
-hymission also uses CMake, GTK 4, gtk4-layer-shell, and libadwaita.
-Setup already builds and installs the swipe-event plugin. Running
-`./scripts/install_hyprland_plugins.sh` alone rebuilds and installs that plugin.
-Restart Hyprland after installing plugins.
+The patch also applies to hymission 0.12.1. Plugins must be rebuilt against the
+headers matching the installed Hyprland. The build requires `make`, CMake, a
+C++23 compiler, GTK 4, gtk4-layer-shell, libadwaita, and development files for
+Hyprland, Pixman, libdrm, Pango/Cairo, libinput, libudev, Wayland, xkbcommon,
+and Lua. Setup already builds and installs the local swipe-event plugin;
+running `./scripts/install_hyprland_plugins.sh` without a checkout rebuilds
+only that plugin. Restart Hyprland after installing plugins.
 
-After upgrading Hyprland, run `hyprpm update` and rebuild local plugins. The Lua
-config skips plugins whose build ABI does not match the running compositor,
-including local binaries without an `.abi` file; stale plugins can crash inside
-their static initializers before their own version checks run. The installer
-checks development headers and writes the ABI files only after successful builds.
-It also accepts a hymission checkout as its second argument to build both overview
-plugins locally: `./scripts/install_hyprland_plugins.sh ~/Hyprspace ~/hymission`.
-Compatible local builds take precedence over Hyprpm's copies.
+After upgrading Hyprland, rebuild the local plugins. The Lua config skips
+plugins whose build ABI does not match the running compositor, including local
+binaries without an `.abi` file; stale plugins can crash inside their static
+initializers before their own version checks run. The installer checks
+development headers and writes the ABI files only after successful builds.
+A compatible local hymission build takes precedence over a Hyprpm copy.
 
 Restart the session after initial installation. When migrating an existing Hyprland session from `.conf` to Lua, use `hyprctl reload full-reset` once to switch parsers. Individual changes can be applied with `hyprctl reload`, `systemctl --user restart vigil.service`, or `systemctl --user restart awww-daemon.service awww-wallpaper.service`.
 

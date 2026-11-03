@@ -5,10 +5,10 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hyprland/plugins"
 
-if [[ $# -gt 2 || "${1:-}" == --help || "${1:-}" == -h ]]; then
-  printf 'Usage: %s [path/to/Hyprspace-checkout [path/to/hymission-checkout]]\n' "$0"
-  printf 'Installs hypr-swipe-events; optionally builds Hyprspace and hymission.\n'
-  [[ $# -le 2 ]] || exit 2
+if [[ $# -gt 1 || "${1:-}" == --help || "${1:-}" == -h ]]; then
+  printf 'Usage: %s [path/to/hymission-checkout]\n' "$0"
+  printf 'Installs hypr-swipe-events; optionally patches and builds hymission.\n'
+  [[ $# -le 1 ]] || exit 2
   exit 0
 fi
 
@@ -22,21 +22,20 @@ install_plugin() {
   printf '%s\n' "$abi" > "$PLUGIN_DIR/$name.so.abi"
 }
 
-if [[ $# -ge 1 ]]; then
-  source_dir="$(cd -- "$1" && pwd)"
-  patch_file="$ROOT/hypr/patches/Hyprspace-gesture-coordination.patch"
+# Apply a tracked patch once; an already-patched checkout is accepted as is.
+apply_patch() {
+  local source_dir="$1" patch_file="$2"
   if git -C "$source_dir" apply --check "$patch_file" 2>/dev/null; then
     git -C "$source_dir" apply "$patch_file"
   elif ! git -C "$source_dir" apply --reverse --check "$patch_file" 2>/dev/null; then
-    printf 'Hyprspace checkout does not match the tracked gesture patch.\n' >&2
+    printf '%s does not match %s.\n' "$source_dir" "$patch_file" >&2
     exit 1
   fi
-  make -B -C "$source_dir" all
-  install_plugin "$source_dir/Hyprspace.so" Hyprspace
-fi
+}
 
-if [[ $# -eq 2 ]]; then
-  source_dir="$(cd -- "$2" && pwd)"
+if [[ $# -eq 1 ]]; then
+  source_dir="$(cd -- "$1" && pwd)"
+  apply_patch "$source_dir" "$ROOT/hypr/patches/hymission-monitor-forceall.patch"
   cmake -S "$source_dir" -B "$source_dir/build-cmake" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$source_dir/build-cmake" --clean-first --target hymission hymission-search-input -j 4
   install_plugin "$source_dir/build-cmake/libhymission.so" hymission
