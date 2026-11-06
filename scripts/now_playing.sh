@@ -189,7 +189,7 @@ escape_markup() {
   s="${s//&/\&amp;}"
   s="${s//</\&lt;}"
   s="${s//>/\&gt;}"
-  echo "$s"
+  printf '%s\n' "$s"
 }
 
 if [[ "$output_mode" == "text" ]]; then
