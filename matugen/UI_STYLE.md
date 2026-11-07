@@ -29,7 +29,9 @@ roles. Edit templates before generated files. Application defaults retain their 
 the opaque, square design through user configuration. Theme generation sends Vigil SIGHUP; Luma also watches
 its generated theme so warm instances update after wallpaper changes.
 
-Motion preserves spatial continuity: panels and notifications still morph from
+Quick Settings slides down 12 px at full size in 160 ms and slides back up in
+120 ms, with smooth easing and a brief fade. It never zooms or bounces, and
+switching sections does not replay its entrance. Notifications still morph from
 and back into their originating bar controls. Vigil uses its existing `calm`
 critically damped springs: no elastic overshoot, squash-and-stretch, or oscillation.
 Interrupted morphs reverse smoothly. Hover and focus colors take 160 ms; launcher
