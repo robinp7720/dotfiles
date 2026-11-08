@@ -9,6 +9,7 @@ Item {
     property color accent: "#83d2e3"
     property bool reducedMotion: false
     property bool hold: false
+    readonly property bool lightSurface: (surface.color.r * 0.213 + surface.color.g * 0.715 + surface.color.b * 0.072) * surface.color.a > 0.5
     signal clicked
     width: 360
     height: 104
@@ -17,9 +18,17 @@ Item {
     Accessible.name: title
     Accessible.onPressAction: clicked()
     Rectangle {
+        id: surface
         anchors.fill: parent
         radius: 4
         color: tile.activeFocus ? "#f5f5f5" : "#c0202020"
+        Behavior on color {
+            ColorAnimation {
+                duration: tile.reducedMotion ? 0 : 160
+                onDurationChanged: if (duration === 0)
+                    complete()
+            }
+        }
         border.width: tile.activeFocus ? 2 : 1
         border.color: tile.activeFocus ? "#f2f3f5" : "#16ffffff"
     }
@@ -29,7 +38,7 @@ Item {
         width: 56
         height: 56
         name: tile.iconName
-        color: tile.activeFocus ? "#141414" : "white"
+        color: tile.lightSurface ? "#141414" : "white"
         visible: logo.status !== Image.Ready
     }
     Image {
@@ -48,7 +57,7 @@ Item {
         x: 112
         anchors.verticalCenter: parent.verticalCenter
         text: tile.title
-        color: tile.activeFocus ? "#141414" : "#f2f3f5"
+        color: tile.lightSurface ? "#141414" : "#f2f3f5"
         font.family: "Inter"
         font.pixelSize: 28
         font.weight: Font.Medium

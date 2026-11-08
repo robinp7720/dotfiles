@@ -12,7 +12,8 @@ Item {
     property bool reducedMotion: false
     property bool tooltipBelow: false
     readonly property bool highlighted: activeFocus || pointer.containsMouse || selected
-    readonly property color foreground: text && !flat && highlighted ? "#161616" : "white"
+    readonly property bool lightSurface: (surface.color.r * 0.213 + surface.color.g * 0.715 + surface.color.b * 0.072) * surface.color.a > 0.5
+    readonly property color foreground: lightSurface ? "#161616" : "white"
     signal clicked
     implicitWidth: 80
     implicitHeight: 80
@@ -20,14 +21,22 @@ Item {
     opacity: enabled ? 1 : 0.3
     Accessible.role: Accessible.Button
     Accessible.name: label
-    Accessible.onPressAction: if (enabled) clicked()
+    Accessible.onPressAction: if (enabled)
+        clicked()
     Rectangle {
+        id: surface
         anchors.fill: parent
         radius: control.text ? 3 : height / 2
         color: control.highlighted ? (control.text && !control.flat ? "white" : "#28ffffff") : control.outlined ? "#a6000000" : "transparent"
         border.width: control.outlined || (control.activeFocus && !control.flat) ? 2 : 0
         border.color: "white"
-        Behavior on color { ColorAnimation { duration: control.reducedMotion ? 0 : 120 } }
+        Behavior on color {
+            ColorAnimation {
+                duration: control.reducedMotion ? 0 : 120
+                onDurationChanged: if (duration === 0)
+                    complete()
+            }
+        }
     }
     Icon {
         anchors.verticalCenter: parent.verticalCenter
@@ -58,7 +67,18 @@ Item {
         height: 44
         radius: 3
         color: "#ed181818"
-        visible: !control.text && control.highlighted && control.enabled
+        Motion {
+            id: tooltipMotion
+            shown: !control.text && control.highlighted && control.enabled
+            reducedMotion: control.reducedMotion
+            duration: 140
+            exitDuration: 100
+        }
+        opacity: tooltipMotion.progress
+        visible: opacity > 0
+        transform: Translate {
+            y: (control.tooltipBelow ? -4 : 4) * (1 - tooltipMotion.progress)
+        }
         Text {
             id: caption
             anchors.centerIn: parent
@@ -78,7 +98,8 @@ Item {
     }
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-            if (!event.isAutoRepeat && enabled) clicked();
+            if (!event.isAutoRepeat && enabled)
+                clicked();
             event.accepted = true;
         }
     }

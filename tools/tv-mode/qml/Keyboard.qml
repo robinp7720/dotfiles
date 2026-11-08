@@ -7,6 +7,19 @@ Rectangle {
     property bool symbols: false
     property color accent: "#83d2e3"
     property bool reducedMotion: false
+    property bool opened: false
+    readonly property real reveal: entrance.progress
+    Motion {
+        id: entrance
+        shown: keyboard.opened
+        reducedMotion: keyboard.reducedMotion
+        duration: 240
+    }
+    opacity: entrance.progress
+    transform: Translate {
+        y: 18 * (1 - entrance.progress)
+    }
+    enabled: opened
     signal closed
     width: 1080
     height: 450
@@ -16,11 +29,11 @@ Rectangle {
     border.width: 1
     function open(field) {
         target = field;
-        visible = true;
+        opened = true;
     }
     function finish() {
         let previous = target;
-        visible = false;
+        opened = false;
         target = null;
         if (previous)
             previous.forceActiveFocus();
@@ -70,21 +83,25 @@ Rectangle {
         Row {
             spacing: 12
             TvButton {
+                reducedMotion: keyboard.reducedMotion
                 text: keyboard.shifted ? "abc" : "ABC"
                 width: 130
                 onClicked: keyboard.shifted = !keyboard.shifted
             }
             TvButton {
+                reducedMotion: keyboard.reducedMotion
                 text: keyboard.symbols ? "Letters" : "123 #"
                 width: 150
                 onClicked: keyboard.symbols = !keyboard.symbols
             }
             TvButton {
+                reducedMotion: keyboard.reducedMotion
                 text: "Space"
                 width: 300
                 onClicked: keyboard.enter(" ")
             }
             TvButton {
+                reducedMotion: keyboard.reducedMotion
                 text: "⌫"
                 width: 120
                 onClicked: if (keyboard.target) {
@@ -93,6 +110,7 @@ Rectangle {
                 }
             }
             TvButton {
+                reducedMotion: keyboard.reducedMotion
                 text: "Done"
                 width: 200
                 primary: true
@@ -101,5 +119,5 @@ Rectangle {
             }
         }
     }
-    visible: false
+    visible: opened || entrance.progress > 0
 }

@@ -59,7 +59,7 @@ Window {
             lastSerial = lib.serial;
             focusPending = true;
             scrollTarget = 0;
-            keyboard.visible = false;
+            keyboard.opened = false;
             hero = {};
         }
         if (page === "home" && !hero.id && shelves.length && shelves[0].items.length) {
@@ -105,7 +105,7 @@ Window {
             scrollTarget = Math.min(scroll.contentHeight - scroll.height, p.y + item.height - scroll.height + 55);
     }
     function focusables(parent, result) {
-        if (!parent.visible || !parent.enabled || parent.opacity === 0)
+        if (!parent.visible || !parent.enabled)
             return;
         if (parent.activeFocusOnTab && parent.width > 0 && parent.height > 0)
             result.push(parent);
@@ -128,7 +128,7 @@ Window {
         if (key === "playerActivity")
             return;
         if (key === "back") {
-            if (keyboard.visible) {
+            if (keyboard.opened) {
                 keyboard.finish();
                 return;
             }
@@ -171,7 +171,7 @@ Window {
         if (current && current.gridOwner && current.gridOwner.navigate(key))
             return;
         let list = [];
-        focusables(keyboard.visible ? keyboard : scene, list);
+        focusables(keyboard.opened ? keyboard : scene, list);
         if (!current) {
             if (list.length)
                 list[0].forceActiveFocus();
@@ -206,7 +206,8 @@ Window {
     function openKeyboard(field) {
         keyboard.open(field);
         Qt.callLater(function () {
-            firstFocus(keyboard);
+            if (keyboard.opened)
+                firstFocus(keyboard);
         });
     }
     function login() {
@@ -220,9 +221,17 @@ Window {
             remember: remember.checked
         });
         password.text = "";
-        keyboard.visible = false;
+        keyboard.opened = false;
     }
-    onPageChanged: pageArrival.restart()
+    Motion {
+        id: pageMotion
+        shown: true
+        reducedMotion: reduced
+        duration: 280
+    }
+    onPageChanged: pageMotion.replay()
+    onReducedChanged: if (reduced)
+        backdropFade.complete()
     onBackdropChanged: {
         if (backdrop !== newBackdrop) {
             oldBackdrop = inLibrary && backdrop ? newBackdrop : "";
@@ -355,6 +364,8 @@ Window {
             from: 0
             to: newBackdrop ? (page === "home" ? 0.8 : 0.85) : 0
             duration: reduced ? 0 : 600
+            onDurationChanged: if (duration === 0)
+                complete()
             easing.type: Easing.OutCubic
         }
         Rectangle {
@@ -404,6 +415,8 @@ Window {
             Behavior on opacity {
                 NumberAnimation {
                     duration: reduced ? 0 : 180
+                    onDurationChanged: if (duration === 0)
+                        complete()
                 }
             }
         }
@@ -463,7 +476,11 @@ Window {
             width: 340
             height: 1080
             z: 4
-            visible: rail.expanded
+            opacity: Math.min(1, railMotion.progress * 1.5)
+            visible: opacity > 0
+            transform: Translate {
+                x: -12 * (1 - railMotion.progress)
+            }
             Text {
                 x: 35
                 y: 76
@@ -488,6 +505,11 @@ Window {
                     color: "#00141414"
                 }
             }
+        }
+        Motion {
+            id: railMotion
+            shown: rail.expanded
+            reducedMotion: reduced
         }
         Column {
             id: rail
@@ -527,8 +549,10 @@ Window {
                 TvButton {
                     required property var modelData
                     objectName: "nav_" + modelData.route
-                    compact: !rail.expanded
-                    text: rail.expanded ? modelData.name : ""
+                    labelAreaWidth: 248
+                    text: modelData.name
+                    labelOpacity: railMotion.progress
+                    surfaceWidth: 72 + 176 * railMotion.progress
                     width: rail.expanded ? 248 : 72
                     height: 72
                     iconName: modelData.route
@@ -569,6 +593,10 @@ Window {
         }
         MediaGrid {
             id: catalogue
+            opacity: pageMotion.progress
+            transform: Translate {
+                y: 16 * (1 - pageMotion.progress)
+            }
             objectName: "catalogue"
             x: 168
             y: 315
@@ -616,16 +644,22 @@ Window {
             contentWidth: width
             contentHeight: content.height + 80
             boundsBehavior: Flickable.StopAtBounds
-            interactive: !keyboard.visible
+            interactive: !keyboard.opened
             contentY: scrollTarget
             Behavior on contentY {
                 NumberAnimation {
                     duration: reduced ? 0 : 280
+                    onDurationChanged: if (duration === 0)
+                        complete()
                     easing.type: Easing.OutCubic
                 }
             }
             Item {
                 id: content
+                opacity: pageMotion.progress
+                transform: Translate {
+                    y: 16 * (1 - pageMotion.progress)
+                }
                 x: 18
                 width: 1664
                 height: page === "login" ? 850 : page === "search" ? 770 : page === "account" ? 830 : page === "detail" ? detailArea.height + (episodeSection.visible ? episodeSection.height : 0) : shelfColumn.y + shelfColumn.height
@@ -821,6 +855,8 @@ Window {
                         Behavior on opacity {
                             NumberAnimation {
                                 duration: reduced ? 0 : 320
+                                onDurationChanged: if (duration === 0)
+                                    complete()
                             }
                         }
                     }
@@ -1095,6 +1131,8 @@ Window {
                                 Behavior on contentX {
                                     NumberAnimation {
                                         duration: reduced ? 0 : 260
+                                        onDurationChanged: if (duration === 0)
+                                            complete()
                                         easing.type: Easing.OutCubic
                                     }
                                 }
@@ -1169,6 +1207,8 @@ Window {
                                     Behavior on scale {
                                         NumberAnimation {
                                             duration: reduced ? 0 : 180
+                                            onDurationChanged: if (duration === 0)
+                                                complete()
                                         }
                                     }
                                     Text {
@@ -1678,6 +1718,24 @@ Window {
         }
         Rectangle {
             id: toast
+            property string dismissedMessage: ""
+            property string displayedMessage: ""
+            property string message: lib.message || ""
+            onMessageChanged: {
+                dismissedMessage = "";
+                if (message)
+                    displayedMessage = message;
+            }
+            Motion {
+                id: toastMotion
+                shown: !!toast.message && toast.message !== toast.dismissedMessage
+                reducedMotion: reduced
+            }
+            opacity: toastMotion.progress
+            transform: Translate {
+                y: 12 * (1 - toastMotion.progress)
+            }
+            enabled: toastMotion.shown
             x: 260
             y: 920
             width: 1400
@@ -1685,12 +1743,12 @@ Window {
             radius: 4
             color: "#f22b2b2b"
             border.color: "#555555"
-            visible: !!lib.message
+            visible: opacity > 0
             z: 9
             Text {
                 anchors.fill: parent
                 anchors.margins: 20
-                text: lib.message || ""
+                text: toast.displayedMessage
                 font.family: "Inter"
                 font.pixelSize: 23
                 color: "#ffffff"
@@ -1701,26 +1759,30 @@ Window {
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked: toast.visible = false
+                onClicked: toast.dismissedMessage = toast.message
             }
         }
         Rectangle {
             x: 168
             y: 132
             height: 3
-            width: lib.loading ? 1664 : 0
+            width: 1664
             color: "#e50914"
             opacity: lib.loading ? 0.8 : 0
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 180
+                    duration: reduced ? 0 : 180
+                    onDurationChanged: if (duration === 0)
+                        complete()
                 }
             }
         }
         Rectangle {
             anchors.fill: parent
             color: "#b0000000"
-            visible: keyboard.visible
+            opacity: keyboard.reveal
+            visible: opacity > 0
+            enabled: keyboard.opened
             z: 19
             MouseArea {
                 anchors.fill: parent
@@ -1735,25 +1797,6 @@ Window {
             z: 20
             accent: window.accent
             reducedMotion: reduced
-        }
-        ParallelAnimation {
-            id: pageArrival
-            NumberAnimation {
-                target: content
-                property: "opacity"
-                from: 0
-                to: 1
-                duration: reduced ? 0 : 320
-                easing.type: Easing.OutCubic
-            }
-            NumberAnimation {
-                target: content
-                property: "y"
-                from: 24
-                to: 0
-                duration: reduced ? 0 : 320
-                easing.type: Easing.OutCubic
-            }
         }
         focus: true
         Keys.onPressed: event => {

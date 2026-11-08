@@ -82,7 +82,7 @@ TestCase {
         series = shows;
         episodes = eps;
     }
-    function route(page, extra) {
+    function route(page, extra, motion = false) {
         let lib = {
             page: page,
             serial: serial++,
@@ -99,17 +99,38 @@ TestCase {
                 lib[key] = extra[key];
         fake.state = {
             library: lib,
-            reducedMotion: true,
+            reducedMotion: !motion,
             controller: "Controller connected"
         };
         shell.requestActivate();
         wait(400);
     }
-    function capture(name) {
-        wait(100);
+    function capture(name, delay = 100) {
+        wait(delay);
         let image = grabImage(shell.contentItem);
         compare(image.width, shell.width);
         image.save("/tmp/tv-mode-shell-qa/" + name + ".png");
+    }
+    function test_motion_frames() {
+        route("home", {
+            rows: [
+                {
+                    title: "Continue watching",
+                    items: episodes.slice(0, 4)
+                }
+            ]
+        }, true);
+        let targets = [];
+        shell.focusables(shell.contentItem, targets);
+        targets.find(item => item.objectName === "nav_home").forceActiveFocus();
+        capture("navigation-entering", 60);
+        capture("navigation-settled", 240);
+        route("search", {}, true);
+        shell.openKeyboard(findChild(shell, "searchField"));
+        capture("keyboard-entering", 60);
+        capture("keyboard-settled", 240);
+        findChild(shell, "keyboard").finish();
+        capture("keyboard-exiting", 40);
     }
     function test_screens() {
         route("home", {

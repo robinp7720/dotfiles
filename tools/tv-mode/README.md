@@ -201,8 +201,11 @@ Artwork is confined to Home and title details; utility screens remain plain.
 
 TV mode deliberately uses this fixed high-contrast palette rather than wallpaper
 colors for focus and playback controls. The Matugen theme bridge remains available
-to components. Focus takes 160–180 ms, pages arrive in 320 ms, and artwork crossfades
-in 600 ms. Settings → Motion disables these animations for the
+to components. Focus takes 160–180 ms, pages arrive with a 16 px slide and fade
+in 280 ms, and artwork crossfades in 600 ms. The navigation rail, playback menus,
+intro/next-episode actions, keyboard, tooltips and notices have short, reversible
+entrance and exit transitions. Closing panels stop accepting input immediately.
+Settings → Motion disables motion and finishes active transitions immediately for the
 current session; `TV_MODE_REDUCED_MOTION=1` selects it at startup.
 
 ```bash

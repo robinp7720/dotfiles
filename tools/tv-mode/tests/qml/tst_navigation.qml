@@ -8,6 +8,7 @@ TestCase {
     when: windowShown
     property var actions: []
     property int serial: 1
+    property bool reducedMotion: true
     QtObject {
         id: fake
         property var state: ({
@@ -53,16 +54,60 @@ TestCase {
             theme: {
                 primary: "#83d2e3"
             },
-            reducedMotion: true
+            reducedMotion: test.reducedMotion
         };
         shell.requestActivate();
         wait(140);
     }
     function init() {
+        reducedMotion = true;
         actions = [];
         route("home", {
             authenticated: false
         });
+    }
+    function test_animated_keyboard_focus_and_exit() {
+        reducedMotion = false;
+        route("search");
+        let field = findChild(shell, "searchField");
+        verify(field);
+        shell.openKeyboard(field);
+        let keyboard = findChild(shell, "keyboard");
+        tryVerify(() => shell.activeFocusItem && shell.activeFocusItem.text === "q");
+        fake.input("press");
+        compare(field.text, "q");
+        tryCompare(keyboard, "reveal", 1);
+        keyboard.finish();
+        compare(keyboard.opened, false);
+        compare(keyboard.enabled, false);
+        compare(shell.activeFocusItem, field);
+        verify(keyboard.visible, "Keyboard stays rendered during its exit");
+        tryCompare(keyboard, "visible", false);
+    }
+    function test_animated_player_menu_and_reduced_motion() {
+        route("home");
+        fake.state = Object.assign({}, fake.state, {
+            reducedMotion: false,
+            playerView: true,
+            playback: {
+                paused: true,
+                audioTracks: []
+            }
+        });
+        let player = findChild(shell, "playbackView");
+        verify(player);
+        player.openMenu("Audio");
+        let overlay = findChild(player, "playerMenuOverlay");
+        verify(overlay.visible);
+        tryVerify(() => overlay.opacity > 0 && overlay.opacity < 1);
+        fake.state = Object.assign({}, fake.state, {
+            reducedMotion: true
+        });
+        compare(overlay.opacity, 1);
+        player.menu = "";
+        compare(overlay.opacity, 0);
+        compare(overlay.visible, false);
+        compare(overlay.enabled, false);
     }
     function test_home_controller_launchers() {
         fake.input("press");
