@@ -114,17 +114,33 @@ session is recreated once; errors remain visible instead of endlessly retrying.
 | Play/pause | A | Space |
 | Seek 10 seconds | D-pad left/right | Left/right |
 | Focus control row; return to seeking | D-pad down; up | Down; up |
+| Focus intro / next-episode actions | D-pad up from seeking, then A | Up, then Enter |
 | Select audio, subtitles, quality, or volume | Control row, then A | Control row, then Enter |
 | Stop and return to details | B | Escape |
 | Cycle subtitles, including off | X | X opens menu |
 | Cycle audio | Y | Y opens menu |
 | Cycle original / 1080p / 720p / auto | Left shoulder | Q opens menu |
 | Change volume | Volume buttons | + / − |
-| Skip current intro/recap, or next chapter | Right shoulder | N |
+| Skip current intro/recap | Right shoulder or Skip intro / recap button | N |
+| Play next episode | Episode actions, then A | E or Next episode button |
+| Next chapter | Control row, then A | Control row, then Enter |
 | Show TV home / return to playback | Hold Guide / B | Home / Escape |
 
 Controls fade during playback and reappear on input. Playback continues behind
 Home; the resume action returns to the video. The timeline also supports mouse seeking.
+The overlay shows series/episode context, remaining time, and the upcoming episode.
+Skip intro / recap appears only inside a valid marker supplied by Oblecto and stays
+accessible while the main controls are hidden. It never falls back to a chapter jump;
+Next chapter is a separate control and is disabled when no later chapter exists.
+Missing markers do not produce guessed intro skips.
+
+Next episode follows the adjacent episode in series order, including on rewatches,
+and is available independently of the autoplay preference. It saves the current
+position and releases the old session before starting the next, resumes that
+episode's saved position, and asks for a source when multiple versions exist.
+Unavailable adjacent episodes are not silently skipped. Episode titles respect
+the account's spoiler preferences. Automatic continuation at the end retains the
+account's autoplay and still-watching preferences.
 
 Library navigation uses D-pad/left stick and A/B, or arrows/Enter/Escape. Press A on a text field to open the controller-operated keyboard with uppercase
 and symbols; B dismisses it and restores field focus. Sign-in passwords are never saved. “Remember me” stores the token
@@ -196,8 +212,12 @@ The native HLS smoke test requires FFmpeg, Xvfb, xdotool, and ImageMagick:
 ```bash
 cargo build --manifest-path tools/tv-mode/Cargo.toml
 xvfb-run -a -s '-screen 0 1600x900x24' python tools/tv-mode/tests/native_player_smoke.py
+xvfb-run -a -s '-screen 0 1600x900x24' python tools/tv-mode/tests/native_player_smoke.py --episodes
 ```
 
 It serves a generated clip from a local Oblecto fixture and checks real rendered
 frames, pause/seek, quality changes, Home/return, engine reuse, and progress saving
-on shutdown. It uses temporary state and software decoding.
+on shutdown. The episode scenario also checks intro boundaries, paused skipping,
+next-episode resume, and final-progress/deletion ordering before the next creation.
+It uses temporary state and software decoding. Add `--artifacts /tmp/tv-mode-qa`
+to retain screenshots and the player log for visual review.

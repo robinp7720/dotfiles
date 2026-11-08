@@ -641,6 +641,19 @@ impl Library {
             });
         }
     }
+    pub fn continue_episode(&mut self, item: Media) {
+        let files = item.files();
+        if files.len() == 1 {
+            let position = item.resume();
+            self.play_request = Some((item, files[0].clone(), position));
+        } else {
+            self.route(
+                json!({"type":"detail","kind":"episode","id":item.id()}),
+                false,
+            );
+            self.message("Choose a source to play the next episode.");
+        }
+    }
     pub fn playback_finished(&mut self, item: &Media, ended: bool, prompt: bool) {
         self.route(
             json!({"type":"detail","kind":item.kind.path(),"id":item.id()}),
@@ -685,6 +698,30 @@ fn kind(value: &Value) -> Kind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn next_episode_resumes_single_source_and_requires_choice_for_multiple() {
+        let mut library = library();
+        let mut item = Media {
+            kind: Kind::Episode,
+            data: json!({"id":2,
+            "Files":[{"id":74}],"TrackEpisodes":[{"time":24.5,"progress":0.2}]}),
+        };
+        library.continue_episode(item.clone());
+        let (next, file, position) = library.play_request.take().unwrap();
+        assert_eq!(next.id(), 2);
+        assert_eq!(file["id"], 74);
+        assert_eq!(position, 24.5);
+        item.data["Files"] = json!([{"id":74},{"id":75}]);
+        let (api, server) = crate::oblecto::fixture::server(vec![
+            (200, item.data.clone()),
+            (200, json!({"next":null})),
+        ]);
+        library.api = Some(api);
+        library.continue_episode(item);
+        assert!(library.play_request.is_none());
+        assert_eq!(library.route["id"], 2);
+        server.join().unwrap();
+    }
     fn library() -> Library {
         let (tx, rx) = mpsc::channel();
         let (art_tx, art_rx) = mpsc::channel();

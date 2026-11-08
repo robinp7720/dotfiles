@@ -366,6 +366,58 @@ TestCase {
         fake.input("back");
         compare(actions[actions.length - 1].command, "stop");
     }
+    function test_episode_actions_keep_focus_and_do_not_retarget_expired_intro() {
+        let state = JSON.parse(JSON.stringify(fake.state));
+        state.playerView = true;
+        state.playback = {position: 12, duration: 300, skipLabel: "Skip intro", canSkipChapter: true};
+        state.nextEpisode = {available: true, title: "The next one", label: "S1 · E2"};
+        fake.state = state;
+        wait(50);
+        let player = findChild(shell, "playbackView");
+        fake.input("up");
+        compare(shell.activeFocusItem.objectName, "player_skip");
+        // Periodic status updates must not recreate the row or steal focus.
+        state = JSON.parse(JSON.stringify(state));
+        state.playback.position = 13;
+        fake.state = state;
+        wait(50);
+        compare(shell.activeFocusItem.objectName, "player_skip");
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "skip");
+        fake.input("right");
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "nextEpisode");
+        state = JSON.parse(JSON.stringify(state));
+        state.playback.skipLabel = null;
+        fake.state = state;
+        wait(50);
+        verify(!player.browsingActions);
+        fake.input("press");
+        compare(actions[actions.length - 1].command, "pause");
+        fake.input("up");
+        compare(shell.activeFocusItem.objectName, "player_nextEpisode");
+        state = JSON.parse(JSON.stringify(state));
+        state.switchingEpisode = true;
+        fake.state = state;
+        wait(30);
+        let count = actions.length;
+        fake.input("press");
+        compare(actions.length, count);
+    }
+    function test_player_without_markers_or_next_has_no_episode_actions() {
+        let state = JSON.parse(JSON.stringify(fake.state));
+        state.playerView = true;
+        state.playback = {position: 12, duration: 300};
+        fake.state = state;
+        wait(50);
+        let player = findChild(shell, "playbackView");
+        compare(player.availableActions.length, 0);
+        fake.input("up");
+        verify(!player.browsingActions);
+        fake.input("down");
+        for (let i = 0; i < 6; i++) fake.input("right");
+        compare(shell.activeFocusItem.objectName, "player_stop");
+    }
     function test_source_selection_and_power_hold() {
         route("detail", {
             detail: {

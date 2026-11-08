@@ -302,6 +302,9 @@ Window {
         visible: playerShowing
         playback: app.playback || ({})
         title: app.playerTitle || ""
+        subtitle: app.playerSubtitle || ""
+        nextEpisode: app.nextEpisode || ({})
+        switchingEpisode: !!app.switchingEpisode
         notice: lib.message || ""
         accent: window.accent
         reducedMotion: reduced

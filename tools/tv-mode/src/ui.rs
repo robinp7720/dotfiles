@@ -39,6 +39,9 @@ struct Shell {
     sender: mpsc::Sender<UiEvent>,
     control: Receiver<ControlCommand>,
     player: Option<(player::Handle, Receiver<player::Event>, Media)>,
+    next_lookup: Option<Receiver<Result<Option<Media>>>>,
+    next_episode: Option<Media>,
+    switching_episode: bool,
     active_app: Option<AppKind>,
     decoder_socket: PathBuf,
     decoder_ready: bool,
@@ -95,6 +98,9 @@ fn run_shell(
         sender: tx,
         control: crx,
         player: None,
+        next_lookup: None,
+        next_episode: None,
+        switching_episode: false,
         active_app: None,
         decoder_socket,
         decoder_ready: false,
@@ -170,6 +176,25 @@ extern "C" fn action(context: *mut c_void, bytes: *const c_char) {
 impl Shell {
     fn tick(&mut self) {
         self.library.poll();
+        if let Some(result) = self.next_lookup.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.next_lookup = None;
+            match result {
+                Ok(item) => {
+                    self.state["nextEpisode"] = item
+                        .as_ref()
+                        .map(|item| {
+                            json!({
+                                "title":item.display_title(&self.library.me["preferences"]),
+                                "label":item.episode_label(), "available":true
+                            })
+                        })
+                        .unwrap_or(Value::Null);
+                    self.next_episode = item;
+                }
+                Err(_) => self.state["nextEpisode"] = json!({"error":true}),
+            }
+            self.dirty = true;
+        }
         while let Ok(command) = self.control.try_recv() {
             match command {
                 ControlCommand::Show => self.show_home(),
@@ -206,15 +231,30 @@ impl Shell {
                         self.state["playing"] = false.into();
                         self.state["playerView"] = false.into();
                         self.state["playback"] = json!({});
+                        self.state["nextEpisode"] = Value::Null;
+                        self.next_lookup = None;
+                        let next = self
+                            .next_episode
+                            .take()
+                            .filter(|_| self.switching_episode && error.is_none());
+                        self.switching_episode = false;
+                        self.state["switchingEpisode"] = false.into();
                         self.dirty = true;
                         self.visibility(true);
-                        self.profile(Profile::Home);
+                        // A direct handoff stays at the media refresh rate; switching to
+                        // Home and back would make the TV renegotiate HDMI between episodes.
+                        if next.as_ref().is_none_or(|item| item.files().len() != 1) {
+                            self.profile(Profile::Home);
+                        }
                         let prompt = self.library.me["preferences"]["stillWatchingPrompt"] != false
                             && self.last_interaction.elapsed() >= Duration::from_secs(5400);
                         if self.exiting {
                             self.quit = true;
+                        } else if let Some(next) = next {
+                            self.library.continue_episode(next);
                         } else {
-                            self.library.playback_finished(&item, ended, prompt);
+                            self.library
+                                .playback_finished(&item, ended && error.is_none(), prompt);
                         }
                         if let Some(e) = error {
                             self.library.message(e);
@@ -271,6 +311,24 @@ impl Shell {
                 }
             }
             "player" => {
+                if a["command"] == "nextEpisode" {
+                    if !self.switching_episode
+                        && self.next_episode.is_some()
+                        && let Some((handle, _, _)) = &self.player
+                    {
+                        self.switching_episode = true;
+                        self.state["switchingEpisode"] = true.into();
+                        self.library.message("Opening next episode…");
+                        self.dirty = true;
+                        handle.send(CommandKind::Stop);
+                    }
+                    return;
+                }
+                if a["command"] == "stop" {
+                    self.switching_episode = false;
+                } else if self.switching_episode {
+                    return;
+                }
                 if let Some(command) = player_command(&a)
                     && let Some((handle, _, _)) = &self.player
                 {
@@ -400,9 +458,24 @@ impl Shell {
             return;
         }
         self.profile(Profile::Media);
+        self.next_episode = None;
+        self.next_lookup = None;
+        self.state["nextEpisode"] = Value::Null;
+        self.state["switchingEpisode"] = false.into();
+        if item.kind == oblecto::Kind::Episode {
+            let (tx, rx) = mpsc::channel();
+            let api = api.clone();
+            let id = item.id();
+            self.state["nextEpisode"] = json!({"loading":true});
+            self.next_lookup = Some(rx);
+            std::thread::spawn(move || {
+                let _ = tx.send(api.next_episode(id));
+            });
+        }
         let options = oblecto::playback_options(&file, &self.library.me["preferences"], position);
         let (handle, events) = player::start(api, options, self.decoder_socket.clone());
         self.state["playerTitle"] = item.display_title(&self.library.me["preferences"]).into();
+        self.state["playerSubtitle"] = item.subtitle().into();
         self.state["playerView"] = true.into();
         self.state["playback"] =
             json!({"position":position,"buffering":true,"paused":false,"volume":100});
@@ -552,6 +625,7 @@ fn player_command(action: &Value) -> Option<CommandKind> {
             .filter(|v| [0, 1, 360, 480, 720, 1080].contains(v))
             .map(|v| CommandKind::SetQuality(v as u16)),
         "skip" => Some(CommandKind::Skip),
+        "chapter" => Some(CommandKind::Chapter),
         _ => None,
     }
 }
