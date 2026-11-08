@@ -181,6 +181,7 @@ Item {
         onContentYChanged: if (!browser.rebuilding)
             viewportTimer.restart()
         ScrollBar.vertical: ScrollBar {
+            visible: browser.count > 0 && grid.contentHeight > grid.height
             policy: ScrollBar.AsNeeded
             active: true
             width: 7
@@ -230,17 +231,17 @@ Item {
         text: "No titles here yet. Try another filter or search."
         font.family: "Inter"
         font.pixelSize: 27
-        color: "#aec2cd"
+        color: "#b3b3b3"
         wrapMode: Text.Wrap
     }
     Text {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.leftMargin: 12
-        text: browser.loading || browser.moreLoading ? "Loading titles…" : browser.error ? "Couldn't load more titles. Your place is saved." : browser.hasMore ? titles.count + " titles · Keep exploring" : titles.count + " titles · All caught up"
+        text: browser.loading || browser.moreLoading ? "Loading titles…" : browser.error ? "Couldn't load more titles. Your place is saved." : browser.hasMore ? titles.count + " titles loaded" : titles.count + " titles"
         font.family: "Inter"
         font.pixelSize: 18
-        color: "#9ab1bf"
+        color: "#999999"
     }
     TvButton {
         id: retry

@@ -10,55 +10,47 @@ Item {
     property bool reducedMotion: false
     property bool hold: false
     signal clicked
-    width: 536
-    height: 224
+    width: 360
+    height: 104
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
     Accessible.name: title
     Accessible.onPressAction: clicked()
-    scale: activeFocus ? 1.018 : 1
-    z: activeFocus ? 2 : 0
-    Behavior on scale {
-        NumberAnimation {
-            duration: tile.reducedMotion ? 0 : 160
-            easing.type: Easing.OutCubic
-        }
-    }
     Rectangle {
         anchors.fill: parent
-        radius: 14
-        color: tile.tint
-        border.width: tile.activeFocus ? 3 : 1
+        radius: 4
+        color: tile.activeFocus ? "#f5f5f5" : "#c0202020"
+        border.width: tile.activeFocus ? 2 : 1
         border.color: tile.activeFocus ? "#f2f3f5" : "#16ffffff"
     }
     Icon {
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: 36
-        width: 88
-        height: 88
+        x: 28
+        anchors.verticalCenter: parent.verticalCenter
+        width: 56
+        height: 56
         name: tile.iconName
-        color: tile.accent
+        color: tile.activeFocus ? "#141414" : "white"
         visible: logo.status !== Image.Ready
     }
     Image {
         id: logo
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: 36
-        width: 88
-        height: 88
+        x: 28
+        anchors.verticalCenter: parent.verticalCenter
+        width: 56
+        height: 56
         source: tile.artwork
-        sourceSize.width: 176
-        sourceSize.height: 176
+        sourceSize.width: 112
+        sourceSize.height: 112
         fillMode: Image.PreserveAspectFit
         visible: status === Image.Ready
     }
     Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: 151
+        x: 112
+        anchors.verticalCenter: parent.verticalCenter
         text: tile.title
-        color: "#f2f3f5"
+        color: tile.activeFocus ? "#141414" : "#f2f3f5"
         font.family: "Inter"
-        font.pixelSize: 30
+        font.pixelSize: 28
         font.weight: Font.Medium
     }
     MouseArea {

@@ -9,10 +9,10 @@ Rectangle {
     property bool reducedMotion: false
     signal closed
     width: 1080
-    height: 400
-    radius: 28
-    color: "#f218252f"
-    border.color: "#405a67"
+    height: 450
+    radius: 4
+    color: "#fc181818"
+    border.color: "#454545"
     border.width: 1
     function open(field) {
         target = field;
@@ -31,8 +31,21 @@ Rectangle {
             target.insert(target.cursorPosition, text);
         }
     }
+    Text {
+        objectName: "keyboardPreview"
+        x: 50
+        y: 24
+        width: 980
+        text: !keyboard.target ? "" : keyboard.target.echoMode === TextInput.Password ? "•".repeat(keyboard.target.text.length) : keyboard.target.text || keyboard.target.placeholderText || "Enter text"
+        elide: Text.ElideLeft
+        color: keyboard.target && keyboard.target.text ? "white" : "#999999"
+        font.family: "Inter"
+        font.pixelSize: 28
+    }
     Column {
-        anchors.centerIn: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 32
         spacing: 12
         Repeater {
             model: keyboard.symbols ? ["1234567890", "@#$%&*()-_", "+=!?/.:,;'"] : ["qwertyuiop", "asdfghjkl'", "zxcvbnm.-_"]
