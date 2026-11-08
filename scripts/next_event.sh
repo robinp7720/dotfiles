@@ -359,7 +359,8 @@ now_epoch="$(current_epoch)"
 if [[ -f "$CACHE_FILE" ]]; then
   cache_mtime="$(mtime_epoch "$CACHE_FILE")"
   age=$(( now_epoch - cache_mtime ))
-  if [[ "$age" -lt "$CACHE_TTL_SECS" && -s "$CACHE_FILE" ]]; then
+  # A clock correction can leave a cache timestamp in the future.
+  if [[ "$age" -ge 0 && "$age" -lt "$CACHE_TTL_SECS" && -s "$CACHE_FILE" ]]; then
     render_cached_json "$(<"$CACHE_FILE")"
   fi
 fi
