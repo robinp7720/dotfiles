@@ -17,6 +17,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--binary", type=Path, default=REPO / "tools/tv-mode/target/debug/tv-mode")
 parser.add_argument("--artifacts", type=Path, help="Keep screenshots of the synthetic clip")
 parser.add_argument("--episodes", action="store_true", help="Exercise intro skipping and next-episode handoff")
+parser.add_argument("--motion", action="store_true", help="Exercise the UI with animations enabled")
 args = parser.parse_args()
 
 
@@ -141,7 +142,7 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
     runtime.mkdir(mode=0o700)
     env = os.environ | {"QT_QPA_PLATFORM": "xcb", "XDG_RUNTIME_DIR": str(runtime),
                         "XDG_STATE_HOME": str(root / "state"), "TV_MODE_SOFTWARE_VIDEO": "1",
-                        "TV_MODE_REDUCED_MOTION": "1"}
+                        "TV_MODE_REDUCED_MOTION": "0" if args.motion else "1"}
     with (artifacts / "player.log").open("w") as log:
         app = subprocess.Popen([str(args.binary.resolve()), "--config", str(root / "config.toml"),
                                 "preview", "--no-controller"], env=env, stdout=log, stderr=log)

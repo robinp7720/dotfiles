@@ -16,6 +16,10 @@ Item {
     property color accent: "#83d2e3"
     property bool reducedMotion: false
     property real progress: 0
+    property real labelOpacity: 1
+    property real labelAreaWidth: width
+    property real surfaceWidth: width
+    readonly property bool lightSurface: (surface.color.r * 0.213 + surface.color.g * 0.715 + surface.color.b * 0.072) * surface.color.a > 0.5
     signal clicked
     signal pressed
     signal released
@@ -26,7 +30,9 @@ Item {
     Accessible.name: text
     Accessible.onPressAction: clicked()
     Rectangle {
-        anchors.fill: parent
+        id: surface
+        width: control.surfaceWidth
+        height: parent.height
         radius: 3
         color: control.activeFocus ? "white" : control.primary ? "white" : control.selected && !control.quiet ? "#444444" : control.quiet || control.flat ? "transparent" : "#333333"
         opacity: control.enabled ? 1 : 0.4
@@ -35,6 +41,8 @@ Item {
         Behavior on color {
             ColorAnimation {
                 duration: control.reducedMotion ? 0 : 160
+                onDurationChanged: if (duration === 0)
+                    complete()
             }
         }
         Rectangle {
@@ -54,17 +62,18 @@ Item {
         height: 28
         name: control.iconName
         visible: !!name
-        color: control.activeFocus || control.primary ? "#14171c" : control.selected ? "white" : "#b3b3b3"
+        color: control.lightSurface ? "#14171c" : control.selected ? "white" : "#b3b3b3"
     }
     Text {
         id: label
-        width: control.width - (control.compact ? 20 : 48) - (control.iconName && control.text ? 42 : 0) - (control.valueText ? 350 : 0)
+        opacity: control.labelOpacity
+        width: control.labelAreaWidth - (control.compact ? 20 : 48) - (control.iconName && control.text ? 42 : 0) - (control.valueText ? 350 : 0)
         horizontalAlignment: control.flat ? Text.AlignLeft : Text.AlignHCenter
         elide: Text.ElideRight
         anchors.centerIn: parent
-        anchors.horizontalCenterOffset: (control.iconName && control.text ? 21 : 0) - (control.valueText ? 175 : 0)
+        anchors.horizontalCenterOffset: (control.labelAreaWidth - control.width) / 2 + (control.iconName && control.text ? 21 : 0) - (control.valueText ? 175 : 0)
         text: control.icon + (control.icon && control.text ? "  " : "") + control.text
-        color: control.activeFocus || control.primary ? "#141414" : "#eeeeee"
+        color: control.lightSurface ? "#141414" : "#eeeeee"
         font.family: "Inter"
         font.pixelSize: control.compact ? 29 : 24
         font.weight: Font.DemiBold
@@ -98,7 +107,7 @@ Item {
         visible: !!text
         font.family: "Inter"
         font.pixelSize: 22
-        color: control.activeFocus ? "#444444" : "#b3b3b3"
+        color: control.lightSurface ? "#444444" : "#b3b3b3"
     }
     Rectangle {
         anchors.fill: parent

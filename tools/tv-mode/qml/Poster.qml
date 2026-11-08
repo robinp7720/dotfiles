@@ -22,6 +22,8 @@ Item {
     Behavior on scale {
         NumberAnimation {
             duration: card.reducedMotion ? 0 : 180
+            onDurationChanged: if (duration === 0)
+                complete()
             easing.type: Easing.OutCubic
         }
     }
@@ -67,6 +69,8 @@ Item {
             Behavior on opacity {
                 NumberAnimation {
                     duration: card.reducedMotion ? 0 : 260
+                    onDurationChanged: if (duration === 0)
+                        complete()
                 }
             }
             clip: true
