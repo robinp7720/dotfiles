@@ -224,6 +224,12 @@ extern "C" int tv_quick_run(void *context, Poll poll, Action action, const char 
     if (!window) return 2;
     window->setPersistentGraphics(true);
     window->setPersistentSceneGraph(true);
+    // Release the desktop curtain only after an actual rendered shell frame.
+    // frameSwapped may originate on the render thread; Rust stays on the GUI thread.
+    QObject::connect(window, &QQuickWindow::frameSwapped, &bridge, [window, &bridge] {
+        bridge.send({{"type", "presented"}});
+        QMetaObject::invokeMethod(window, "enterSession");
+    }, Qt::ConnectionType(Qt::QueuedConnection | Qt::SingleShotConnection));
     if (!preview) {
         QScreen *target = nullptr;
         for (auto screen : app.screens()) if (screen->name() == output) target = screen;

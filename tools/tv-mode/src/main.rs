@@ -5,6 +5,7 @@ mod oblecto;
 mod platform;
 mod player;
 mod session;
+mod transition;
 mod ui;
 
 use std::path::PathBuf;
@@ -42,6 +43,9 @@ enum CommandName {
     /// Run the TV shell process (used by tv-mode.service)
     #[command(hide = true)]
     Run,
+    /// Internal desktop fade helper, isolated from the Qt event loop
+    #[command(hide = true)]
+    Transition,
     /// Preview the TV interface without changing displays, audio, or power
     Preview {
         /// Disable physical controllers when running an isolated UI test
@@ -62,6 +66,9 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        CommandName::Transition => {
+            std::process::exit(transition::run());
+        }
         CommandName::Start => start_service(),
         CommandName::Home => control::send(ControlCommand::Show, Duration::from_secs(1)),
         CommandName::Status => {

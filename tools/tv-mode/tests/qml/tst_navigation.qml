@@ -35,6 +35,26 @@ TestCase {
         bridge: fake
         visible: true
     }
+    function initTestCase() {
+        shell.enterSession();
+    }
+    function test_session_entrance_is_once_and_reduced_motion_settles() {
+        let motion = findChild(shell, "sessionMotion");
+        verify(motion);
+        reducedMotion = false;
+        route("home");
+        motion.shown = false;
+        tryCompare(motion, "progress", 0);
+        shell.enterSession();
+        tryVerify(() => motion.progress > 0 && motion.progress < 1);
+        let before = motion.progress;
+        shell.enterSession();
+        compare(motion.progress, before);
+        reducedMotion = true;
+        route("home");
+        compare(motion.progress, 1);
+        compare(motion.running, false);
+    }
     function route(page, extra) {
         let lib = {
             page: page,

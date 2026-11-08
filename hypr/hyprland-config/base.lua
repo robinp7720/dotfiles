@@ -83,6 +83,9 @@ hl.layer_rule({ name = "vigil-no_anim", match = { namespace = "vigil" }, no_anim
 hl.layer_rule({ name = "vigil-control-center-no_anim", match = { namespace = "vigil-control-center" }, no_anim = true })
 hl.layer_rule({ name = "vigil-notifications-no_anim", match = { namespace = "vigil-notifications" }, no_anim = true })
 hl.layer_rule({ name = "tv-mode-no_anim", match = { namespace = "tv-mode" }, no_anim = true })
+-- The TV handoff curtain animates its own opacity across all outputs.
+hl.layer_rule({ name = "tv-mode-transition-no_anim", match = { namespace = "tv-mode-transition" }, no_anim = true, blur = false })
+hl.window_rule({ name = "tv-mode-no_anim", match = { class = "me[.]robindecker[.]TvMode" }, no_anim = true })
 hl.layer_rule({ name = "vigil-control-center-blur", match = { namespace = "vigil-control-center" }, blur = false })
 hl.layer_rule({ name = "vigil-notifications-blur", match = { namespace = "vigil-notifications" }, blur = false })
 hl.layer_rule({ name = "kitty-quick-access-animation", match = { namespace = "kitty-quick-access" }, animation = "slide top" })

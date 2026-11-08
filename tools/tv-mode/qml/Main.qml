@@ -45,6 +45,17 @@ Window {
     function send(a) {
         bridge.send(a);
     }
+    // The native host starts this once the window has presented its first frame.
+    // Returning from Steam or playback must not replay the session entrance.
+    function enterSession() {
+        sessionMotion.shown = true;
+    }
+    Motion {
+        id: sessionMotion
+        objectName: "sessionMotion"
+        reducedMotion: reduced
+        duration: 360
+    }
     function same(a, b) {
         return JSON.stringify(a) === JSON.stringify(b);
     }
@@ -327,6 +338,10 @@ Window {
     Item {
         id: scene
         visible: !playerShowing
+        opacity: reduced ? 1 : sessionMotion.progress
+        transform: Translate {
+            y: reduced ? 0 : 12 * (1 - sessionMotion.progress)
+        }
         width: 1920
         height: 1080
         anchors.centerIn: parent

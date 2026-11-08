@@ -65,6 +65,7 @@ pub struct Session {
     runtime_dir: PathBuf,
     snapshot: SessionSnapshot,
     restored: bool,
+    transition: Option<crate::transition::Transition>,
 }
 
 impl Session {
@@ -91,6 +92,7 @@ impl Session {
             runtime_dir,
             snapshot,
             restored: false,
+            transition: crate::transition::Transition::begin(),
         };
         if let Err(error) = session.apply_enter() {
             let rollback = session.restore();
@@ -106,6 +108,12 @@ impl Session {
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub fn reveal(&mut self) {
+        if let Some(transition) = self.transition.take() {
+            transition.reveal();
+        }
     }
 
     pub fn apply_profile(&self, profile: Profile) -> Result<()> {
@@ -129,6 +137,7 @@ impl Session {
                 .with_context(|| format!("failed to remove {}", state_path.display()))?;
         }
         self.restored = true;
+        self.reveal();
         Ok(())
     }
 

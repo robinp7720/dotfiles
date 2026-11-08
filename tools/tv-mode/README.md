@@ -13,6 +13,7 @@ recovery; a small C++ bridge exposes presentation state to QML.
 
 Requires a C++17 compiler, pkg-config, **Qt 6 Base, Declarative, and Wayland**
 and **libmpv 0.38+** (`qt6-base qt6-declarative qt6-wayland mpv` on Arch),
+plus **GTK 4 Layer Shell** (`gtk4-layer-shell`, also used by Vigil and Luma),
 an OpenGL 3.3-capable graphics driver, and the existing session tools.
 QML and artwork-free ambient visuals are embedded in the binary; no web server
 or browser is needed. Inter is the preferred font, with the system sans fallback.
@@ -49,6 +50,15 @@ configured HDMI audio profile to become available, before changing the desktop. 
 the TV remains unavailable or a mode is unsupported, startup fails with a message
 in `journalctl --user -u tv-mode.service`; turn on the TV, select its connected
 input, and retry.
+
+After readiness checks, the desktop fades to black over 240 ms on every active
+output. Display, audio and workspace changes happen behind this curtain. The first
+rendered TV Home frame releases it with a 320 ms fade while Home arrives with a
+small 12 px slide. HDMI resynchronization can still briefly blank the TV itself.
+The curtain never takes focus or pointer input; startup rollback or a lost owner
+releases it, with a 15-second safety limit if the shell never renders. Missing
+transition support falls back to the normal startup path. `TV_MODE_REDUCED_MOTION=1`
+skips the handoff animation; the desktop fade also respects GTK's animation setting.
 
 Steam startup remains in the gaming profile while its launcher updates; a
 temporary updater window closing does not count as leaving Big Picture.

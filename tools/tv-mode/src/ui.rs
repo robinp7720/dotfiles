@@ -336,6 +336,11 @@ impl Shell {
                 }
             }
             "exit" => self.exit(),
+            "presented" => {
+                if let Some(session) = &mut self.session {
+                    session.reveal();
+                }
+            }
             "home" => self.show_home(),
             "resumeApp" => {
                 if self.player.is_some() {
