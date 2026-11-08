@@ -5,11 +5,18 @@ Item {
     id: player
     property var playback: ({})
     property string title: ""
+    property string subtitle: ""
+    property var nextEpisode: ({})
+    property bool switchingEpisode: false
     property string notice: ""
     property color accent: "#83d2e3"
     property bool reducedMotion: false
     property bool controlsVisible: true
     property bool browsingControls: false
+    property bool browsingActions: false
+    property int actionIndex: 0
+    readonly property string actionKey: (playback.skipLabel ? "skip," : "") + (nextEpisode.available ? "nextEpisode," : "")
+    readonly property var availableActions: actionKey.split(",").filter(value => !!value)
     property int controlIndex: 0
     property string menu: ""
     property var menuEntries: []
@@ -18,6 +25,8 @@ Item {
     readonly property bool buffering: !!playback.buffering
     signal action(var value)
     function command(name, value) {
+        if (switchingEpisode && name !== "stop")
+            return;
         activity();
         action({
             type: "player",
@@ -35,7 +44,9 @@ Item {
         hideTimer.restart();
     }
     function focusControl() {
-        if (browsingControls && controls.itemAt(controlIndex))
+        if (browsingActions && contextActions.itemAt(actionIndex))
+            contextActions.itemAt(actionIndex).forceActiveFocus();
+        else if (browsingControls && controls.itemAt(controlIndex))
             controls.itemAt(controlIndex).forceActiveFocus();
         else
             player.forceActiveFocus();
@@ -127,24 +138,35 @@ Item {
             return;
         }
         if (key === "down") {
+            browsingActions = false;
             browsingControls = true;
             focusControl();
             return;
         }
         if (key === "up") {
+            browsingActions = !browsingControls && availableActions.length > 0;
             browsingControls = false;
             focusControl();
             return;
         }
         if (key === "left" || key === "right") {
-            if (browsingControls) {
+            if (browsingActions) {
+                actionIndex = Math.max(0, Math.min(availableActions.length - 1, actionIndex + (key === "right" ? 1 : -1)));
+                focusControl();
+            } else if (browsingControls) {
                 controlIndex = Math.max(0, Math.min(controls.count - 1, controlIndex + (key === "right" ? 1 : -1)));
+                if (!controls.itemAt(controlIndex).enabled)
+                    controlIndex = Math.max(0, Math.min(controls.count - 1, controlIndex + (key === "right" ? 1 : -1)));
                 focusControl();
             } else
                 command("seek", key === "right" ? 10 : -10);
         } else if (key === "press") {
-            if (browsingControls)
-                controls.itemAt(controlIndex).clicked();
+            if (browsingActions && contextActions.itemAt(actionIndex))
+                contextActions.itemAt(actionIndex).clicked();
+            else if (browsingControls) {
+                if (controls.itemAt(controlIndex).enabled)
+                    controls.itemAt(controlIndex).clicked();
+            }
             else
                 command("pause");
         }
@@ -170,6 +192,8 @@ Item {
             openMenu("Quality");
         else if (key === Qt.Key_N)
             command("skip");
+        else if (key === Qt.Key_E && nextEpisode.available)
+            command("nextEpisode");
         else if (key === Qt.Key_Plus || key === Qt.Key_Equal)
             command("volume", 5);
         else if (key === Qt.Key_Minus)
@@ -185,13 +209,24 @@ Item {
     onVisibleChanged: {
         if (visible) {
             browsingControls = false;
+            browsingActions = false;
+            controlIndex = 0;
+            actionIndex = 0;
             menu = "";
             forceActiveFocus();
             activity();
         }
     }
-    onPausedChanged: if (paused)
-        activity()
+    onPausedChanged: activity()
+    onBufferingChanged: activity()
+    onAvailableActionsChanged: {
+        // A disappearing intro must never turn a pending A press into Next episode.
+        if (browsingActions) {
+            browsingActions = false;
+            actionIndex = 0;
+            forceActiveFocus();
+        }
+    }
     onNoticeChanged: if (notice)
         activity()
     Keys.onPressed: event => {
@@ -200,7 +235,7 @@ Item {
     Timer {
         id: hideTimer
         interval: 4500
-        onTriggered: if (!player.paused && !player.buffering && !player.menu && !player.browsingControls)
+        onTriggered: if (!player.paused && !player.buffering && !player.menu && !player.browsingControls && !player.browsingActions)
             player.controlsVisible = false
     }
     MouseArea {
@@ -209,6 +244,7 @@ Item {
         onPositionChanged: player.activity()
         onClicked: {
             player.browsingControls = false;
+            player.browsingActions = false;
             player.forceActiveFocus();
             player.command("pause");
         }
@@ -234,6 +270,16 @@ Item {
                         color: "#00000000"
                     }
                 }
+            }
+            Text {
+                x: 100
+                y: 128
+                width: 1440
+                text: player.subtitle
+                elide: Text.ElideRight
+                font.family: "Inter"
+                font.pixelSize: 24
+                color: "#bfc8cb"
             }
             Text {
                 x: 100
@@ -339,6 +385,14 @@ Item {
                 color: "#e5e7eb"
             }
             Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 865
+                text: player.playback.duration > 0 ? player.time(Math.max(0, player.playback.duration - player.playback.position)) + " remaining" : ""
+                font.family: "Inter"
+                font.pixelSize: 24
+                color: "#bfc8cb"
+            }
+            Text {
                 x: 1450
                 y: 865
                 width: 370
@@ -354,14 +408,15 @@ Item {
                 spacing: 16
                 Repeater {
                     id: controls
-                    model: ["pause", "Audio", "Subtitles", "Quality", "quieter", "louder", "skip", "stop"]
+                    model: ["pause", "Audio", "Subtitles", "Quality", "quieter", "louder", "chapter", "stop"]
                     TvButton {
                         required property string modelData
                         required property int index
                         objectName: "player_" + modelData
                         width: 201
                         height: 64
-                        text: modelData === "pause" ? (player.paused ? "Play" : "Pause") : modelData === "quieter" ? "Volume −" : modelData === "louder" ? "Volume +" : modelData === "skip" ? "Skip" : modelData === "stop" ? "Back" : modelData
+                        text: modelData === "pause" ? (player.paused ? "Play" : "Pause") : modelData === "quieter" ? "Volume −" : modelData === "louder" ? "Volume +" : modelData === "chapter" ? "Next chapter" : modelData === "stop" ? "Back" : modelData
+                        enabled: (!player.switchingEpisode || modelData === "stop") && (modelData !== "chapter" || !!player.playback.canSkipChapter)
                         selected: player.browsingControls && player.controlIndex === index
                         accent: player.accent
                         reducedMotion: player.reducedMotion
@@ -377,10 +432,50 @@ Item {
             Text {
                 x: 100
                 y: 1022
-                text: "← → Seek    ↓ Controls    A / Space Pause    B / Esc Back    X Subtitles    Y Audio"
+                text: "← → Seek    ↓ Controls" + (player.availableActions.length ? "    ↑ Episode actions" : "") + "    A / Space Pause    B / Esc Back    X Subtitles    Y Audio"
                 font.family: "Inter"
                 font.pixelSize: 20
                 color: "#a7afb9"
+            }
+        }
+        Column {
+            anchors.right: parent.right
+            anchors.rightMargin: 100
+            y: 650
+            spacing: 16
+            visible: !player.menu && (player.controlsVisible || !!player.playback.skipLabel || player.browsingActions)
+            Text {
+                width: 680
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
+                text: player.nextEpisode.available ? "Up next · " + player.nextEpisode.label + " · " + player.nextEpisode.title : player.nextEpisode.loading ? "Finding next episode…" : player.nextEpisode.error ? "Next episode unavailable" : ""
+                font.family: "Inter"
+                font.pixelSize: 24
+                color: "white"
+                style: Text.Outline
+                styleColor: "#b0000000"
+                visible: player.controlsVisible && !!text
+            }
+            Row {
+                anchors.right: parent.right
+                spacing: 16
+                Repeater {
+                    id: contextActions
+                    model: player.availableActions
+                    TvButton {
+                        required property string modelData
+                        required property int index
+                        objectName: "player_" + modelData
+                        width: 280
+                        height: 68
+                        text: modelData === "skip" ? (player.playback.skipLabel || "Skip intro") : player.switchingEpisode ? "Opening…" : "Next episode"
+                        enabled: !player.switchingEpisode
+                        primary: modelData === "skip"
+                        accent: player.accent
+                        reducedMotion: player.reducedMotion
+                        onClicked: if (enabled) player.command(modelData)
+                    }
+                }
             }
         }
         BusyIndicator {

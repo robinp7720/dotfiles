@@ -16,6 +16,7 @@ REPO = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--binary", type=Path, default=REPO / "tools/tv-mode/target/debug/tv-mode")
 parser.add_argument("--artifacts", type=Path, help="Keep screenshots of the synthetic clip")
+parser.add_argument("--episodes", action="store_true", help="Exercise intro skipping and next-episode handoff")
 args = parser.parse_args()
 
 
@@ -50,12 +51,20 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
     movie = {"id": 1, "movieName": "Native HLS playback", "runtime": 1,
              "releaseDate": "2026-01-01", "Files": [{"id": 73, "name": "HLS test", "duration": 60}],
              "TrackMovies": [{"time": 4.0, "progress": 0.07}]}
+    episode = {"id": 1, "episodeName": "The journey begins", "SeriesId": 1,
+               "Series": {"id": 1, "seriesName": "Open trails"}, "airedSeason": "1",
+               "airedEpisodeNumber": "1", "Files": movie["Files"],
+               "TrackEpisodes": [{"time": 4.0, "progress": 0.07}]}
+    next_episode = {**episode, "id": 2, "episodeName": "Across the valley", "airedEpisodeNumber": "2",
+                    "Files": [{"id": 74, "name": "Next episode", "duration": 60}],
+                    "TrackEpisodes": [{"time": 7.5, "progress": 0.125}]}
 
     def descriptor():
         return {"sessionId": "fixture-session", "revision": state["revision"],
                 "position": state["position"], "duration": 60, "method": "remux",
                 "mediaUrl": f"/media/stream.m3u8?revision={state['revision']}",
-                "tracks": [], "selectedTracks": {}, "chapters": [], "segments": []}
+                "tracks": [], "selectedTracks": {}, "chapters": [{"start": 30}, {"start": 45}],
+                "segments": [{"type": "intro", "start": 10, "end": 22}] if args.episodes else []}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *unused):
@@ -67,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
             requests.append((self.command, path, body))
             status = 200
             content_type = "application/json"
-            if path.endswith(("/poster", "/fanart")):
+            if path.endswith(("/poster", "/fanart", "/banner")):
                 data = (root / "art.png").read_bytes()
                 content_type = "image/png"
             elif path.startswith("/media/"):
@@ -89,10 +98,14 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
                     data = {"items": [], "pageInfo": {"nextCursor": None}}
                 elif path == "/movie/1/info":
                     data = movie
+                elif path in ["/episode/1/info", "/episode/2/info"]:
+                    data = episode if path == "/episode/1/info" else next_episode
+                elif path in ["/episode/1/context", "/episode/2/context"]:
+                    data = {"next": next_episode if path == "/episode/1/context" else None}
                 elif path == "/movies/watching":
-                    data = [movie]
+                    data = [] if args.episodes else [movie]
                 elif path in ["/episodes/watching", "/episodes/next"]:
-                    data = []
+                    data = [episode] if args.episodes and path == "/episodes/watching" else []
                 elif path.endswith("/progress"):
                     state["position"] = body["position"]
                     data, status = None, 204
@@ -164,7 +177,7 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
             time.sleep(0.2)
             run("xdotool", "mousemove", "215", "305", "click", "1")
             time.sleep(1)
-            key("Return")
+            key("Down" if args.episodes else "Return")
             key("Return")
             key("Return")
             wait_for(lambda: (prop("time-pos") or 0) > 5)
@@ -181,6 +194,13 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
                             "-channel", channel, "-format", "%[fx:mean]", "info:",
                             capture_output=True, text=True)
                 assert float(color.stdout) > 0.65, "Decoded video did not render correctly"
+            if args.episodes:
+                key("n")
+                wait_for(lambda: abs((prop("time-pos") or 0) - 22) < 0.2)
+                assert prop("pause") is True
+                key("n")  # No implicit jump to the next chapter outside an intro.
+                assert abs(prop("time-pos") - 22) < 0.2
+                shot("intro-skipped")
             position = prop("time-pos")
             key("q")
             key("Down")
@@ -193,11 +213,22 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
             assert not any(r[0] == "DELETE" for r in requests)
             key("Escape")
             shot("returned-to-playback")
+            if args.episodes:
+                key("Up")
+                shot("next-episode-focused")
+                key("Return")
+                wait_for(lambda: sum(r[0] == "POST" and r[1] == "/playback/sessions" for r in requests) == 2)
+                wait_for(lambda: 7.5 <= (prop("time-pos") or 0) < 12)
+                assert prop("pause") is False
+                creates = [r for r in requests if r[0] == "POST" and r[1] == "/playback/sessions"]
+                assert creates[1][2]["fileId"] == 74
+                assert creates[1][2]["position"] == 7.5
+                shot("next-episode-playing")
             key("Escape")
-            wait_for(lambda: any(r[0] == "DELETE" for r in requests))
+            wait_for(lambda: sum(r[0] == "DELETE" for r in requests) == (2 if args.episodes else 1))
             # Reuse the same engine, then exit with playback active.
             key("Return")
-            wait_for(lambda: sum(r[0] == "POST" and r[1] == "/playback/sessions" for r in requests) == 2)
+            wait_for(lambda: sum(r[0] == "POST" and r[1] == "/playback/sessions" for r in requests) == (3 if args.episodes else 2))
             wait_for(lambda: (prop("time-pos") or 0) > 4.5)
             app.terminate()
             app.wait(timeout=10)
@@ -211,7 +242,11 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
             assert old[2]["revision"] == patch[2]["revision"] == 1
             assert abs(old[2]["position"] - patch[2]["position"]) < 0.2
             deletes = [i for i, r in enumerate(operations) if r[0] == "DELETE"]
-            assert len(deletes) == 2
+            assert len(deletes) == (3 if args.episodes else 2)
+            if args.episodes:
+                second_create = [i for i, r in enumerate(operations) if r[0] == "POST" and r[1] == "/playback/sessions"][1]
+                assert deletes[0] < second_create
+                assert abs(operations[deletes[0] - 1][2]["position"] - 22) < 0.2
             assert all(operations[i - 1][1].endswith("/progress") for i in deletes)
             assert operations[deletes[0] - 1][2]["revision"] == 2
             assert operations[deletes[0] - 1][2]["paused"] is True

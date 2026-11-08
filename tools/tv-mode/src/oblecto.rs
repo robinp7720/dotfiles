@@ -260,6 +260,19 @@ impl Api {
             cursor: value["pageInfo"]["nextCursor"].as_str().map(String::from),
         })
     }
+    pub fn next_episode(&self, id: i64) -> Result<Option<Media>> {
+        let context = self.get(&format!("episode/{id}/context"))?;
+        let Some(next) = context["next"]["id"]
+            .as_i64()
+            .filter(|next| *next > 0 && *next != id)
+        else {
+            return Ok(None);
+        };
+        // Explicit Next follows episode order, including already-watched episodes.
+        // Do not silently jump over an unavailable episode to nextUnwatched.
+        let item = self.detail(Kind::Episode, next)?;
+        Ok((!item.files().is_empty()).then_some(item))
+    }
     pub fn episodes(&self, id: i64) -> Result<Vec<Media>> {
         let value = self.get(&format!("series/{id}/episodes"))?;
         let mut items = media_array(Kind::Episode, value)?;
@@ -654,6 +667,24 @@ pub(crate) mod fixture {
 #[cfg(test)]
 mod http_tests {
     use super::*;
+    #[test]
+    fn explicit_next_follows_adjacency_on_rewatch_and_requires_a_source() {
+        let (api, server) = fixture::server(vec![
+            (200, json!({"next":{"id":2},"nextUnwatched":{"id":5}})),
+            (
+                200,
+                json!({"id":2,"Files":[{"id":74}],"TrackEpisodes":[{"progress":1}]}),
+            ),
+            (200, json!({"next":{"id":3}})),
+            (200, json!({"id":3,"Files":[]})),
+            (200, json!({"next":null})),
+        ]);
+        assert_eq!(api.next_episode(1).unwrap().unwrap().id(), 2);
+        assert!(api.next_episode(2).unwrap().is_none());
+        assert!(api.next_episode(3).unwrap().is_none());
+        let requests = server.join().unwrap();
+        assert!(requests[1].path.ends_with("/episode/2/info"));
+    }
     #[test]
     fn auth_browse_cursor_and_empty_progress_use_native_contract() {
         let (api, server) = fixture::server(vec![

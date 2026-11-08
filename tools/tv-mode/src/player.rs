@@ -1,4 +1,5 @@
 //! One worker owns the decoder and managed session, serializing progress/PATCH/DELETE.
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -24,6 +25,7 @@ pub enum CommandKind {
     Subtitles,
     Quality,
     Skip,
+    Chapter,
     Stop,
 }
 pub enum Event {
@@ -81,6 +83,7 @@ struct Decoder {
     reader: BufReader<UnixStream>,
     writer: UnixStream,
     partial: String,
+    pending: VecDeque<Value>,
 }
 impl Decoder {
     fn connect(socket: &Path) -> Result<Self> {
@@ -91,6 +94,7 @@ impl Decoder {
             reader: BufReader::new(stream.try_clone()?),
             writer: stream,
             partial: String::new(),
+            pending: VecDeque::new(),
         })
     }
     fn command(&mut self, args: Value) -> Result<()> {
@@ -99,6 +103,12 @@ impl Decoder {
         Ok(())
     }
     fn event(&mut self) -> Result<Option<Value>> {
+        if let Some(event) = self.pending.pop_front() {
+            return Ok(Some(event));
+        }
+        self.read_event()
+    }
+    fn read_event(&mut self) -> Result<Option<Value>> {
         match self.reader.read_line(&mut self.partial) {
             Ok(0) => bail!("The player closed"),
             Ok(_) => Ok(serde_json::from_str(&std::mem::take(&mut self.partial)).ok()),
@@ -132,10 +142,15 @@ impl Decoder {
         self.writer.write_all(b"\n").ok()?;
         let deadline = Instant::now() + Duration::from_secs(1);
         while Instant::now() < deadline {
-            if let Some(event) = self.event().ok()?
-                && event["request_id"] == 99
-            {
-                return number(&event["data"]);
+            if let Some(event) = self.read_event().ok()? {
+                if event["request_id"] == 99 {
+                    return number(&event["data"]);
+                }
+                // Pause, file-loaded and EOF notifications must survive position
+                // queries used by skip, reconfiguration and final progress.
+                if event["event"].is_string() {
+                    self.pending.push_back(event);
+                }
             }
         }
         None
@@ -247,6 +262,44 @@ fn quality_value(value: u16) -> Value {
         _ => json!("auto"),
     }
 }
+fn skip_segment(descriptor: &Value, position: f64) -> Option<(&str, f64)> {
+    descriptor["segments"]
+        .as_array()?
+        .iter()
+        .find_map(|segment| {
+            let kind = segment["type"].as_str()?;
+            let start = number(&segment["start"])?;
+            let end = number(&segment["end"])?;
+            (matches!(kind, "intro" | "recap")
+                && valid_marker(start, end, descriptor)
+                && position >= start
+                && position < end)
+                .then_some((kind, end))
+        })
+}
+fn valid_marker(start: f64, end: f64, descriptor: &Value) -> bool {
+    start.is_finite()
+        && end.is_finite()
+        && start >= 0.0
+        && end > start
+        && number(&descriptor["duration"])
+            .filter(|d| *d > 0.0)
+            .is_none_or(|d| end <= d)
+}
+fn next_chapter(descriptor: &Value, position: f64) -> Option<f64> {
+    descriptor["chapters"]
+        .as_array()?
+        .iter()
+        .filter_map(|chapter| number(&chapter["start"]))
+        .filter(|start| {
+            start.is_finite()
+                && *start > position + 1.0
+                && number(&descriptor["duration"])
+                    .filter(|d| *d > 0.0)
+                    .is_none_or(|d| *start < d)
+        })
+        .min_by(f64::total_cmp)
+}
 fn status(
     descriptor: &Value,
     options: &Value,
@@ -267,7 +320,9 @@ fn status(
         "audioTracks":tracks("audio"),"subtitleTracks":tracks("subtitle"),
         "selectedAudio":descriptor["selectedTracks"]["audioStreamIndex"],
         "selectedSubtitle":descriptor["selectedTracks"]["subtitleStreamIndex"],
-        "quality":options["quality"]})
+        "quality":options["quality"],
+        "skipLabel":skip_segment(descriptor, position).map(|(kind, _)| if kind == "intro" {"Skip intro"} else {"Skip recap"}),
+        "canSkipChapter":next_chapter(descriptor, position).is_some()})
 }
 fn play(
     api: Api,
@@ -387,26 +442,23 @@ fn play(
                             }
                         }
                     }
-                    CommandKind::Skip => {
-                        let segment = descriptor["segments"].as_array().and_then(|segments| {
-                            segments.iter().find(|s| {
-                                matches!(s["type"].as_str(), Some("intro" | "recap"))
-                                    && number(&s["start"]).is_some_and(|start| position >= start)
-                                    && number(&s["end"]).is_some_and(|end| position < end)
-                            })
-                        });
-                        let target = segment.and_then(|s| number(&s["end"])).or_else(|| {
-                            descriptor["chapters"]
-                                .as_array()?
-                                .iter()
-                                .filter_map(|c| number(&c["start"]))
-                                .find(|v| *v > position + 1.0)
-                        });
+                    CommandKind::Skip | CommandKind::Chapter => {
+                        position = decoder.current_position().unwrap_or(position);
+                        let target = if matches!(command, CommandKind::Skip) {
+                            skip_segment(&descriptor, position).map(|(_, end)| end)
+                        } else {
+                            next_chapter(&descriptor, position)
+                        };
                         if let Some(target) = target {
                             decoder.command(json!(["seek", target, "absolute+exact"]))?;
+                            report_after = Some(Instant::now() + Duration::from_millis(500));
                         } else {
-                            let _ = events
-                                .send(Event::Notice("No next chapter or intro to skip".into()));
+                            let message = if matches!(command, CommandKind::Skip) {
+                                "No intro or recap at this position"
+                            } else {
+                                "No next chapter available"
+                            };
+                            let _ = events.send(Event::Notice(message.into()));
                         }
                     }
                 }
@@ -554,6 +606,50 @@ fn play(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn position_query_preserves_interleaved_decoder_events() {
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("decoder.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let engine = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            for event in [
+                json!({"event":"property-change","name":"pause","data":true}),
+                json!({"event":"end-file","reason":"eof"}),
+                json!({"request_id":99,"data":42.5}),
+            ] {
+                writeln!(reader.get_mut(), "{event}").unwrap();
+            }
+        });
+        let mut decoder = Decoder::connect(&socket).unwrap();
+        assert_eq!(decoder.current_position(), Some(42.5));
+        assert_eq!(decoder.event().unwrap().unwrap()["name"], "pause");
+        assert_eq!(decoder.event().unwrap().unwrap()["reason"], "eof");
+        engine.join().unwrap();
+    }
+    #[test]
+    fn intro_actions_are_bounded_and_do_not_fall_back_to_chapters() {
+        let descriptor = json!({"duration":100,"segments":[
+            {"type":"intro","start":-1,"end":20},
+            {"type":"intro","start":10,"end":101},
+            {"type":"recap","start":0,"end":10},
+            {"type":"intro","start":"10","end":"20"},
+            {"type":"credits","start":80,"end":100}],
+            "chapters":[{"start":70},{"start":30},{"start":101}]});
+        assert_eq!(skip_segment(&descriptor, 0.0), Some(("recap", 10.0)));
+        assert_eq!(skip_segment(&descriptor, 10.0), Some(("intro", 20.0)));
+        assert_eq!(skip_segment(&descriptor, 20.0), None);
+        assert_eq!(skip_segment(&descriptor, 90.0), None);
+        assert_eq!(next_chapter(&descriptor, 20.0), Some(30.0));
+        assert_eq!(next_chapter(&descriptor, 70.0), None);
+        let state = status(&descriptor, &json!({}), 15.0, true, false, 100.0);
+        assert_eq!(state["skipLabel"], "Skip intro");
+        assert_eq!(state["canSkipChapter"], true);
+        assert_eq!(skip_segment(&json!({}), 0.0), None);
+    }
     #[test]
     fn reconfiguration_flushes_old_revision_and_restores_paused_absolute_position() {
         let (api, server) = crate::oblecto::fixture::server(vec![
