@@ -344,6 +344,13 @@ TestCase {
         fake.input("down");
         fake.input("right");
         fake.input("press");
+        compare(actions[actions.length - 1].command, "seek");
+        compare(actions[actions.length - 1].value, -10);
+        fake.input("right");
+        fake.input("press");
+        compare(actions[actions.length - 1].value, 10);
+        for (let i = 0; i < 3; i++) fake.input("right");
+        fake.input("press");
         compare(player.menu, "Audio");
         fake.input("down");
         fake.input("press");
@@ -415,7 +422,7 @@ TestCase {
         fake.input("up");
         verify(!player.browsingActions);
         fake.input("down");
-        for (let i = 0; i < 6; i++) fake.input("right");
+        for (let i = 0; i < 8; i++) fake.input("right");
         compare(shell.activeFocusItem.objectName, "player_stop");
     }
     function test_source_selection_and_power_hold() {

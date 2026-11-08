@@ -256,90 +256,59 @@ Item {
         scale: Math.min(player.width / width, player.height / height)
         Item {
             anchors.fill: parent
-            visible: player.controlsVisible || player.paused || player.buffering || !!player.menu
+            opacity: player.controlsVisible || player.paused || player.buffering || !!player.menu ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: player.reducedMotion ? 0 : 180 } }
             Rectangle {
                 width: parent.width
-                height: 280
+                height: 260
                 gradient: Gradient {
-                    GradientStop {
-                        position: 0
-                        color: "#d9000000"
-                    }
-                    GradientStop {
-                        position: 1
-                        color: "#00000000"
-                    }
+                    GradientStop { position: 0; color: "#c9000000" }
+                    GradientStop { position: 1; color: "transparent" }
                 }
             }
-            Text {
-                x: 100
-                y: 128
-                width: 1440
-                text: player.subtitle
-                elide: Text.ElideRight
-                font.family: "Inter"
-                font.pixelSize: 24
-                color: "#bfc8cb"
+            PlayerControl {
+                x: 56; y: 58
+                iconName: "back"
+                label: "Back to details"
+                tooltipBelow: true
+                reducedMotion: player.reducedMotion
+                onClicked: player.command("stop")
             }
             Text {
-                x: 100
-                y: 75
-                width: 1340
+                x: 152; y: 70; width: 1450
                 text: player.title
                 elide: Text.ElideRight
-                font.family: "Inter"
-                font.pixelSize: 36
-                font.weight: Font.Medium
+                font.family: "Inter"; font.pixelSize: 34; font.weight: Font.DemiBold
                 color: "white"
             }
-            TvButton {
-                x: 1640
-                y: 65
-                width: 180
-                height: 64
-                text: "Home"
+            PlayerControl {
+                x: 1784; y: 58
                 iconName: "home"
+                label: "Home"
+                tooltipBelow: true
                 reducedMotion: player.reducedMotion
-                onClicked: player.action({
-                    type: "home"
-                })
+                onClicked: player.action({type: "home"})
             }
             Rectangle {
-                y: 690
-                width: parent.width
-                height: 390
+                y: 650; width: parent.width; height: 430
                 gradient: Gradient {
-                    GradientStop {
-                        position: 0
-                        color: "#00000000"
-                    }
-                    GradientStop {
-                        position: 0.55
-                        color: "#d9000000"
-                    }
-                    GradientStop {
-                        position: 1
-                        color: "#ed000000"
-                    }
+                    GradientStop { position: 0; color: "transparent" }
+                    GradientStop { position: 0.55; color: "#a6000000" }
+                    GradientStop { position: 1; color: "#ed000000" }
                 }
             }
             Text {
-                x: 100
-                y: 775
-                width: 1500
-                text: player.notice || (player.buffering ? "Buffering…" : player.paused ? "Paused" : "")
-                font.family: "Inter"
-                font.pixelSize: 24
-                color: "#e5e7eb"
+                x: 64; y: 847; width: 1500
+                text: player.notice || (player.buffering ? "Loading…" : "")
+                font.family: "Inter"; font.pixelSize: 24
+                color: "#eeeeee"
                 elide: Text.ElideRight
             }
             Slider {
                 id: timeline
                 objectName: "playerTimeline"
-                x: 92
-                y: 820
-                width: 1736
-                height: 40
+                x: 56; y: 896; width: 1656; height: 44
                 from: 0
                 to: Math.max(1, player.playback.duration || 0)
                 Binding {
@@ -349,130 +318,110 @@ Item {
                     when: !timeline.pressed
                     restoreMode: Binding.RestoreNone
                 }
-                enabled: (player.playback.duration || 0) > 0
+                enabled: (player.playback.duration || 0) > 0 && !player.switchingEpisode
                 onMoved: player.activity()
-                onPressedChanged: if (!pressed)
-                    player.command("seekTo", value)
+                onPressedChanged: if (!pressed) player.command("seekTo", value)
                 background: Rectangle {
                     x: timeline.leftPadding
                     y: timeline.topPadding + timeline.availableHeight / 2 - height / 2
-                    width: timeline.availableWidth
-                    height: 5
-                    radius: 2
-                    color: "#667078"
+                    width: timeline.availableWidth; height: timeline.hovered || timeline.pressed ? 7 : 5
+                    color: "#70ffffff"
                     Rectangle {
-                        width: timeline.visualPosition * parent.width
-                        height: parent.height
-                        radius: 2
-                        color: player.accent
+                        width: timeline.visualPosition * parent.width; height: parent.height
+                        color: "#e50914"
                     }
                 }
                 handle: Rectangle {
                     x: timeline.leftPadding + timeline.visualPosition * (timeline.availableWidth - width)
                     y: timeline.topPadding + timeline.availableHeight / 2 - height / 2
-                    width: 16
-                    height: 16
-                    radius: 8
-                    color: "white"
+                    width: 18; height: 18; radius: 9
+                    color: "#e50914"
+                    visible: timeline.hovered || timeline.pressed || player.browsingControls || player.paused
                 }
+                ToolTip.visible: pressed
+                ToolTip.text: player.time(value)
             }
             Text {
-                x: 100
-                y: 865
-                text: player.time(player.playback.position) + " / " + player.time(player.playback.duration)
-                font.family: "Inter"
-                font.pixelSize: 24
-                color: "#e5e7eb"
-            }
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 865
-                text: player.playback.duration > 0 ? player.time(Math.max(0, player.playback.duration - player.playback.position)) + " remaining" : ""
-                font.family: "Inter"
-                font.pixelSize: 24
-                color: "#bfc8cb"
-            }
-            Text {
-                x: 1450
-                y: 865
-                width: 370
+                x: 1736; y: 902; width: 120
                 horizontalAlignment: Text.AlignRight
-                text: "Volume " + Math.round(player.playback.volume === undefined ? 100 : player.playback.volume) + "%"
-                font.family: "Inter"
-                font.pixelSize: 24
-                color: "#e5e7eb"
+                text: player.playback.duration > 0 ? "−" + player.time(Math.max(0, player.playback.duration - player.playback.position)) : "--:--"
+                font.family: "Inter"; font.pixelSize: 25
+                color: "white"
+                Accessible.name: text + " remaining"
             }
-            Row {
-                x: 100
-                y: 925
-                spacing: 16
-                Repeater {
-                    id: controls
-                    model: ["pause", "Audio", "Subtitles", "Quality", "quieter", "louder", "chapter", "stop"]
-                    TvButton {
-                        required property string modelData
-                        required property int index
-                        objectName: "player_" + modelData
-                        width: 201
-                        height: 64
-                        text: modelData === "pause" ? (player.paused ? "Play" : "Pause") : modelData === "quieter" ? "Volume −" : modelData === "louder" ? "Volume +" : modelData === "chapter" ? "Next chapter" : modelData === "stop" ? "Back" : modelData
-                        enabled: (!player.switchingEpisode || modelData === "stop") && (modelData !== "chapter" || !!player.playback.canSkipChapter)
-                        selected: player.browsingControls && player.controlIndex === index
-                        accent: player.accent
-                        reducedMotion: player.reducedMotion
-                        onClicked: {
-                            if (["Audio", "Subtitles", "Quality"].indexOf(modelData) >= 0)
-                                player.openMenu(modelData);
-                            else
-                                player.command(modelData === "quieter" || modelData === "louder" ? "volume" : modelData, modelData === "quieter" ? -5 : 5);
-                        }
+            Text {
+                x: 552; y: 973; width: 780
+                text: player.subtitle || player.title
+                elide: Text.ElideRight
+                font.family: "Inter"; font.pixelSize: 26; font.weight: Font.Medium
+                color: "#eeeeee"
+            }
+            Repeater {
+                id: controls
+                model: ["pause", "rewind", "forward", "quieter", "louder", "chapter", "Audio", "Subtitles", "Quality", "stop"]
+                PlayerControl {
+                    required property string modelData
+                    required property int index
+                    objectName: "player_" + modelData
+                    x: index < 5 ? 56 + index * 88 : 1392 + (index - 5) * 88
+                    y: 950
+                    iconName: modelData === "pause" ? (player.paused ? "play" : "pause") : modelData === "quieter" ? "volumeDown" : modelData === "louder" ? "volumeUp" : modelData === "Audio" ? "audio" : modelData === "Subtitles" ? "subtitles" : modelData === "Quality" ? "quality" : modelData === "stop" ? "back" : modelData
+                    label: modelData === "pause" ? (player.paused ? "Play" : "Pause") : modelData === "rewind" ? "Back 10 seconds" : modelData === "forward" ? "Forward 10 seconds" : modelData === "quieter" || modelData === "louder" ? "Volume " + Math.round(player.playback.volume === undefined ? 100 : player.playback.volume) + "%" : modelData === "chapter" ? "Next chapter" : modelData === "stop" ? "Back to details" : modelData
+                    enabled: (!player.switchingEpisode || modelData === "stop") && (modelData !== "chapter" || !!player.playback.canSkipChapter)
+                    reducedMotion: player.reducedMotion
+                    onActiveFocusChanged: if (activeFocus) {
+                        player.browsingControls = true;
+                        player.browsingActions = false;
+                        player.controlIndex = index;
+                        player.activity();
+                    }
+                    onClicked: {
+                        if (["Audio", "Subtitles", "Quality"].indexOf(modelData) >= 0)
+                            player.openMenu(modelData);
+                        else if (modelData === "rewind" || modelData === "forward")
+                            player.command("seek", modelData === "rewind" ? -10 : 10);
+                        else
+                            player.command(modelData === "quieter" || modelData === "louder" ? "volume" : modelData, modelData === "quieter" ? -5 : 5);
                     }
                 }
             }
-            Text {
-                x: 100
-                y: 1022
-                text: "← → Seek    ↓ Controls" + (player.availableActions.length ? "    ↑ Episode actions" : "") + "    A / Space Pause    B / Esc Back    X Subtitles    Y Audio"
-                font.family: "Inter"
-                font.pixelSize: 20
-                color: "#a7afb9"
-            }
         }
         Column {
-            anchors.right: parent.right
-            anchors.rightMargin: 100
-            y: 650
-            spacing: 16
+            anchors.right: parent.right; anchors.rightMargin: 64
+            y: 734; spacing: 18
             visible: !player.menu && (player.controlsVisible || !!player.playback.skipLabel || player.browsingActions)
             Text {
-                width: 680
+                width: 740
                 horizontalAlignment: Text.AlignRight
                 elide: Text.ElideRight
-                text: player.nextEpisode.available ? "Up next · " + player.nextEpisode.label + " · " + player.nextEpisode.title : player.nextEpisode.loading ? "Finding next episode…" : player.nextEpisode.error ? "Next episode unavailable" : ""
-                font.family: "Inter"
-                font.pixelSize: 24
+                text: player.nextEpisode.available ? "Up next: " + player.nextEpisode.label + " · " + player.nextEpisode.title : player.nextEpisode.loading ? "Finding next episode…" : player.nextEpisode.error ? "Next episode unavailable" : ""
+                font.family: "Inter"; font.pixelSize: 24
                 color: "white"
-                style: Text.Outline
-                styleColor: "#b0000000"
+                style: Text.Outline; styleColor: "#80000000"
                 visible: player.controlsVisible && !!text
             }
             Row {
-                anchors.right: parent.right
-                spacing: 16
+                anchors.right: parent.right; spacing: 16
                 Repeater {
                     id: contextActions
                     model: player.availableActions
-                    TvButton {
+                    PlayerControl {
                         required property string modelData
                         required property int index
                         objectName: "player_" + modelData
-                        width: 280
-                        height: 68
+                        width: modelData === "skip" ? 232 : 280
+                        height: 64
                         text: modelData === "skip" ? (player.playback.skipLabel || "Skip intro") : player.switchingEpisode ? "Opening…" : "Next episode"
+                        iconName: modelData === "nextEpisode" ? "next" : ""
+                        outlined: true
                         enabled: !player.switchingEpisode
-                        primary: modelData === "skip"
-                        accent: player.accent
                         reducedMotion: player.reducedMotion
+                        onActiveFocusChanged: if (activeFocus) {
+                            player.browsingActions = true;
+                            player.browsingControls = false;
+                            player.actionIndex = index;
+                            player.activity();
+                        }
                         onClicked: if (enabled) player.command(modelData)
                     }
                 }
@@ -482,12 +431,11 @@ Item {
             anchors.centerIn: parent
             running: player.buffering
             visible: running
-            width: 72
-            height: 72
+            width: 72; height: 72
         }
         Rectangle {
             anchors.fill: parent
-            color: "#90000000"
+            color: "#66000000"
             visible: !!player.menu
             MouseArea {
                 anchors.fill: parent
@@ -497,60 +445,49 @@ Item {
                 }
             }
             Rectangle {
-                x: 1120
-                y: 175
-                width: 700
-                height: 680
-                radius: 14
-                color: "#1c2129"
+                x: 1224; y: 316; width: 632; height: 560
+                radius: 4
+                color: "#f0181818"
                 Text {
-                    x: 36
-                    y: 30
+                    x: 32; y: 28
                     text: player.menu
-                    font.family: "Inter"
-                    font.pixelSize: 34
-                    font.weight: Font.Medium
+                    font.family: "Inter"; font.pixelSize: 30; font.weight: Font.DemiBold
                     color: "white"
                 }
+                PlayerControl {
+                    x: 528; y: 12
+                    iconName: "close"
+                    label: "Close"
+                    tooltipBelow: true
+                    onClicked: {
+                        player.menu = "";
+                        player.focusControl();
+                    }
+                }
                 Text {
-                    x: 36
-                    y: 125
+                    x: 32; y: 120
                     visible: !player.menuEntries.length
                     text: "No tracks available"
-                    font.pixelSize: 26
-                    color: "#a7afb9"
+                    font.pixelSize: 25
+                    color: "#b3b3b3"
                 }
                 ListView {
                     id: menuList
                     objectName: "playerMenu"
-                    x: 30
-                    y: 110
-                    width: 640
-                    height: 470
-                    spacing: 12
+                    x: 16; y: 104; width: 600; height: 430
+                    spacing: 4
                     clip: true
                     model: player.menuEntries
-                    delegate: TvButton {
+                    delegate: PlayerControl {
                         required property var modelData
                         required property int index
-                        width: 620
-                        height: 64
-                        text: (modelData.selected ? "✓  " : "") + modelData.label
+                        width: 600; height: 64
+                        text: modelData.label
+                        iconName: modelData.selected ? "check" : ""
+                        flat: true
                         selected: player.menuIndex === index
-                        primary: player.menuIndex === index
-                        accent: player.accent
                         reducedMotion: player.reducedMotion
                         onClicked: player.selectMenu(index)
-                    }
-                }
-                TvButton {
-                    x: 36
-                    y: 600
-                    text: "Close"
-                    height: 54
-                    onClicked: {
-                        player.menu = "";
-                        player.focusControl();
                     }
                 }
             }
