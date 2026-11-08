@@ -88,6 +88,8 @@ TestCase {
         compare(actions[actions.length - 1].type, "browse");
         compare(actions[actions.length - 1].kind, "movie");
         fake.input("down");
+        compare(shell.activeFocusItem.media.id, 1);
+        fake.input("right");
         compare(shell.activeFocusItem.media.id, 2);
         fake.input("left");
         compare(shell.activeFocusItem.media.id, 1);
@@ -117,6 +119,7 @@ TestCase {
         verify(findChild(shell, "keyboard").visible);
         fake.input("press");
         compare(findChild(shell, "password").text, "q");
+        compare(findChild(shell, "keyboardPreview").text, "•");
         fake.input("right");
         fake.input("press");
         compare(findChild(shell, "password").text, "qw");
@@ -160,6 +163,59 @@ TestCase {
         compare(shell.activeFocusItem.media.id, 2);
         fake.input("press");
         compare(actions[actions.length - 1].id, 2);
+    }
+    function test_expanded_navigation_keeps_vertical_input_in_sidebar() {
+        route("home", {
+            rows: [
+                {
+                    title: "Movies",
+                    items: movies(3)
+                }
+            ]
+        });
+        let targets = [];
+        shell.focusables(shell.contentItem, targets);
+        targets.find(item => item.objectName === "nav_home").forceActiveFocus();
+        verify(findChild(shell, "rail").expanded);
+        fake.input("down");
+        compare(shell.activeFocusItem.objectName, "nav_search");
+        fake.input("down");
+        compare(shell.activeFocusItem.objectName, "nav_movie");
+        fake.input("up");
+        compare(shell.activeFocusItem.objectName, "nav_search");
+        fake.input("right");
+        verify(!findChild(shell, "rail").expanded);
+    }
+    function test_utility_pages_hide_previous_title_artwork() {
+        route("detail", {
+            detail: {
+                id: 1,
+                kind: "movie",
+                title: "Title",
+                art: "cover",
+                files: []
+            },
+            assets: {
+                cover: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'/%3E"
+            }
+        });
+        verify(findChild(shell, "libraryBackdrop").visible);
+        route("account");
+        verify(!findChild(shell, "libraryBackdrop").visible);
+        route("login", {
+            authenticated: false
+        });
+        verify(!findChild(shell, "libraryBackdrop").visible);
+    }
+    function test_settings_controller_rows() {
+        route("account");
+        fake.input("down");
+        compare(shell.activeFocusItem.text, "Sign out");
+        fake.input("down");
+        compare(shell.activeFocusItem.text, "Motion");
+        fake.input("press");
+        compare(actions[actions.length - 1].type, "motion");
+        compare(actions[actions.length - 1].reduced, false);
     }
     function movies(count) {
         let items = [];
@@ -289,6 +345,9 @@ TestCase {
             ]
         });
         let cards = findChild(shell, "episodeGrid").children.filter(c => c.media);
+        compare(shell.activeFocusItem.objectName, "browseEpisodes");
+        fake.input("press");
+        compare(shell.activeFocusItem.text, "Season 1");
         compare(cards.length, 12);
         verify(cards[4].y > cards[0].y);
         compare(cards[4].x, cards[0].x);
@@ -349,7 +408,8 @@ TestCase {
         fake.input("right");
         fake.input("press");
         compare(actions[actions.length - 1].value, 10);
-        for (let i = 0; i < 3; i++) fake.input("right");
+        for (let i = 0; i < 3; i++)
+            fake.input("right");
         fake.input("press");
         compare(player.menu, "Audio");
         fake.input("down");
@@ -376,8 +436,17 @@ TestCase {
     function test_episode_actions_keep_focus_and_do_not_retarget_expired_intro() {
         let state = JSON.parse(JSON.stringify(fake.state));
         state.playerView = true;
-        state.playback = {position: 12, duration: 300, skipLabel: "Skip intro", canSkipChapter: true};
-        state.nextEpisode = {available: true, title: "The next one", label: "S1 · E2"};
+        state.playback = {
+            position: 12,
+            duration: 300,
+            skipLabel: "Skip intro",
+            canSkipChapter: true
+        };
+        state.nextEpisode = {
+            available: true,
+            title: "The next one",
+            label: "S1 · E2"
+        };
         fake.state = state;
         wait(50);
         let player = findChild(shell, "playbackView");
@@ -414,7 +483,10 @@ TestCase {
     function test_player_without_markers_or_next_has_no_episode_actions() {
         let state = JSON.parse(JSON.stringify(fake.state));
         state.playerView = true;
-        state.playback = {position: 12, duration: 300};
+        state.playback = {
+            position: 12,
+            duration: 300
+        };
         fake.state = state;
         wait(50);
         let player = findChild(shell, "playbackView");
@@ -422,7 +494,8 @@ TestCase {
         fake.input("up");
         verify(!player.browsingActions);
         fake.input("down");
-        for (let i = 0; i < 8; i++) fake.input("right");
+        for (let i = 0; i < 8; i++)
+            fake.input("right");
         compare(shell.activeFocusItem.objectName, "player_stop");
     }
     function test_source_selection_and_power_hold() {

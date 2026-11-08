@@ -9,7 +9,7 @@ Window {
     minimumWidth: 960
     minimumHeight: 540
     title: "TV Home"
-    color: "#101216"
+    color: "#141414"
     onClosing: close => {
         close.accepted = false;
         send({
@@ -41,7 +41,7 @@ Window {
     property string newBackdrop: ""
     readonly property bool inLibrary: lib.authenticated || false
     readonly property var feature: page === "detail" ? detail : hero
-    readonly property string backdrop: (lib.assets || {})[feature.backdrop || ""] || (lib.assets || {})[feature.art || ""] || ""
+    readonly property string backdrop: page !== "home" && page !== "detail" ? "" : (lib.assets || {})[feature.backdrop || ""] || (lib.assets || {})[feature.art || ""] || ""
     function send(a) {
         bridge.send(a);
     }
@@ -181,13 +181,18 @@ Window {
         for (let item of list) {
             if (item === current)
                 continue;
+            if ((key === "up" || key === "down") && ((current.objectName || "").indexOf("nav_") === 0) !== ((item.objectName || "").indexOf("nav_") === 0))
+                continue;
             let p = item.mapToItem(scene, item.width / 2, item.height / 2), dx = p.x - c.x, dy = p.y - c.y;
             let along = key === "left" ? -dx : key === "right" ? dx : key === "up" ? -dy : dy;
             let across = key === "left" || key === "right" ? Math.abs(dy) : Math.abs(dx);
             if (along < 8)
                 continue;
-            // Prefer the same shelf/column before moving diagonally.
-            let s = along + across * 3 + across * across / Math.max(40, along);
+            // Prefer the nearest overlapping row/column, even when controls have
+            // different widths (compact launchers above narrow poster cards).
+            let span = key === "left" || key === "right" ? (item.height + current.height) / 2 : (item.width + current.width) / 2;
+            let gap = Math.max(0, across - span);
+            let s = along + gap * 3 + gap * gap / Math.max(40, along) + across * 0.1;
             if (s < score) {
                 score = s;
                 best = item;
@@ -220,7 +225,7 @@ Window {
     onPageChanged: pageArrival.restart()
     onBackdropChanged: {
         if (backdrop !== newBackdrop) {
-            oldBackdrop = inLibrary ? newBackdrop : "";
+            oldBackdrop = inLibrary && backdrop ? newBackdrop : "";
             newBackdrop = backdrop;
             backdropFade.restart();
         }
@@ -322,15 +327,18 @@ Window {
         }
         Image {
             id: previousImage
+            visible: inLibrary && (page === "home" || page === "detail") && !!oldBackdrop && !!newBackdrop
             anchors.fill: parent
             source: oldBackdrop
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            opacity: newImage.source ? (page === "home" ? 0.22 : 0.65) : 0
+            opacity: newBackdrop ? (page === "home" ? 0.8 : 0.85) : 0
             sourceSize.width: 1920
         }
         Image {
             id: newImage
+            objectName: "libraryBackdrop"
+            visible: inLibrary && (page === "home" || page === "detail") && !!newBackdrop
             anchors.fill: parent
             source: newBackdrop
             fillMode: Image.PreserveAspectCrop
@@ -345,7 +353,7 @@ Window {
             target: newImage
             property: "opacity"
             from: 0
-            to: newBackdrop ? (page === "home" ? 0.22 : 0.65) : 0
+            to: newBackdrop ? (page === "home" ? 0.8 : 0.85) : 0
             duration: reduced ? 0 : 600
             easing.type: Easing.OutCubic
         }
@@ -355,15 +363,15 @@ Window {
                 orientation: Gradient.Horizontal
                 GradientStop {
                     position: 0
-                    color: "#ff101216"
+                    color: "#ff141414"
                 }
                 GradientStop {
                     position: .35
-                    color: "#c7101216"
+                    color: "#c7141414"
                 }
                 GradientStop {
                     position: 1
-                    color: "#18101216"
+                    color: "#18141414"
                 }
             }
         }
@@ -372,27 +380,27 @@ Window {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#60101216"
+                    color: "#60141414"
                 }
                 GradientStop {
                     position: .4
-                    color: "#00101216"
+                    color: "#00141414"
                 }
                 GradientStop {
                     position: .85
-                    color: "#f5101216"
+                    color: "#f5141414"
                 }
                 GradientStop {
                     position: 1
-                    color: "#ff101216"
+                    color: "#ff141414"
                 }
             }
         }
         // A soft vignette leaves every focus target readable over artwork.
         Rectangle {
             anchors.fill: parent
-            color: "#101216"
-            opacity: page === "browse" ? 0.38 : 0
+            color: "#141414"
+            opacity: page === "detail" ? Math.min(0.5, scroll.contentY / 900) : 0
             Behavior on opacity {
                 NumberAnimation {
                     duration: reduced ? 0 : 180
@@ -407,11 +415,13 @@ Window {
             height: 66
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "TV"
+                text: "TV MODE"
+                visible: !rail.expanded
                 font.family: "Inter"
-                font.pixelSize: 30
+                font.letterSpacing: 3
+                font.pixelSize: 22
                 font.weight: Font.DemiBold
-                color: "#f2f3f5"
+                color: "#f5f5f5"
             }
             Row {
                 anchors.right: parent.right
@@ -432,18 +442,50 @@ Window {
                 }
                 Text {
                     text: lib.account || ""
-                    visible: !!lib.account
+                    visible: inLibrary && !!lib.account
                     font.family: "Inter"
                     font.pixelSize: 21
-                    color: "#becdd3"
+                    color: "#b3b3b3"
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     text: clockText
                     font.family: "Inter"
                     font.pixelSize: 25
-                    color: "#e8f0f3"
+                    color: "#eeeeee"
                     anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+        Rectangle {
+            x: 0
+            y: 0
+            width: 340
+            height: 1080
+            z: 4
+            visible: rail.expanded
+            Text {
+                x: 35
+                y: 76
+                text: "TV MODE"
+                font.family: "Inter"
+                font.pixelSize: 22
+                font.letterSpacing: 3
+                color: "white"
+            }
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0
+                    color: "#ff141414"
+                }
+                GradientStop {
+                    position: 0.8
+                    color: "#fa141414"
+                }
+                GradientStop {
+                    position: 1
+                    color: "#00141414"
                 }
             }
         }
@@ -452,8 +494,9 @@ Window {
             objectName: "rail"
             x: 35
             y: 278
-            spacing: 30
+            spacing: 22
             z: 5
+            readonly property bool expanded: !!window.activeFocusItem && (window.activeFocusItem.objectName || "").indexOf("nav_") === 0
             Repeater {
                 model: [
                     {
@@ -483,8 +526,10 @@ Window {
                 ]
                 TvButton {
                     required property var modelData
-                    compact: true
-                    width: 72
+                    objectName: "nav_" + modelData.route
+                    compact: !rail.expanded
+                    text: rail.expanded ? modelData.name : ""
+                    width: rail.expanded ? 248 : 72
                     height: 72
                     iconName: modelData.route
                     quiet: true
@@ -515,9 +560,9 @@ Window {
                         anchors.topMargin: 4
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.name
-                        color: "#f1f7fa"
+                        color: "#ffffff"
                         font.pixelSize: 16
-                        visible: parent.activeFocus
+                        visible: false
                     }
                 }
             }
@@ -584,19 +629,67 @@ Window {
                 x: 18
                 width: 1664
                 height: page === "login" ? 850 : page === "search" ? 770 : page === "account" ? 830 : page === "detail" ? detailArea.height + (episodeSection.visible ? episodeSection.height : 0) : shelfColumn.y + shelfColumn.height
-                Text {
-                    y: inLibrary ? 38 : 130
-                    text: "Apps"
+                Item {
+                    id: homeFeature
+                    objectName: "homeFeature"
                     visible: page === "home"
-                    color: "#f2f3f5"
-                    font.family: "Inter"
-                    font.pixelSize: 32
-                    font.weight: Font.Medium
+                    width: 1080
+                    height: inLibrary ? featuredMore.y + featuredMore.height : 140
+                    Text {
+                        id: featuredTitle
+                        y: 32
+                        width: 1040
+                        text: inLibrary ? (hero.title || "Home") : "Home"
+                        color: "white"
+                        font.family: "Inter"
+                        font.pixelSize: 64
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: -1
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        id: featuredMetadata
+                        y: featuredTitle.y + featuredTitle.height + 16
+                        width: 1000
+                        text: hero.subtitle || ""
+                        visible: inLibrary
+                        font.family: "Inter"
+                        font.pixelSize: 23
+                        color: "#cccccc"
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        id: featuredSynopsis
+                        y: featuredMetadata.y + featuredMetadata.height + 18
+                        width: 920
+                        text: hero.overview || ""
+                        visible: inLibrary
+                        font.family: "Inter"
+                        font.pixelSize: 26
+                        color: "#dddddd"
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                    }
+                    TvButton {
+                        id: featuredMore
+                        objectName: "featuredDetails"
+                        y: Math.max(266, featuredSynopsis.y + featuredSynopsis.height + 24)
+                        text: "More info"
+                        iconName: "info"
+                        primary: true
+                        height: 60
+                        visible: inLibrary && !!hero.id
+                        onClicked: openTitle(hero)
+                        reducedMotion: reduced
+                    }
                 }
                 Row {
                     id: launchers
-                    y: inLibrary ? 108 : 204
-                    spacing: 28
+                    y: inLibrary ? homeFeature.height + 44 : 190
+                    spacing: 20
                     visible: page === "home"
                     Repeater {
                         model: [
@@ -661,7 +754,7 @@ Window {
                         font.pixelSize: 52
                         font.weight: Font.DemiBold
                         font.letterSpacing: -1
-                        color: "#f3f7fa"
+                        color: "#ffffff"
                     }
                     Row {
                         y: 85
@@ -698,6 +791,7 @@ Window {
                                 required property var modelData
                                 text: modelData.label
                                 height: 56
+                                quiet: true
                                 selected: lib.browseKind === modelData.kind && lib.browseList === modelData.list
                                 accent: window.accent
                                 reducedMotion: reduced
@@ -723,7 +817,7 @@ Window {
                         source: (lib.assets || {})[detail.art || ""] || ""
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
-                        opacity: status === Image.Ready ? 0.9 : 0
+                        opacity: status === Image.Ready ? 0.9 * Math.max(0, 1 - scroll.contentY / 260) : 0
                         Behavior on opacity {
                             NumberAnimation {
                                 duration: reduced ? 0 : 320
@@ -739,7 +833,7 @@ Window {
                         font.pixelSize: 68
                         font.weight: Font.DemiBold
                         font.letterSpacing: -1
-                        color: "#f3f7fa"
+                        color: "#ffffff"
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
@@ -750,7 +844,7 @@ Window {
                         text: detail.subtitle || ""
                         font.family: "Inter"
                         font.pixelSize: 23
-                        color: accent
+                        color: "#cccccc"
                     }
                     Text {
                         id: detailOverview
@@ -760,7 +854,7 @@ Window {
                         font.family: "Inter"
                         font.pixelSize: 27
                         lineHeight: 1.3
-                        color: "#bbcbd3"
+                        color: "#cccccc"
                         wrapMode: Text.Wrap
                         maximumLineCount: 3
                         elide: Text.ElideRight
@@ -782,6 +876,15 @@ Window {
                             })
                         }
                         TvButton {
+                            objectName: "browseEpisodes"
+                            text: "Episodes"
+                            iconName: "series"
+                            primary: true
+                            visible: detail.kind === "series" && shelves.length > 0
+                            reducedMotion: reduced
+                            onClicked: firstFocus(episodeSection)
+                        }
+                        TvButton {
                             text: "Start over"
                             visible: detail.resumable || false
                             onClicked: send({
@@ -792,7 +895,9 @@ Window {
                             reducedMotion: reduced
                         }
                         TvButton {
-                            text: detail.favourite ? "♥ Favourite" : "♡ Favourite"
+                            text: detail.favourite ? "Favourited" : "Favourite"
+                            iconName: "heart"
+                            quiet: true
                             onClicked: send({
                                 type: "flag",
                                 flag: "favourite",
@@ -801,7 +906,9 @@ Window {
                             reducedMotion: reduced
                         }
                         TvButton {
-                            text: detail.watchlist ? "✓ In watchlist" : "+ Watchlist"
+                            text: detail.watchlist ? "In watchlist" : "Watchlist"
+                            iconName: detail.watchlist ? "check" : "plus"
+                            quiet: true
                             visible: detail.kind !== "episode"
                             onClicked: send({
                                 type: "flag",
@@ -811,7 +918,8 @@ Window {
                             reducedMotion: reduced
                         }
                         TvButton {
-                            text: detail.watched ? "✓ Watched" : "Mark watched"
+                            text: detail.watched ? "Watched" : "Mark watched"
+                            quiet: true
                             visible: detail.kind !== "series"
                             onClicked: send({
                                 type: "flag",
@@ -833,7 +941,9 @@ Window {
                             property var sources: detail.files || []
                             onSourcesChanged: currentIndex = 0
                             width: 890
-                            text: "Source " + (currentIndex + 1) + "/" + sources.length + "  ·  " + (sources[currentIndex] ? sources[currentIndex].label : "")
+                            quiet: true
+                            flat: true
+                            text: "Version " + (currentIndex + 1) + " of " + sources.length + "  ·  " + (sources[currentIndex] ? sources[currentIndex].label : "")
                             visible: sources.length > 1
                             onClicked: currentIndex = (currentIndex + 1) % sources.length
                             reducedMotion: reduced
@@ -841,7 +951,7 @@ Window {
                         Text {
                             text: "No playable source is linked to this title."
                             font.pixelSize: 25
-                            color: "#becdd4"
+                            color: "#b3b3b3"
                             visible: (detail.files || []).length === 0
                         }
                         TvButton {
@@ -862,6 +972,13 @@ Window {
                     width: 1664
                     spacing: 28
                     visible: page === "detail" && detail.kind === "series"
+                    Text {
+                        visible: !lib.loading && shelves.length === 0
+                        text: "No episodes available."
+                        font.family: "Inter"
+                        font.pixelSize: 25
+                        color: "#b3b3b3"
+                    }
                     Flow {
                         width: parent.width
                         spacing: 14
@@ -872,6 +989,7 @@ Window {
                                 required property int index
                                 text: modelData.title
                                 height: 58
+                                quiet: true
                                 selected: seasonIndex === index
                                 accent: window.accent
                                 reducedMotion: reduced
@@ -904,9 +1022,9 @@ Window {
                 }
                 Column {
                     id: shelfColumn
-                    y: 408
+                    y: inLibrary ? launchers.y + launchers.height + 26 : 360
                     width: parent.width
-                    spacing: 36
+                    spacing: 28
                     visible: page === "home"
                     Repeater {
                         model: page === "home" && inLibrary ? shelves : []
@@ -915,7 +1033,7 @@ Window {
                             required property var modelData
                             required property int index
                             width: shelfColumn.width
-                            spacing: 25
+                            spacing: 16
                             Item {
                                 width: parent.width
                                 height: 50
@@ -925,13 +1043,14 @@ Window {
                                     font.family: "Inter"
                                     font.pixelSize: 29
                                     font.weight: Font.DemiBold
-                                    color: "#e5eef2"
+                                    color: "#eeeeee"
                                 }
                                 TvButton {
                                     anchors.right: parent.right
                                     width: 240
                                     height: 50
-                                    text: "Browse all →"
+                                    text: "View all"
+                                    quiet: true
                                     visible: shelf.modelData.title === "Movies" || shelf.modelData.title === "Series"
                                     accent: window.accent
                                     reducedMotion: reduced
@@ -987,7 +1106,7 @@ Window {
                         text: "Your library is empty."
                         font.family: "Inter"
                         font.pixelSize: 27
-                        color: "#9db3bf"
+                        color: "#b3b3b3"
                         width: 1200
                         wrapMode: Text.Wrap
                     }
@@ -1004,7 +1123,7 @@ Window {
                         font.pixelSize: 56
                         font.weight: Font.DemiBold
                         font.letterSpacing: -1
-                        color: "#f1f7f9"
+                        color: "#ffffff"
                     }
                     Row {
                         id: profileRow
@@ -1039,14 +1158,14 @@ Window {
                                         password.forceActiveFocus();
                                 }
                                 Rectangle {
-                                    width: 112
-                                    height: 112
-                                    radius: 56
+                                    width: 140
+                                    height: 140
+                                    radius: 4
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    color: profile.activeFocus ? accent : index % 2 === 0 ? "#375263" : "#4d4b68"
+                                    color: ["#39485b", "#71514c", "#4b6352", "#655472"][index % 4]
                                     border.width: profile.activeFocus ? 4 : 0
                                     border.color: "#ffffff"
-                                    scale: profile.activeFocus ? 1.08 : 1
+                                    scale: profile.activeFocus ? 1.03 : 1
                                     Behavior on scale {
                                         NumberAnimation {
                                             duration: reduced ? 0 : 180
@@ -1058,17 +1177,17 @@ Window {
                                         font.family: "Inter"
                                         font.pixelSize: 47
                                         font.weight: Font.Medium
-                                        color: profile.activeFocus ? "#10232b" : "#e7f1f8"
+                                        color: "white"
                                     }
                                 }
                                 Text {
-                                    y: 137
+                                    y: 154
                                     width: parent.width
                                     text: modelData.name || modelData.username
                                     horizontalAlignment: Text.AlignHCenter
                                     font.family: "Inter"
                                     font.pixelSize: 25
-                                    color: profile.activeFocus ? "#ffffff" : "#afc3d0"
+                                    color: profile.activeFocus ? "#ffffff" : "#b3b3b3"
                                 }
                                 MouseArea {
                                     anchors.fill: parent
@@ -1090,18 +1209,18 @@ Window {
                             Text {
                                 text: "Username"
                                 font.pixelSize: 22
-                                color: "#99b2bf"
+                                color: "#b3b3b3"
                             }
                             TextField {
                                 id: username
                                 objectName: "username"
                                 width: 440
                                 height: 72
-                                placeholderTextColor: "#91aab9"
+                                placeholderTextColor: "#999999"
                                 placeholderText: "Username"
                                 font.pixelSize: 26
                                 font.family: "Inter"
-                                color: "#f1f7fa"
+                                color: "#ffffff"
                                 leftPadding: 22
                                 activeFocusOnTab: true
                                 Accessible.name: "Username"
@@ -1110,10 +1229,10 @@ Window {
                                 }
                                 Keys.onReturnPressed: openKeyboard()
                                 background: Rectangle {
-                                    radius: 10
-                                    color: "#242930"
+                                    radius: 3
+                                    color: "#252525"
                                     border.width: username.activeFocus ? 3 : 1
-                                    border.color: username.activeFocus ? accent : "#48606b"
+                                    border.color: username.activeFocus ? "white" : "#555555"
                                 }
                             }
                         }
@@ -1122,19 +1241,19 @@ Window {
                             Text {
                                 text: "Password"
                                 font.pixelSize: 22
-                                color: "#99b2bf"
+                                color: "#b3b3b3"
                             }
                             TextField {
                                 id: password
                                 objectName: "password"
                                 width: 440
                                 height: 72
-                                placeholderTextColor: "#91aab9"
+                                placeholderTextColor: "#999999"
                                 placeholderText: "Password"
                                 echoMode: TextInput.Password
                                 font.pixelSize: 26
                                 font.family: "Inter"
-                                color: "#f1f7fa"
+                                color: "#ffffff"
                                 leftPadding: 22
                                 activeFocusOnTab: true
                                 Accessible.name: "Password"
@@ -1143,10 +1262,10 @@ Window {
                                 }
                                 onAccepted: window.login()
                                 background: Rectangle {
-                                    radius: 10
-                                    color: "#242930"
+                                    radius: 3
+                                    color: "#252525"
                                     border.width: password.activeFocus ? 3 : 1
-                                    border.color: password.activeFocus ? accent : "#48606b"
+                                    border.color: password.activeFocus ? "white" : "#555555"
                                 }
                             }
                         }
@@ -1172,7 +1291,30 @@ Window {
                             font.family: "Inter"
                             font.pixelSize: 23
                             activeFocusOnTab: true
-                            palette.windowText: "#bfd1db"
+                            contentItem: Text {
+                                text: remember.text
+                                color: "#cccccc"
+                                font: remember.font
+                                leftPadding: remember.indicator.width + remember.spacing
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            indicator: Rectangle {
+                                width: 28
+                                height: 28
+                                y: (remember.height - height) / 2
+                                color: remember.checked ? "white" : "transparent"
+                                border.width: remember.activeFocus ? 3 : 1
+                                border.color: "white"
+                                radius: 2
+                                Icon {
+                                    anchors.centerIn: parent
+                                    width: 22
+                                    height: 22
+                                    name: "check"
+                                    color: "#141414"
+                                    visible: remember.checked
+                                }
+                            }
                         }
                         TvButton {
                             text: "Server settings"
@@ -1195,7 +1337,7 @@ Window {
                             height: 70
                             text: lib.server || ""
                             font.pixelSize: 23
-                            color: "#e9f5fb"
+                            color: "#ffffff"
                             leftPadding: 20
                             activeFocusOnTab: true
                             function openKeyboard() {
@@ -1203,10 +1345,10 @@ Window {
                             }
                             Keys.onReturnPressed: openKeyboard()
                             background: Rectangle {
-                                radius: 16
-                                color: "#242930"
+                                radius: 3
+                                color: "#252525"
                                 border.width: server.activeFocus ? 3 : 1
-                                border.color: accent
+                                border.color: "white"
                             }
                         }
                         TvButton {
@@ -1231,7 +1373,7 @@ Window {
                         font.pixelSize: 56
                         font.weight: Font.DemiBold
                         font.letterSpacing: -1
-                        color: "#f1f6f9"
+                        color: "#ffffff"
                     }
                     TextField {
                         id: searchField
@@ -1239,11 +1381,11 @@ Window {
                         y: 170
                         width: 1250
                         height: 86
-                        placeholderTextColor: "#91aab9"
-                        placeholderText: "Search your library"
+                        placeholderTextColor: "#999999"
+                        placeholderText: "Titles, movies, series"
                         font.pixelSize: 32
                         font.family: "Inter"
-                        color: "#f2f7fa"
+                        color: "#ffffff"
                         leftPadding: 26
                         activeFocusOnTab: true
                         Accessible.name: "Search your library"
@@ -1257,10 +1399,10 @@ Window {
                             list: "all"
                         })
                         background: Rectangle {
-                            radius: 10
-                            color: "#242930"
+                            radius: 3
+                            color: "#252525"
                             border.width: searchField.activeFocus ? 3 : 1
-                            border.color: accent
+                            border.color: "white"
                         }
                     }
                     Row {
@@ -1288,80 +1430,124 @@ Window {
                         }
                     }
                 }
-                Column {
+                Item {
                     id: accountArea
                     visible: page === "account"
-                    y: 50
                     width: parent.width
-                    spacing: 30
+                    height: 830
                     Text {
+                        y: 50
                         text: "Settings"
                         font.family: "Inter"
                         font.pixelSize: 56
                         font.weight: Font.DemiBold
-                        color: "#eef5f8"
+                        color: "white"
                         font.letterSpacing: -1
                     }
                     Text {
-                        text: (lib.account || "Guest") + "  ·  " + (lib.server || "")
+                        y: 144
+                        width: 440
+                        text: lib.account || "Guest"
                         font.family: "Inter"
-                        font.pixelSize: 24
-                        color: "#a8bfcb"
+                        font.pixelSize: 30
+                        color: "white"
+                        elide: Text.ElideRight
                     }
-                    Row {
-                        spacing: 18
+                    Text {
+                        y: 198
+                        width: 440
+                        text: lib.server || ""
+                        font.family: "Inter"
+                        font.pixelSize: 22
+                        color: "#999999"
+                        wrapMode: Text.WrapAnywhere
+                    }
+                    Text {
+                        y: 310
+                        width: 440
+                        text: "Playback preferences are managed in Oblecto."
+                        font.family: "Inter"
+                        font.pixelSize: 23
+                        color: "#b3b3b3"
+                        wrapMode: Text.Wrap
+                    }
+                    Text {
+                        y: 750
+                        width: 440
+                        text: app.controller || "Keyboard & remote"
+                        font.family: "Inter"
+                        font.pixelSize: 20
+                        color: "#999999"
+                        elide: Text.ElideRight
+                    }
+                    Column {
+                        x: 520
+                        y: 50
+                        width: 1100
+                        spacing: 8
+                        Text {
+                            text: "Account & display"
+                            height: 46
+                            font.family: "Inter"
+                            font.pixelSize: 26
+                            color: "#b3b3b3"
+                        }
                         TvButton {
                             text: "Refresh library"
-                            primary: true
-                            accent: window.accent
+                            iconName: "refresh"
+                            flat: true
+                            width: 1100
+                            height: 76
+                            reducedMotion: reduced
                             onClicked: send({
                                 type: "home"
                             })
                         }
                         TvButton {
-                            text: "Sign in"
-                            visible: !inLibrary
+                            text: inLibrary ? "Sign out" : "Sign in"
+                            iconName: "profile"
+                            valueText: lib.account || "Guest"
+                            flat: true
+                            width: 1100
+                            height: 76
+                            reducedMotion: reduced
                             onClicked: send({
-                                type: "open"
+                                type: inLibrary ? "logout" : "open"
                             })
                         }
                         TvButton {
-                            text: "Sign out"
-                            visible: inLibrary
-                            onClicked: send({
-                                type: "logout"
-                            })
-                        }
-                        TvButton {
-                            text: reduced ? "Motion: reduced" : "Motion: full"
+                            text: "Motion"
+                            iconName: "motion"
+                            valueText: reduced ? "Reduced" : "Full"
+                            flat: true
+                            width: 1100
+                            height: 76
+                            reducedMotion: reduced
                             onClicked: send({
                                 type: "motion",
                                 reduced: !reduced
                             })
                         }
-                    }
-                    Text {
-                        text: "Playback preferences are managed in Oblecto."
-                        font.family: "Inter"
-                        font.pixelSize: 24
-                        color: "#93aebb"
-                    }
-                    Rectangle {
-                        width: 1600
-                        height: 1
-                        color: "#334c59"
-                    }
-                    Text {
-                        text: "Power"
-                        font.family: "Inter"
-                        font.pixelSize: 34
-                        color: "#dceaf2"
-                    }
-                    Row {
-                        spacing: 18
+                        Item {
+                            width: 1
+                            height: 22
+                        }
+                        Text {
+                            text: "System"
+                            height: 46
+                            font.family: "Inter"
+                            font.pixelSize: 26
+                            color: "#b3b3b3"
+                        }
                         TvButton {
-                            text: "Sleep · hold 2s"
+                            text: "Sleep"
+                            iconName: "sleep"
+                            valueText: "Hold 2 seconds"
+                            flat: true
+                            width: 1100
+                            height: 76
                             hold: true
+                            reducedMotion: reduced
                             progress: activeFocus ? (app.holdProgress || 0) : 0
                             onPressed: send({
                                 type: "powerPress",
@@ -1372,8 +1558,14 @@ Window {
                             })
                         }
                         TvButton {
-                            text: "Shut down · hold 2s"
+                            text: "Shut down"
+                            iconName: "power"
+                            valueText: "Hold 2 seconds"
+                            flat: true
+                            width: 1100
+                            height: 76
                             hold: true
+                            reducedMotion: reduced
                             progress: activeFocus ? (app.holdProgress || 0) : 0
                             onPressed: send({
                                 type: "powerPress",
@@ -1385,16 +1577,15 @@ Window {
                         }
                         TvButton {
                             text: "Return to desktop"
+                            iconName: "exit"
+                            flat: true
+                            width: 1100
+                            height: 76
+                            reducedMotion: reduced
                             onClicked: send({
                                 type: "exit"
                             })
                         }
-                    }
-                    Text {
-                        text: app.controller || "Keyboard & remote"
-                        font.family: "Inter"
-                        font.pixelSize: 22
-                        color: "#91aab8"
                     }
                 }
             }
@@ -1407,11 +1598,11 @@ Window {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#00101216"
+                    color: "#00141414"
                 }
                 GradientStop {
                     position: .35
-                    color: "#ff101216"
+                    color: "#ff141414"
                 }
             }
         }
@@ -1452,14 +1643,14 @@ Window {
                             text: modelData.key
                             font.pixelSize: 16
                             font.weight: Font.DemiBold
-                            color: "#cfdee7"
+                            color: "#dddddd"
                         }
                     }
                     Text {
                         text: modelData.label
                         font.family: "Inter"
                         font.pixelSize: 18
-                        color: "#8da7b6"
+                        color: "#999999"
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
@@ -1482,7 +1673,7 @@ Window {
             text: "Preview"
             font.family: "Inter"
             font.pixelSize: 15
-            color: "#678592"
+            color: "#777777"
             visible: !!app.preview && !app.playing && !app.activeApp
         }
         Rectangle {
@@ -1491,9 +1682,9 @@ Window {
             y: 920
             width: 1400
             height: 74
-            radius: 20
-            color: "#f228414f"
-            border.color: "#537282"
+            radius: 4
+            color: "#f22b2b2b"
+            border.color: "#555555"
             visible: !!lib.message
             z: 9
             Text {
@@ -1502,7 +1693,7 @@ Window {
                 text: lib.message || ""
                 font.family: "Inter"
                 font.pixelSize: 23
-                color: "#e3f2fa"
+                color: "#ffffff"
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
@@ -1518,7 +1709,7 @@ Window {
             y: 132
             height: 3
             width: lib.loading ? 1664 : 0
-            color: accent
+            color: "#e50914"
             opacity: lib.loading ? 0.8 : 0
             Behavior on opacity {
                 NumberAnimation {
@@ -1528,7 +1719,7 @@ Window {
         }
         Rectangle {
             anchors.fill: parent
-            color: "#90080e16"
+            color: "#b0000000"
             visible: keyboard.visible
             z: 19
             MouseArea {
@@ -1540,7 +1731,7 @@ Window {
             id: keyboard
             objectName: "keyboard"
             x: 420
-            y: 640
+            y: 590
             z: 20
             accent: window.accent
             reducedMotion: reduced

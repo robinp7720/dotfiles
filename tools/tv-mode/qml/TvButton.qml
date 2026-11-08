@@ -7,6 +7,8 @@ Item {
     property string icon: ""
     property string iconName: ""
     property bool quiet: false
+    property bool flat: false
+    property string valueText: ""
     property bool primary: false
     property bool compact: false
     property bool hold: false
@@ -23,19 +25,12 @@ Item {
     Accessible.role: Accessible.Button
     Accessible.name: text
     Accessible.onPressAction: clicked()
-    scale: activeFocus ? 1.025 : 1
-    Behavior on scale {
-        NumberAnimation {
-            duration: control.reducedMotion ? 0 : 160
-            easing.type: Easing.OutCubic
-        }
-    }
     Rectangle {
         anchors.fill: parent
-        radius: 10
-        color: control.activeFocus ? "#f2f3f5" : control.primary ? control.accent : control.selected ? "#30363e" : control.quiet ? "transparent" : "#242930"
+        radius: 3
+        color: control.activeFocus ? "white" : control.primary ? "white" : control.selected && !control.quiet ? "#444444" : control.quiet || control.flat ? "transparent" : "#333333"
         opacity: control.enabled ? 1 : 0.4
-        border.width: control.activeFocus ? 2 : 0
+        border.width: control.activeFocus ? 2 : control.primary ? 1 : 0
         border.color: "#ffffff"
         Behavior on color {
             ColorAnimation {
@@ -48,7 +43,7 @@ Item {
             height: 5
             radius: 2
             width: parent.width * control.progress
-            color: control.accent
+            color: "#e50914"
             visible: control.progress > 0
         }
     }
@@ -59,20 +54,60 @@ Item {
         height: 28
         name: control.iconName
         visible: !!name
-        color: control.activeFocus || control.primary ? "#14171c" : control.selected ? control.accent : "#a7afb9"
+        color: control.activeFocus || control.primary ? "#14171c" : control.selected ? "white" : "#b3b3b3"
     }
     Text {
         id: label
-        width: control.width - (control.compact ? 20 : 48) - (control.iconName && control.text ? 42 : 0)
-        horizontalAlignment: Text.AlignHCenter
+        width: control.width - (control.compact ? 20 : 48) - (control.iconName && control.text ? 42 : 0) - (control.valueText ? 350 : 0)
+        horizontalAlignment: control.flat ? Text.AlignLeft : Text.AlignHCenter
         elide: Text.ElideRight
         anchors.centerIn: parent
-        anchors.horizontalCenterOffset: control.iconName && control.text ? 21 : 0
+        anchors.horizontalCenterOffset: (control.iconName && control.text ? 21 : 0) - (control.valueText ? 175 : 0)
         text: control.icon + (control.icon && control.text ? "  " : "") + control.text
-        color: control.activeFocus || control.primary ? "#14171c" : "#e5e7eb"
+        color: control.activeFocus || control.primary ? "#141414" : "#eeeeee"
         font.family: "Inter"
         font.pixelSize: control.compact ? 29 : 24
         font.weight: Font.DemiBold
+    }
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        height: 3
+        color: "white"
+        visible: control.selected && control.quiet && !control.activeFocus
+    }
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: "#333333"
+        visible: control.flat && !control.activeFocus
+    }
+    Text {
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.verticalCenter: parent.verticalCenter
+        width: 320
+        horizontalAlignment: Text.AlignRight
+        elide: Text.ElideRight
+        text: control.valueText
+        visible: !!text
+        font.family: "Inter"
+        font.pixelSize: 22
+        color: control.activeFocus ? "#444444" : "#b3b3b3"
+    }
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -5
+        radius: 5
+        color: "transparent"
+        border.width: 2
+        border.color: "white"
+        visible: control.primary && control.activeFocus
     }
     MouseArea {
         anchors.fill: parent

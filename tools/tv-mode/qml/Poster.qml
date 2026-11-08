@@ -18,7 +18,7 @@ Item {
     Accessible.name: media.title || "Title"
     Accessible.onPressAction: chosen(media)
     z: activeFocus ? 2 : 0
-    scale: activeFocus ? 1.045 : 1
+    scale: activeFocus ? 1.025 : 1
     Behavior on scale {
         NumberAnimation {
             duration: card.reducedMotion ? 0 : 180
@@ -29,19 +29,19 @@ Item {
         id: frame
         width: parent.width
         height: card.artHeight
-        radius: 15
-        color: "#243139"
+        radius: 3
+        color: "#232323"
         Rectangle {
             anchors.fill: parent
-            radius: 15
+            radius: 3
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: "#3a535d"
+                    color: "#303030"
                 }
                 GradientStop {
                     position: 1
-                    color: "#19232d"
+                    color: "#181818"
                 }
             }
         }
@@ -53,11 +53,11 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 25
             font.family: "Inter"
-            color: "#afc4cf"
+            color: "#b3b3b3"
         }
         Image {
             anchors.fill: parent
-            anchors.margins: 2
+            anchors.margins: 0
             source: card.assets[card.media.art] || ""
             asynchronous: true
             fillMode: Image.PreserveAspectCrop
@@ -73,7 +73,7 @@ Item {
         }
         Rectangle {
             anchors.fill: parent
-            radius: 15
+            radius: 3
             color: "transparent"
             border.width: card.activeFocus ? 4 : 0
             border.color: "#f2f7fa"
@@ -90,7 +90,7 @@ Item {
                 width: parent.width * Math.min(1, card.media.progress || 0)
                 height: 5
                 radius: 3
-                color: card.accent
+                color: "#e50914"
             }
         }
         Rectangle {
@@ -99,14 +99,14 @@ Item {
             anchors.margins: 12
             width: 34
             height: 34
-            radius: 17
-            color: card.accent
+            radius: 3
+            color: "#e50914"
             visible: card.media.progress >= 0.9
             Text {
                 anchors.centerIn: parent
                 text: "✓"
                 font.pixelSize: 21
-                color: "#102029"
+                color: "white"
             }
         }
     }
@@ -117,7 +117,7 @@ Item {
         font.family: "Inter"
         font.pixelSize: card.compact ? 21 : 23
         font.weight: card.activeFocus ? Font.DemiBold : Font.Medium
-        color: card.activeFocus ? "#ffffff" : "#d0dbe0"
+        color: card.activeFocus ? "#ffffff" : "#dddddd"
         elide: Text.ElideRight
     }
     Text {
@@ -126,7 +126,7 @@ Item {
         text: card.media.subtitle || ""
         font.family: "Inter"
         font.pixelSize: card.compact ? 17 : 18
-        color: "#92a5ae"
+        color: "#999999"
         elide: Text.ElideRight
     }
     MouseArea {

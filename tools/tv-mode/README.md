@@ -183,15 +183,26 @@ Artwork is cached in a private temporary directory with a 128-entry limit; older
 entries are evicted individually and visible covers are reloaded on demand. The
 cache is removed on sign-out/exit. Image URLs are never reused between accounts.
 
-Home puts three app tiles above the library shelves. A neutral background,
-Inter typography, restrained corners, and white focus outlines keep navigation
-readable from a sofa. Steam and Kodi use their installed icons from
+Home features the selected title's artwork, synopsis and details action above compact
+Oblecto, Steam and Kodi launchers and continue-watching shelves. The sidebar expands
+into labelled navigation when focused; up/down stays in the sidebar, and right returns
+to content. Movie and series pages use large titles, quiet secondary actions, a clear
+play/resume or episode action, version selection, and season tabs. Browsing retains
+its virtualized grid, pagination and saved position.
+
+The shell shares the player's black-and-white visual language: charcoal surfaces,
+white focus and primary actions, red watch-progress indicators, restrained corners,
+and Inter typography. Steam and Kodi use their installed icons from
 `/usr/share/icons/hicolor`, with built-in vector fallbacks when unavailable.
-Headings describe the content; titles retain their year, runtime, rating, and synopsis.
-Focus uses the Matugen `primary` role read from `tv-mode/colors.css`; edit
-`matugen/templates/tv-mode.css` for palette changes. Focus takes 160–180 ms,
-pages arrive in 320 ms, and artwork crossfades in 600 ms. Decorative visuals
-stay still while idle. Settings → Motion disables these animations for the
+Search, profile selection and sign-in use neutral fields and square profile avatars.
+The controller keyboard shows the text being edited and masks password previews.
+Settings uses labelled rows, including the existing hold-to-sleep/shutdown actions.
+Artwork is confined to Home and title details; utility screens remain plain.
+
+TV mode deliberately uses this fixed high-contrast palette rather than wallpaper
+colors for focus and playback controls. The Matugen theme bridge remains available
+to components. Focus takes 160–180 ms, pages arrive in 320 ms, and artwork crossfades
+in 600 ms. Settings → Motion disables these animations for the
 current session; `TV_MODE_REDUCED_MOTION=1` selects it at startup.
 
 ```bash
@@ -208,6 +219,17 @@ source selection, player menus and controls, and power press/release.
 Use `tv-mode preview` for visual checks and playback without switching displays.
 Use `tv-mode preview --no-controller` in isolated Xvfb tests so the test window
 does not consume controller input intended for your desktop preview.
+
+The offline visual fixture renders Home, navigation, catalogue and empty states,
+movie/series details, episode grids, search, keyboard, profiles, sign-in and settings
+at desktop and minimum window sizes. Its artwork and account data are synthetic:
+
+```bash
+mkdir -p /tmp/tv-mode-shell-qa
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tools/tv-mode/tests/visual
+```
+
+Screenshots are saved in `/tmp/tv-mode-shell-qa` for visual inspection.
 
 For software decoding (including isolated Xvfb playback checks), set
 `TV_MODE_SOFTWARE_VIDEO=1`. Normal playback uses automatic hardware decoding.
