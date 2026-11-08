@@ -128,7 +128,11 @@ session is recreated once; errors remain visible instead of endlessly retrying.
 
 Controls fade during playback and reappear on input. Playback continues behind
 Home; the resume action returns to the video. The timeline also supports mouse seeking.
-The overlay shows series/episode context, remaining time, and the upcoming episode.
+The playback overlay uses a Netflix-style layout: white transport icons, a slim
+red timeline, remaining time, and outlined episode actions over a dark gradient.
+Controller focus or pointer hover reveals each icon's label. Audio, subtitle, and
+quality choices open in a compact panel with plain selectable rows. Series/episode
+context and the upcoming episode remain visible without a strip of text buttons.
 Skip intro / recap appears only inside a valid marker supplied by Oblecto and stays
 accessible while the main controls are hidden. It never falls back to a chapter jump;
 Next chapter is a separate control and is disabled when no later chapter exists.

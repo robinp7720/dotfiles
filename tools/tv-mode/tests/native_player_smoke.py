@@ -203,6 +203,7 @@ with tempfile.TemporaryDirectory(prefix="tv-native-smoke-") as directory:
                 shot("intro-skipped")
             position = prop("time-pos")
             key("q")
+            shot("quality-menu")
             key("Down")
             key("Return")
             wait_for(lambda: any(r[0] == "PATCH" for r in requests))
