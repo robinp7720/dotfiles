@@ -1,0 +1,7 @@
+preferred_output = "DP-3"
+panel_edge = "left"
+wallpaper = "/var/cache/shell-greeter/current/wallpaper"
+theme = "/var/cache/shell-greeter/current/theme.css"
+state = "/var/lib/shell-greeter/state.json"
+session_dirs = ["/usr/share/wayland-sessions", "/usr/share/xsessions"]
+initial_session = "wayland:hyprland.desktop"

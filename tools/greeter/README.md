@@ -1,0 +1,74 @@
+# Shell greeter
+
+Rust/GTK4 login surface for greetd, styled with the desktop's industrial shell.
+Authentication stays in greetd/PAM; the greeter only sends protocol requests and
+renders their replies. It supports arbitrary secret/visible prompts, information,
+errors, cancellation, remembered accounts/sessions, and installed Wayland/X11
+sessions. Session commands retain their desktop-entry arguments; no shell parses
+credentials or desktop entry commands. X11 entries use the existing startx path.
+
+## Development
+
+```sh
+cargo test --locked --manifest-path tools/greeter/Cargo.toml
+cargo clippy --locked --manifest-path tools/greeter/Cargo.toml --all-targets -- -D warnings
+cargo build --release --locked --manifest-path tools/greeter/Cargo.toml
+tools/greeter/target/release/shell-greeter --config shell-greeter/config.toml --check-config
+tools/greeter/target/release/shell-greeter --config shell-greeter/config.toml --preview
+```
+
+Run previews in an isolated layer-shell compositor, since the panel takes keyboard
+focus. Preview never opens GREETD_SOCK, writes remembered state, starts desktops,
+or invokes power commands. Enter `wrong` for an authentication error, `otp` for a
+second visible prompt, or `disconnect` for a simulated service failure. Other
+responses complete the demonstration. The preview remains open on success.
+
+For an end-to-end GTK test against a fake greetd socket, run
+`tests/greeter_wayland_smoke.py` with the two isolated compositor environment
+variables documented in its header. This verifies the actual widget-to-protocol
+path without PAM or real session startup.
+
+The panel prefers DP-3, falls back to the first connector in sorted order, and
+moves when outputs disappear. It adapts to scaling and scrolls at short heights.
+The wallpaper fills every output, with an opaque fallback if it cannot be read.
+Configuration is validated before connecting to Wayland or greetd.
+
+## Deployment and rollback
+
+`setup.sh` builds the greeter before installation and uses the narrow installer
+below for root-owned files. `INSTALL_SYSTEM_CONFIG=0` skips all system changes.
+For a greeter-only update after building:
+
+```sh
+sudo bash scripts/install_greeter.sh "$USER"
+scripts/awww_wallpaper_watcher.sh --greeter-only
+```
+
+The standalone executable lives in `/usr/local/bin`, the minimal compositor and
+configuration in `/etc/shell-greeter`, and remembered state in the private,
+greeter-owned `/var/lib/shell-greeter`. No executable or configuration required
+before login is linked into a user's home. Setup copies the desktop owner's
+0xProto font into `/usr/local/share/fonts/shell-greeter` so a user-only font
+installation also works before login; Cantarell is supplied by the system. GTK4, GTK4 Layer Shell, greetd,
+Hyprland/start-hyprland, the two interface fonts, and Python/GObject/GdkPixbuf for
+asset publication are required. X11 additionally needs startx and Xorg.
+
+The existing wallpaper watcher publishes a validated image/palette pair using an
+atomic `current` symlink in `/var/cache/shell-greeter`. Only the desktop owner can
+publish assets; the greeter only reads them. Generation failure retains the old
+pair, including one previous generation. `--greeter-only` generates only this
+palette and wallpaper; it does not reload the desktop. The pre-login process
+resolves both asset paths to the same generation at startup.
+
+Installation backs up prior system files under `/var/backups/shell-greeter` and
+switches greetd's configuration last. It does **not** restart greetd or terminate
+the active desktop. Restart greetd only after ending the desktop session, or
+reboot to activate the new configuration. Authentication, real compositor
+handoff, X11 startup, return to greeter, multi-monitor hotplug, and power actions
+need a real login-session acceptance pass; previews do not prove these paths.
+
+The nwg-hello package and its installed configuration remain available. To roll
+back, restore `etc/greetd/config.toml` from the printed backup directory to
+`/etc/greetd/config.toml`, then restart greetd from a TTY after ending the desktop
+session (or reboot). This restores the previous greeter command; no PAM changes
+are made by this project.

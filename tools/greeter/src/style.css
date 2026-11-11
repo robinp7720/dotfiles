@@ -1,0 +1,44 @@
+/* Bundled fallback palette; Matugen overrides these semantic colors. */
+@define-color greeter_surface #171b1e;
+@define-color greeter_item #24292d;
+@define-color greeter_hover #30363b;
+@define-color greeter_outline #4c555c;
+@define-color greeter_text #eef5f8;
+@define-color greeter_muted #9eacb4;
+@define-color greeter_primary #8ecbd6;
+@define-color greeter_on_primary #102027;
+@define-color greeter_error #ff8a80;
+@define-color greeter_warning #efc66f;
+* { font-family: "Cantarell", sans-serif; font-size: 14px; border-radius: 0; box-shadow: none; text-shadow: none; }
+window.greeter-background { background: @greeter_surface; }
+window.greeter-panel { background: @greeter_surface; color: @greeter_text; border: 1px solid @greeter_outline; }
+.panel-content { padding: 24px; }
+.clock { font-family: "0xProto", monospace; font-size: 40px; font-weight: 500; letter-spacing: -1px; }
+.title { font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+.eyebrow, .muted { color: @greeter_muted; }
+.caption { color: @greeter_muted; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+.status { min-height: 48px; font-size: 13px; color: @greeter_muted; }
+.error { color: @greeter_error; }
+.warning { color: @greeter_warning; font-size: 12px; }
+.preview { color: @greeter_warning; font-family: "0xProto", monospace; font-size: 11px; }
+button, entry, passwordentry, dropdown > button {
+  min-height: 28px; padding: 8px 12px; border: 1px solid @greeter_outline;
+  background: @greeter_item; color: @greeter_text;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+passwordentry entry { min-height: 0; padding: 0; border: none; background: transparent; }
+button:hover, dropdown > button:hover { background: @greeter_hover; }
+button:focus-visible, entry:focus-within, passwordentry:focus-within, dropdown:focus-within > button {
+  outline: 2px solid @greeter_primary; outline-offset: -2px;
+}
+button.primary { background: @greeter_primary; color: @greeter_on_primary; border-color: @greeter_primary; font-weight: 700; }
+button.primary:hover { background: mix(@greeter_primary, @greeter_text, 0.12); }
+button.primary:focus-visible { outline-color: @greeter_on_primary; outline-offset: -4px; }
+button.destructive { color: @greeter_error; }
+button:disabled { opacity: 0.5; }
+separator { min-height: 1px; background: @greeter_outline; }
+popover > contents { background: @greeter_surface; color: @greeter_text; border: 1px solid @greeter_outline; padding: 4px; }
+popover row { padding: 8px; min-height: 28px; }
+popover row:selected { background: mix(@greeter_surface, @greeter_primary, 0.2); border-left: 2px solid @greeter_primary; }
+popover row:hover { background: @greeter_hover; }
+spinner { color: @greeter_primary; min-width: 16px; min-height: 16px; }
