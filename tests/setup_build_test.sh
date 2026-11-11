@@ -39,7 +39,7 @@ elif name == 'cargo':
     tool = manifest.parent.name
     if os.environ.get('SETUP_TEST_FAIL') == tool:
         sys.exit(17)
-    for binary in {'bar': ['vigil'], 'launcher': ['Luma', 'luma-mail-eds'], 'tv-mode': ['tv-mode']}[tool]:
+    for binary in {'bar': ['vigil'], 'launcher': ['Luma', 'luma-mail-eds'], 'tv-mode': ['tv-mode'], 'greeter': ['shell-greeter']}[tool]:
         output = target / 'release' / binary
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text('#!/usr/bin/env bash\nexit 0\n')
@@ -78,7 +78,7 @@ def check(failure='', missing_submodule=''):
         (repo / 'Luma/style.css').touch()
         (repo / 'zshrc').touch()
         (home / '.zshrc').write_text('original shell config\n')
-        for tool in ('bar', 'launcher', 'tv-mode', 'hypr-swipe-events'):
+        for tool in ('bar', 'launcher', 'tv-mode', 'greeter', 'hypr-swipe-events'):
             directory = repo / 'tools' / tool
             directory.mkdir(parents=True)
             if tool != missing_submodule:
@@ -108,14 +108,14 @@ def check(failure='', missing_submodule=''):
             assert (home / '.config/Luma/style.css').is_file()
             assert (home / '.config/Luma/style.css').resolve() == repo / 'Luma/style.css'
             assert (base / 'data/hyprland/plugins/hypr-swipe-events.so').is_file()
-            assert len([line for line in commands if line.startswith('cargo ')]) == 3
+            assert len([line for line in commands if line.startswith('cargo ')]) == 4
             assert any(line.startswith('git ') for line in commands) == bool(missing_submodule)
             assert len(list(home.glob('.zshrc.bak.*'))) == 1
 
 check()
 for submodule in ('bar', 'launcher'):
     check(missing_submodule=submodule)
-for failure in ('bar', 'launcher', 'tv-mode', 'plugin'):
+for failure in ('bar', 'launcher', 'tv-mode', 'greeter', 'plugin'):
     check(failure=failure)
 print('Setup builds every tool, initializes missing submodules, and preserves installation on build failure.')
 PY

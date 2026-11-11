@@ -58,8 +58,7 @@ LUA
 verify "$TEMP_ROOT/ipc.lua"
 
 # Greeter paths must work after installation, independently of the user's home.
-cp "$ROOT/nwg-hello/hyprland.lua" "$TEMP_ROOT/greeter/"
-cp "$ROOT/hypr/hyprland-config/base.lua" "$TEMP_ROOT/greeter/"
+cp "$ROOT/shell-greeter/hyprland.lua" "$TEMP_ROOT/greeter/"
 cp "$ROOT/hypr/monitor_layouts/default.lua" "$TEMP_ROOT/greeter/monitors.lua"
 verify "$TEMP_ROOT/greeter/hyprland.lua"
 

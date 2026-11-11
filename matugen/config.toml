@@ -18,9 +18,9 @@ post_hook = 'pkill -USR1 -x kitty'
 input_path = '~/.config/matugen/templates/niri-colors.kdl'
 output_path = '~/.config/niri/colors.kdl'
 
-[templates.greetd]
-input_path = '~/.config/matugen/templates/greetd.css'
-output_path = '/var/cache/matugen/greetd.css'
+[templates.shell_greeter]
+input_path = '~/.config/matugen/templates/shell-greeter.css'
+output_path = '/var/cache/matugen/shell-greeter.css'
 
 [templates.luma]
 input_path = '~/.config/matugen/templates/luma.css'

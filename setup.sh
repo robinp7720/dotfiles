@@ -103,7 +103,7 @@ for tool in bar launcher; do
   fi
 done
 
-for tool in bar launcher tv-mode; do
+for tool in bar launcher tv-mode greeter; do
   echo "Building $tool (release)"
   cargo build --release --locked --bins \
     --manifest-path "$DIR/tools/$tool/Cargo.toml" \
@@ -124,7 +124,7 @@ directories=(
   "matugen"
   "niri"
   "nvim"
-  "nwg-hello"
+  "shell-greeter"
   "greetd"
   "tv-mode"
 )
@@ -247,71 +247,12 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
-# Configure greetd/nwg-hello CSS to point at matugen output (requires sudo).
-# Set INSTALL_SYSTEM_CONFIG=0 for an entirely user-scoped setup pass.
+# Install the standalone login surface only when system installation is enabled.
 if [[ "${INSTALL_SYSTEM_CONFIG:-1}" == "1" ]] && command -v sudo >/dev/null 2>&1; then
-  if sudo install -d -m 755 /etc/nwg-hello; then
-    cache_dir="/var/cache/matugen"
-    cache_css="${cache_dir}/greetd.css"
-    target_css="/etc/nwg-hello/nwg-hello.css"
-    target_hypr="/etc/nwg-hello/hyprland.lua"
-    target_base="/etc/nwg-hello/base.lua"
-    target_monitors="/etc/nwg-hello/monitors.lua"
-    source_hypr="$DIR/nwg-hello/hyprland.lua"
-    source_base="$DIR/hypr/hyprland-config/base.lua"
-    source_monitors="$DIR/hypr/monitors.lua"
-
-    if [[ ! -e "$source_monitors" ]]; then
-      source_monitors="$DIR/hypr/monitor_layouts/default.lua"
-    fi
-
-    sudo mkdir -p "$cache_dir"
-    sudo chown "$USER":"$USER" "$cache_dir"
-
-    if [[ ! -f "$cache_css" ]]; then
-      sudo cp "$DIR/matugen/templates/greetd.css" "$cache_css"
-      sudo chown "$USER":"$USER" "$cache_css"
-    fi
-
-    # Install Hyprland config for greetd/nwg-hello as real files so the
-    # greeter does not depend on being able to traverse /home.
-    if [[ -e "$source_hypr" ]]; then
-      sudo_install_file "$source_hypr" "$target_hypr"
-      echo "Installed greetd Hyprland config to $target_hypr"
-    fi
-
-    # Install shared Hyprland base for greetd/nwg-hello as a real file.
-    if [[ -e "$source_base" ]]; then
-      sudo_install_file "$source_base" "$target_base"
-      echo "Installed greetd shared Hyprland base to $target_base"
-    fi
-
-    # Keep greetd aligned with the current Hypr monitor layout when present,
-    # otherwise fall back to the tracked default layout. Install a real file
-    # for the same reason as the other greeter-side config.
-    if [[ -e "$source_monitors" ]]; then
-      sudo_install_file "$source_monitors" "$target_monitors"
-      echo "Installed greetd monitor config to $target_monitors"
-    fi
-
-    sudo_link_path "$cache_css" "$target_css"
-    echo "Linked greetd CSS: $target_css -> $cache_css"
-  else
-    warn "failed to create /etc/nwg-hello; skipping greetd CSS and Hyprland config"
+  sudo bash "$DIR/scripts/install_greeter.sh" "$USER"
+  if ! "$DIR/scripts/awww_wallpaper_watcher.sh" --greeter-only; then
+    warn "greeter installed with fallback assets; wallpaper publication failed"
   fi
 else
-  echo "Skipping greetd CSS and Hyprland config (disabled or sudo unavailable)"
-fi
-
-# Install greetd daemon config
-if [[ "${INSTALL_SYSTEM_CONFIG:-1}" == "1" ]] && command -v sudo >/dev/null 2>&1; then
-  if sudo install -d -m 755 /etc/greetd; then
-    target_greetd_cfg="/etc/greetd/config.toml"
-    sudo_install_file "$DIR/greetd/config.toml" "$target_greetd_cfg"
-    echo "Installed greetd config to $target_greetd_cfg"
-  else
-    warn "failed to create /etc/greetd; skipping greetd config"
-  fi
-else
-  echo "Skipping greetd config (disabled or sudo unavailable)"
+  echo "Skipping system greeter installation (disabled or sudo unavailable)"
 fi

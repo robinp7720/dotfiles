@@ -4,6 +4,6 @@ vt = 1
 
 # The default session, also known as the greeter.
 [default_session]
-# `agreety` is the bundled agetty/login-lookalike. We start Hyprland with nwg-hello instead.
-command = "start-hyprland -- --config /etc/nwg-hello/hyprland.lua"
+# The native shell greeter runs in its own minimal Hyprland session.
+command = "start-hyprland -- --config /etc/shell-greeter/hyprland.lua"
 user = "greeter"

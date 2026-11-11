@@ -70,14 +70,14 @@ assert_contains hypr/hyprlock.conf \
   'text = cmd[update:5000] ~/.dotfiles/scripts/lockscreen_context.sh summary'
 assert_contains hypr/hyprlock.conf \
   'onclick = ~/.dotfiles/scripts/now_playing.sh --toggle'
-assert_contains matugen/templates/greetd.css \
+assert_contains tools/greeter/src/style.css \
   'font-family: "Cantarell", sans-serif;'
 assert_contains matugen/UI_STYLE.md \
   'Typography: Cantarell for interface text, with Symbols Nerd Font limited to icon fallback'
 
 assert_not_contains matugen/templates/luma.css 'JetBrains Mono'
 assert_not_contains hypr/hyprlock.conf 'JetBrains Mono'
-assert_not_contains matugen/templates/greetd.css 'JetBrains Mono'
+assert_not_contains tools/greeter/src/style.css 'JetBrains Mono'
 
 assert_contains bar/style.css \
   '@define-color cockpit_shell #171b1e;'

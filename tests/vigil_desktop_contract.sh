@@ -70,6 +70,7 @@ make_setup_fixture() {
     "$repo_root/tools/bar/target/release" \
     "$repo_root/tools/launcher/target/release" \
     "$repo_root/tools/tv-mode/target/release" \
+    "$repo_root/tools/greeter/target/release" \
     "$repo_root/tools/hypr-swipe-events" \
     "$repo_root/nwg-hello" \
     "$repo_root/hypr/hyprland-config" \
@@ -83,6 +84,7 @@ make_setup_fixture() {
     "$repo_root/tools/bar/Cargo.toml" \
     "$repo_root/tools/launcher/Cargo.toml" \
     "$repo_root/tools/tv-mode/Cargo.toml" \
+    "$repo_root/tools/greeter/Cargo.toml" \
     "$repo_root/systemd/user/example.service" \
     "$repo_root/tools/launcher/target/release/Luma" \
     "$repo_root/tools/launcher/target/release/luma-mail-eds" \
@@ -120,13 +122,13 @@ verify_legacy_desktop_links_cleanup() {
   done
   ln -s /tmp/external-waybar "$foreign_home/.config/waybar"
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
   for dir in anyrun bspwm cairo-dock dunst eww polybar sxhkd waybar; do
     [[ ! -L "$managed_home/.config/$dir" ]] \
       || { printf 'managed legacy link should be removed: %s\n' "$dir" >&2; exit 1; }
   done
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
   [[ -L "$foreign_home/.config/waybar" ]] \
     || { printf 'foreign desktop link should be preserved\n' >&2; exit 1; }
 }
@@ -150,7 +152,7 @@ verify_luma_binary_link() {
   printf 'personal preferences' > "$test_home/.config/Luma/config.json"
   printf 'generated palette' > "$test_home/.config/Luma/theme.css"
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
 
   [[ "$(readlink "$test_home/.config/Luma/style.css")" == "$fixture_root/Luma/style.css" ]] \
     || { printf 'setup should link persistent Luma styling\n' >&2; exit 1; }
@@ -248,13 +250,13 @@ verify_managed_stale_binary_link_cleanup() {
   ln -s "$fixture_root/tools/bar/target/release/vigil" "$managed_home/.local/bin/vigil"
   ln -s "/tmp/external-vigil" "$foreign_home/.local/bin/vigil"
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$managed_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
   if [[ -L "$managed_home/.local/bin/vigil" ]]; then
     printf 'managed stale Vigil symlink should be removed when release binary is missing\n' >&2
     exit 1
   fi
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$foreign_home" bash "$fixture_root/setup.sh" >/dev/null 2>"$stderr_log"
   if [[ ! -L "$foreign_home/.local/bin/vigil" ]]; then
     printf 'foreign Vigil symlink should be preserved when release binary is missing\n' >&2
     exit 1
@@ -285,7 +287,7 @@ verify_legacy_cockpit_links_cleanup() {
     "$fixture_root/systemd/user/cockpit-bar.service" \
     "$test_home/.config/systemd/user/cockpit-bar.service"
 
-  PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
+  INSTALL_SYSTEM_CONFIG=0 PATH="$stub_root:/usr/bin:/bin" HOME="$test_home" bash "$fixture_root/setup.sh" >/dev/null 2>&1
 
   [[ ! -L "$test_home/.config/cockpit-bar" ]] \
     || { printf 'legacy managed config link should be removed\n' >&2; exit 1; }

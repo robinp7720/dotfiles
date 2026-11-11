@@ -2,8 +2,8 @@
 
 The core Wayland shell uses an industrial design: opaque surfaces, square geometry,
 structural separators, and restrained morphing motion. This covers Vigil, Luma,
-notifications, OSD, and compositor window decoration. Lock screen, greeter,
-TV mode, and application interiors retain their existing styling for this pass.
+notifications, OSD, compositor window decoration, and the native shell greeter.
+Lock screen, TV mode, and application interiors retain their existing styling.
 
 - Spacing: 4, 8, 12, 16, 20, and 24 px.
 - Geometry: 0 px corner radius for panels, rows, controls, and compositor frames.
@@ -87,3 +87,15 @@ compact square switches. Level tracks are 6 px with distinct 12 px handles while
 the interactive scale remains at least 28 px tall. Selected device rows use a
 leading accent, and power profiles use an inset underline. Use window-scoped
 selectors so GTK button defaults cannot override transparent navigation buttons.
+
+## Greeter
+
+The Rust/GTK4 shell greeter uses a 440 logical-pixel opaque panel attached to the
+left edge of DP-3, with a 24 px inset, square controls and flat semantic colors.
+The clock uses 0xProto; authentication and session controls use Cantarell. The
+panel scrolls on short outputs and moves to an available output on disconnect.
+All outputs display the wallpaper used for Matugen's palette. Generation publishes
+a validated image/color pair atomically under `/var/cache/shell-greeter`; the
+pre-login process never needs access to the user's home. Missing assets use the
+bundled neutral surface and palette. Motion is limited to 160 ms control color
+changes and pending indicators, and follows GTK's reduced-motion setting.

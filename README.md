@@ -1,13 +1,13 @@
 # Robin's Dotfiles
 
-Personal configuration for a Wayland desktop built around Hyprland and Niri. The repository installs compositor configuration, a generated visual theme, lock and login surfaces, helper scripts, and three native tools: Vigil, Luma, and TV mode.
+Personal configuration for a Wayland desktop built around Hyprland and Niri. The repository installs compositor configuration, a generated visual theme, lock and login surfaces, helper scripts, and four native tools: Vigil, Luma, TV mode, and the shell greeter.
 
 ## Highlights
 
 - **Hyprland and Niri** share the same launch, lock, wallpaper, and cockpit workflows.
 - **Vigil** is the always-visible desktop cockpit and notification server. It provides workspaces, urgent context, quick settings, timers, media, notifications, volume/brightness and idle-lock displays, and monitor-aware control-center placement.
 - **Luma** is the command palette for applications, files, windows, passwords, system controls, and Vigil handoffs.
-- **Dynamic Matugen themes** cover Vigil, Luma, Hyprland, Hyprlock, Niri, Kitty, TV mode, greetd, and nwg-hello.
+- **Dynamic Matugen themes** cover Vigil, Luma, Hyprland, Hyprlock, Niri, Kitty, TV mode, and the native shell greeter.
 - **Focused-output locking** renders a privacy-bounded Hyprlock dashboard with calendar, timer, media, network, power, and notification-count context.
 - **Controller-first TV mode** temporarily moves the session to the TV and restores the previous monitor and service state afterwards.
 
@@ -16,12 +16,12 @@ Personal configuration for a Wayland desktop built around Hyprland and Niri. The
 The configuration targets Arch Linux or a derivative. Core runtime dependencies are:
 
 - Desktop: `hyprland`, `niri`, `hypridle`, `hyprlock`, `hyprsunset`, `kitty`
-- Login: `greetd`, `nwg-hello`
+- Login: `greetd`, the bundled Rust shell greeter, `python-gobject`, `gdk-pixbuf2`; `xorg-xinit` and `xorg-server` for X11 sessions
 - Desktop services: `pipewire`, `wireplumber`, `networkmanager`, `bluez`, `power-profiles-daemon`, `polkit-gnome`
 - Helpers: `bash`, `python`, `jq`, `playerctl`, `pactl`, `wpctl`, `brightnessctl`, `notify-send`, `grim`, `slurp`, `wl-copy`, `wl-paste`, `cliphist`
 - Shell preview: `fzf`, `eza`, `bat`; setup installs the tracked `preview` helper
 - Theming and wallpaper: `matugen`, `awww`
-- Builds: a Rust toolchain, C/C++ compiler, and `pkg-config`; GTK 4 and gtk4-layer-shell development files for Vigil/Luma; Evolution and Evolution Data Server development files for Luma's mail integration; Qt 6 Quick/OpenGL, libmpv, and libudev development files for TV mode
+- Builds: a Rust toolchain, C/C++ compiler, and `pkg-config`; GTK 4 and gtk4-layer-shell development files for Vigil/Luma/the greeter; Evolution and Evolution Data Server development files for Luma's mail integration; Qt 6 Quick/OpenGL, libmpv, and libudev development files for TV mode
 
 Optional integrations include `khal` or `gcalcli` for calendar context, `pass` for passwords, Steam and Kodi for TV mode, Spotify for Bluetooth auto-launch, and Codex for self-improvement automation.
 The optional `hyprshade` timer uses the tracked `hypr/hyprshade.toml`. Install Hyprshade with its `vibrance` and `blue-light-filter` shaders before enabling it with `systemctl --user enable --now hyprshade.timer`. Hyprshade is currently absent on the audited machine, so its existing timer cannot apply a filter.
@@ -34,11 +34,11 @@ cd ~/.dotfiles
 ./setup.sh
 ```
 
-`setup.sh` initializes missing tool submodules and builds Vigil, Luma, `luma-mail-eds`, and TV mode in release mode using their lockfiles. It also builds and installs the local Hyprland swipe-event plugin. Install the build dependencies listed above and the plugin development dependencies below before running setup. A build failure stops setup before it changes installed configuration or services.
+`setup.sh` initializes missing tool submodules and builds Vigil, Luma, `luma-mail-eds`, TV mode, and the shell greeter in release mode using their lockfiles. It also builds and installs the local Hyprland swipe-event plugin. Install the build dependencies listed above and the plugin development dependencies below before running setup. A build failure stops setup before it changes installed configuration or services.
 
-After building, setup links supported configuration under `~/.config`, exposes binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs greetd/nwg-hello files when `sudo` is available. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
+After building, setup links supported configuration under `~/.config`, exposes binaries under `~/.local/bin`, installs user units, reloads the user daemon, and installs the root-owned greeter executable and greetd configuration when `sudo` is available. Greeter system backups live under `/var/backups/shell-greeter`; installation does not restart an active login session. Existing non-symlink paths are moved to timestamped backups. Links managed by older versions for removed desktop stacks are cleaned up without touching foreign paths.
 
-Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update greetd/nwg-hello under `/etc`.
+Use `INSTALL_SYSTEM_CONFIG=0 ./setup.sh` for a user-only pass that does not prompt for `sudo` or update system greeter files. The new greetd configuration takes effect after a service restart or reboot. See [the greeter guide](tools/greeter/README.md) for previews and rollback.
 
 ### Hyprland gesture plugins
 
@@ -86,7 +86,7 @@ Restart the session after initial installation. When migrating an existing Hyprl
 - `bar/` — tracked Vigil runtime configuration and CSS
 - `kitty/` — terminal configuration
 - `matugen/` — theme source templates; generated outputs should not be edited directly
-- `greetd/`, `nwg-hello/` — login screen configuration
+- `greetd/`, `shell-greeter/` — login screen configuration; `nwg-hello/` retains the legacy fallback
 - `scripts/` — wallpaper, lockscreen, calendar, media, and session helpers
 - `wallpapers/` — the four images used by the active wallpaper mapping
 - `systemd/user/` — Vigil, wallpaper, TV-mode, Spotify, and Codex units
@@ -94,6 +94,7 @@ Restart the session after initial installation. When migrating an existing Hyprl
 - `tools/hymission` — Git submodule with the Mission Control overview plugin fork
 - `tools/logiops` — Git submodule with the Logitech device support fork; built and installed separately from `setup.sh`
 - `tools/tv-mode` — controller-first couch-session tool
+- `tools/greeter` — Rust/GTK4 login surface using greetd IPC
 - `tv-mode/` — TV-mode configuration and theme
 - `tests/` — desktop, theme, lock, wallpaper, and service contracts
 
@@ -176,6 +177,7 @@ Hyprland --config hypr/hyprland-config/laptop.lua --verify-config
 cargo test --manifest-path tools/bar/Cargo.toml
 cargo test --manifest-path tools/launcher/Cargo.toml
 cargo test --manifest-path tools/tv-mode/Cargo.toml
+cargo test --manifest-path tools/greeter/Cargo.toml
 ```
 
 Visible changes should also be checked with screenshots on the primary and reduced outputs. Long-session changes should verify that Vigil retains one audio subscriber and that awww owns one wallpaper layer per output.

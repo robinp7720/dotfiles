@@ -9,6 +9,7 @@ CONFIG_FILE="${AWWW_WALLPAPER_CONFIG:-$CONFIG_FILE_DEFAULT}"
 DEFAULT_WALLPAPER_FALLBACK="${AWWW_DEFAULT_WALLPAPER:-$HOME/.wallpaper.png}"
 THEME_WALLPAPER_OVERRIDE="${AWWW_THEME_WALLPAPER:-}"
 RUN_MATUGEN=true
+GREETER_ONLY=false
 WATCH=true
 MATUGEN_PREFER="${AWWW_MATUGEN_PREFER:-saturation}"
 WAYLAND_DISPLAY_NAME="${WAYLAND_DISPLAY:-wayland-0}"
@@ -19,6 +20,8 @@ usage() {
 Usage: awww_wallpaper_watcher.sh [--once] [--watch] [--config path]
                                  [--wallpaper path] [--theme path] [--no-theme]
 
+  --greeter-only         Publish only login assets, without changing the desktop.
+
 Defaults:
   --watch                Run continuously and reapply on output changes.
   --config               Uses ~/.dotfiles/scripts/awww_wallpapers.conf if present.
@@ -28,6 +31,9 @@ USAGE
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --greeter-only)
+      GREETER_ONLY=true
+      ;;
     --once)
       WATCH=false
       ;;
@@ -60,8 +66,13 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if ! command -v awww >/dev/null 2>&1; then
+if ! "$GREETER_ONLY" && ! command -v awww >/dev/null 2>&1; then
   exit 0
+fi
+
+# The long-lived watcher and standalone asset publication use separate locks.
+if "$GREETER_ONLY"; then
+  LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/greeter-assets-$(id -u).lock"
 fi
 
 # Ensure only one instance is running.
@@ -198,6 +209,8 @@ run_matugen() {
     -c "$HOME/.config/matugen/config.toml" \
     >/dev/null; then
     printf 'Matugen theme generation failed for %s\n' "$THEME_WALLPAPER" >&2
+  elif ! "$SCRIPT_DIR/publish_greeter_theme.sh" "$THEME_WALLPAPER"; then
+    printf 'Greeter theme publication failed; retaining the previous assets.\n' >&2
   fi
 }
 
@@ -328,6 +341,26 @@ watch_hypr() {
 
 load_config
 resolve_wallpapers
+
+if "$GREETER_ONLY"; then
+  if [[ ! -d /var/cache/shell-greeter || ! -w /var/cache/shell-greeter ]]; then
+    exit 0
+  fi
+  [[ -f "$THEME_WALLPAPER" ]] || { printf 'Theme wallpaper is unavailable.\n' >&2; exit 1; }
+  staging="$(mktemp -d)"
+  trap 'rm -rf -- "$staging"' EXIT
+  python3 - "$SCRIPT_DIR/../matugen/templates/shell-greeter.css" "$staging" <<'PYCONFIG'
+from pathlib import Path
+import json, sys
+source, destination = map(Path, sys.argv[1:])
+(destination / 'matugen.toml').write_text(
+    '[config]\n[templates.greeter]\ninput_path = ' + json.dumps(str(source.resolve())) +
+    '\noutput_path = ' + json.dumps(str(destination / 'theme.css')) + '\n')
+PYCONFIG
+  matugen image "$THEME_WALLPAPER" --prefer "$MATUGEN_PREFER" -c "$staging/matugen.toml"
+  "$SCRIPT_DIR/publish_greeter_theme.sh" "$THEME_WALLPAPER" "$staging/theme.css"
+  exit 0
+fi
 
 if ! wait_for_daemon; then
   printf 'awww daemon is unavailable on %s\n' "$WAYLAND_DISPLAY_NAME" >&2
