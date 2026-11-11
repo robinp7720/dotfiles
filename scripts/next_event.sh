@@ -206,7 +206,8 @@ for row in csv.reader(io.StringIO(os.environ["KHAL_OUTPUT"]), delimiter="\t"):
     }
     events.append(event)
 
-events = sorted({event["id"]: event for event in events}.values(), key=lambda event: (event["start_epoch"], event["title"], event["id"]))
+# Recurring occurrences share an ID; only collapse duplicates at the same start.
+events = sorted({(event["id"], event["start_epoch"]): event for event in events}.values(), key=lambda event: (event["start_epoch"], event["title"], event["id"]))
 if mode == "agenda_json":
     print("event" if events else "empty")
     print(json.dumps({"healthy": True, "empty": not events, "range_start": range_start, "range_end": range_end, "events": events}, ensure_ascii=False, separators=(",", ":")))
@@ -303,7 +304,8 @@ else:
             "all_day": not bool(start_time),
         })
 
-events = sorted({event["id"]: event for event in events}.values(), key=lambda event: (event["start_epoch"], event["title"], event["id"]))
+# Recurring occurrences share an ID; only collapse duplicates at the same start.
+events = sorted({(event["id"], event["start_epoch"]): event for event in events}.values(), key=lambda event: (event["start_epoch"], event["title"], event["id"]))
 if mode == "agenda_json":
     print("event" if events else "empty")
     print(json.dumps({"healthy": True, "empty": not events, "range_start": range_start, "range_end": range_end, "events": events}, ensure_ascii=False, separators=(",", ":")))
