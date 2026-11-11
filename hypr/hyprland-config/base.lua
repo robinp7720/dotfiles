@@ -20,6 +20,9 @@ hl.config({
     },
     misc = {
         allow_session_lock_restore = true,
+        -- Show the theme background while the wallpaper service starts.
+        disable_hyprland_logo = true,
+        disable_splash_rendering = true,
     },
     animations = {
         enabled = true,
