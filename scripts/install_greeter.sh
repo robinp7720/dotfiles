@@ -29,8 +29,17 @@ monitors="$ROOT/hypr/monitors.lua"
 [[ -f "$monitors" ]] || monitors="$ROOT/hypr/monitor_layouts/default.lua"
 cp "$monitors" "$staging/monitors.lua"
 chmod 755 "$staging"
+handoff="$ROOT/tools/greeter/target/handoff"
+backend_env=()
+if [[ -f "$handoff/libaquamarine.so.15" && -f "$handoff/system.sha256" ]] &&
+  sha256sum --check --status "$handoff/system.sha256"; then
+  install -d -m 755 "$staging/handoff"
+  install -m 755 "$handoff/libaquamarine.so.15" "$staging/handoff/"
+  install -m 644 "$handoff/system.sha256" "$handoff/source-revision" "$staging/handoff/"
+  backend_env=("LD_LIBRARY_PATH=$staging/handoff" "AQ_PRESERVE_OUTPUTS_ON_EXIT=1")
+fi
 install -d -m 700 -o greeter -g "$(id -gn greeter)" "$staging/runtime"
-if ! runuser -u greeter -- env XDG_RUNTIME_DIR="$staging/runtime" Hyprland --config "$staging/hyprland.lua" --verify-config >"$staging/verify.log" 2>&1 ||
+if ! runuser -u greeter -- env XDG_RUNTIME_DIR="$staging/runtime" "${backend_env[@]}" Hyprland --config "$staging/hyprland.lua" --verify-config >"$staging/verify.log" 2>&1 ||
   ! grep -Fq 'config ok' "$staging/verify.log"; then
   cat "$staging/verify.log" >&2
   exit 1
@@ -38,7 +47,7 @@ fi
 
 backup="/var/backups/shell-greeter/$(date +%Y%m%d-%H%M%S)-$$"
 install -d -m 700 "$backup"
-for target in /etc/greetd/config.toml /etc/shell-greeter /usr/local/bin/shell-greeter /usr/local/libexec/shell-greeter-session /usr/local/share/fonts/shell-greeter; do
+for target in /etc/greetd/config.toml /etc/shell-greeter /usr/local/bin/shell-greeter /usr/local/libexec/shell-greeter-session /usr/local/libexec/shell-greeter-compositor /usr/local/lib/shell-greeter/handoff /usr/local/share/fonts/shell-greeter; do
   if [[ -e "$target" || -L "$target" ]]; then
     cp -a --parents "$target" "$backup/"
   fi
@@ -59,6 +68,19 @@ fc-cache /usr/local/share/fonts/shell-greeter
 install -m 755 "$binary" /usr/local/bin/.shell-greeter-new
 mv -f /usr/local/bin/.shell-greeter-new /usr/local/bin/shell-greeter
 install -m 755 "$ROOT/shell-greeter/session.sh" /usr/local/libexec/shell-greeter-session
+install -m 755 "$ROOT/shell-greeter/compositor.sh" /usr/local/libexec/shell-greeter-compositor
+handoff="$staging/handoff"
+if [[ -d "$handoff" ]]; then
+  destination=/usr/local/lib/shell-greeter/handoff
+  install -d -m 755 "$destination"
+  install -m 755 "$handoff/libaquamarine.so.15" "$destination/.library-new"
+  mv -f "$destination/.library-new" "$destination/libaquamarine.so.15"
+  install -m 644 "$handoff/system.sha256" "$destination/.manifest-new"
+  mv -f "$destination/.manifest-new" "$destination/system.sha256"
+  install -m 644 "$handoff/source-revision" "$destination/source-revision"
+else
+  printf 'No current private build supplied; retaining any installed handoff backend.\n' >&2
+fi
 install -m 644 "$ROOT/shell-greeter/config.toml" /etc/shell-greeter/config.toml
 install -m 644 "$staging/hyprland.lua" /etc/shell-greeter/hyprland.lua
 install -m 644 "$staging/monitors.lua" /etc/shell-greeter/monitors.lua

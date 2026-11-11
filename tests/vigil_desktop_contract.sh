@@ -78,6 +78,10 @@ make_setup_fixture() {
     "$repo_root/matugen/templates" \
     "$repo_root/greetd"
 
+  # Setup orchestration fixtures must not clone/build the real display backend.
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$repo_root/scripts/build_greeter_handoff.sh"
+  chmod +x "$repo_root/scripts/build_greeter_handoff.sh"
+
   touch \
     "$repo_root/scripts/launch_kitty.sh" \
     "$repo_root/scripts/preview.sh" \

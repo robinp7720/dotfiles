@@ -1,0 +1,61 @@
+diff --git a/include/aquamarine/backend/DRM.hpp b/include/aquamarine/backend/DRM.hpp
+index 25e27da..4f2bd76 100644
+--- a/include/aquamarine/backend/DRM.hpp
++++ b/include/aquamarine/backend/DRM.hpp
+@@ -355,6 +355,7 @@ namespace Aquamarine {
+         bool                                           init(drmModeConnector* connector);
+         void                                           connect(drmModeConnector* connector);
+         void                                           disconnect();
++        void                                           disconnect(bool preserveKms);
+         Hyprutils::Memory::CSharedPointer<SDRMCRTC>    getCurrentCRTC(const drmModeConnector* connector);
+         drmModeModeInfo*                               getCurrentMode();
+         IOutput::SParsedEDID                           parseEDID(std::vector<uint8_t> data);
+diff --git a/src/backend/drm/DRM.cpp b/src/backend/drm/DRM.cpp
+index 688ed97..25b5317 100644
+--- a/src/backend/drm/DRM.cpp
++++ b/src/backend/drm/DRM.cpp
+@@ -383,8 +383,11 @@ std::vector<SP<CDRMBackend>> Aquamarine::CDRMBackend::attempt(SP<CBackend> backe
+ Aquamarine::CDRMBackend::~CDRMBackend() {
+     stopCommitThread();
+ 
++    // Opt-in for a greeter handing the same modes to another compositor.
++    // Normal hot-unplug still goes through disconnect() and disables KMS.
++    const bool PRESERVE_KMS = envEnabled("AQ_PRESERVE_OUTPUTS_ON_EXIT");
+     for (auto& conn : connectors) {
+-        conn->disconnect();
++        conn->disconnect(PRESERVE_KMS);
+         conn.reset();
+     }
+ 
+@@ -2128,6 +2131,10 @@ void Aquamarine::SDRMConnector::connect(drmModeConnector* connector) {
+ }
+ 
+ void Aquamarine::SDRMConnector::disconnect() {
++    disconnect(false);
++}
++
++void Aquamarine::SDRMConnector::disconnect(bool preserveKms) {
+     if (!output) {
+         if (backend && backend->backend)
+             backend->backend->log(AQ_LOG_DEBUG, std::format("drm: Not disconnecting connector {} because it's already disconnected", szName));
+@@ -2139,7 +2146,7 @@ void Aquamarine::SDRMConnector::disconnect() {
+ 
+     // normal output commits reject disconnected connectors, so disable KMS
+     // directly before releasing the output and its framebuffer references.
+-    if (crtc && backend->backend->session && backend->backend->session->active && output->enabledState) {
++    if (!preserveKms && crtc && backend->backend->session && backend->backend->session->active && output->enabledState) {
+         const auto QUEUE_KEY = crtc->id;
+         if (backend->pauseCommitQueue(QUEUE_KEY)) {
+             CScopeGuard             resume([this, QUEUE_KEY] { backend->resumeCommitQueue(QUEUE_KEY); });
+@@ -2157,6 +2164,11 @@ void Aquamarine::SDRMConnector::disconnect() {
+             backend->log(AQ_LOG_ERROR, std::format("drm: Failed to pause commit queue for disconnect of {}", szName));
+     }
+ 
++    if (preserveKms)
++        backend->log(AQ_LOG_DEBUG, std::format("drm: Retaining KMS output {} for compositor handoff", szName));
++
++    // CDRMFB::drop uses CLOSEFB: release ownership while the kernel retains
++    // the last scanout until the next DRM master replaces it.
+     status = DRM_MODE_DISCONNECTED;
+     releaseFBReferences();
+ 

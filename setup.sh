@@ -110,6 +110,7 @@ for tool in bar launcher tv-mode greeter; do
     --target-dir "$DIR/tools/$tool/target"
 done
 
+"$DIR/scripts/build_greeter_handoff.sh"
 echo "Building Hyprland swipe-event plugin"
 make -C "$DIR/tools/hypr-swipe-events" all
 

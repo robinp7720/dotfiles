@@ -42,6 +42,23 @@ over 240 ms before exiting. Failed authentication or launch never fades the UI.
 The greeter compositor and Hyprland desktop both use black as their uncovered
 background, including after Matugen regeneration, to bridge compositor teardown.
 
+The fade alone cannot prevent a monitor losing its signal. Aquamarine 0.16.0
+explicitly disables KMS outputs during backend destruction. The greeter's
+`shell-greeter-compositor` launcher opts into a private patched build that skips
+that shutdown disable, allowing its existing `drmModeCloseFB` cleanup to leave
+the last frame scanning out until the next compositor replaces it. Ordinary
+monitor disconnection still disables the output. This changes neither the
+system library nor the desktop session's backend.
+
+The private build is pinned to upstream revision
+`b77d67648336223a6c8fb88844ae316e7b72b574`. The launcher checks fingerprints of
+Hyprland, the system Aquamarine library and the build's shared dependencies before
+loading it; a mismatch falls back to stock Aquamarine. Rebuild and reinstall the
+private backend after compatible package upgrades. Other Aquamarine versions use
+the stock backend until the patch is reviewed for that version. This removes one
+known signal interruption; driver and VT handoff may still cause a modeset, so
+uninterrupted physical output must be checked with a real login on the target GPU.
+
 Hyprland's desktop startup helper runs `shell-greeter --desktop-reveal` before
 restarting the wallpaper and bar services. This mode does not load greeter
 configuration, contact greetd or read/write authentication state. It reports
@@ -79,6 +96,7 @@ below for root-owned files. `INSTALL_SYSTEM_CONFIG=0` skips all system changes.
 For a greeter-only update after building:
 
 ```sh
+scripts/build_greeter_handoff.sh
 sudo bash scripts/install_greeter.sh "$USER"
 scripts/awww_wallpaper_watcher.sh --greeter-only
 ```
@@ -91,6 +109,18 @@ before login is linked into a user's home. Setup copies the desktop owner's
 installation also works before login; Cantarell is supplied by the system. GTK4, GTK4 Layer Shell, greetd,
 Hyprland/start-hyprland, the two interface fonts, and Python/GObject/GdkPixbuf for
 asset publication are required. X11 additionally needs startx and Xorg.
+
+Building the private backend also requires Git, CMake, Ninja, a C++23 compiler,
+pkg-config and Aquamarine's development dependencies. The build script runs the
+upstream non-display tests and a fake-KMS harness exercising the real backend:
+stock shutdown disables outputs, opt-in shutdown retains them, and hotplug still
+disables them; all paths release output objects and notify listeners. Run
+`bash tests/greeter_handoff_launcher_test.sh` to check matching, stale and missing
+dependency manifests. These tests never open a GPU or change the active session.
+The installed library and its manifest live under
+`/usr/local/lib/shell-greeter/handoff`, readable by the greeter without `/home`.
+Renaming its `system.sha256` manifest disables the private backend for subsequent
+greeter launches and restores the standard library without changing the UI.
 
 The existing wallpaper watcher publishes a validated image/palette pair using an
 atomic `current` symlink in `/var/cache/shell-greeter`. Only the desktop owner can
