@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod session;
+mod transition;
 mod ui;
 
 use clap::Parser;
@@ -18,9 +19,21 @@ struct Args {
     /// Isolated demo. Never authenticates, starts sessions, writes state, or powers off.
     #[arg(long)]
     preview: bool,
+    /// Cover Hyprland startup, then reveal its ready wallpaper and bar. No authentication.
+    #[arg(long, conflicts_with_all = ["preview", "check_config"])]
+    desktop_reveal: bool,
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    if args.desktop_reveal {
+        let app = gtk4::Application::builder()
+            .application_id("me.robindecker.SessionReveal")
+            .flags(gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.connect_activate(transition::desktop);
+        app.run_with_args::<&str>(&[]);
+        return Ok(());
+    }
     let config = config::Config::load(&args.config)?;
     let sessions = session::discover(&config.session_dirs);
     if args.check_config {

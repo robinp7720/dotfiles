@@ -34,6 +34,13 @@ for name in "${vars[@]}"; do
 done
 systemctl --user import-environment "${imported[@]}"
 
+# Wait only for the curtain's first opaque frame, never for desktop readiness.
+# The helper watches this compositor and reveals independently after startup.
+# Missing helpers, reduced motion and display failures cannot block login.
+if [[ "$1" == hyprland ]] && command -v shell-greeter >/dev/null 2>&1; then
+  read -r -t 2 transition_ready < <(shell-greeter --desktop-reveal) || true
+fi
+
 services=(
   vigil.service
   awww-daemon.service

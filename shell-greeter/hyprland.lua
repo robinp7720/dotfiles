@@ -5,7 +5,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 hl.env("XCURSOR_SIZE", "24")
 hl.env("XCURSOR_THEME", "capitaine-cursors")
 hl.config({
-    misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
+    misc = { disable_hyprland_logo = true, disable_splash_rendering = true, background_color = "rgb(000000)" },
     cursor = { no_hardware_cursors = 1 },
     animations = { enabled = false },
     decoration = { rounding = 0, shadow = { enabled = false }, blur = { enabled = false } },

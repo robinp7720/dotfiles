@@ -20,7 +20,8 @@ hl.config({
     },
     misc = {
         allow_session_lock_restore = true,
-        -- Show the theme background while the wallpaper service starts.
+        -- Match the greeter/desktop curtain across the compositor handoff.
+        background_color = "rgb(000000)",
         disable_hyprland_logo = true,
         disable_splash_rendering = true,
     },
@@ -88,6 +89,7 @@ hl.layer_rule({ name = "vigil-notifications-no_anim", match = { namespace = "vig
 hl.layer_rule({ name = "tv-mode-no_anim", match = { namespace = "tv-mode" }, no_anim = true })
 -- The TV handoff curtain animates its own opacity across all outputs.
 hl.layer_rule({ name = "tv-mode-transition-no_anim", match = { namespace = "tv-mode-transition" }, no_anim = true, blur = false })
+hl.layer_rule({ name = "session-transition-no_anim", match = { namespace = "session-transition" }, no_anim = true, blur = false })
 hl.window_rule({ name = "tv-mode-no_anim", match = { class = "me[.]robindecker[.]TvMode" }, no_anim = true })
 hl.layer_rule({ name = "vigil-control-center-blur", match = { namespace = "vigil-control-center" }, blur = false })
 hl.layer_rule({ name = "vigil-notifications-blur", match = { namespace = "vigil-notifications" }, blur = false })

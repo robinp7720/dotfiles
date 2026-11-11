@@ -97,5 +97,9 @@ panel scrolls on short outputs and moves to an available output on disconnect.
 All outputs display the wallpaper used for Matugen's palette. Generation publishes
 a validated image/color pair atomically under `/var/cache/shell-greeter`; the
 pre-login process never needs access to the user's home. Missing assets use the
-bundled neutral surface and palette. Motion is limited to 160 ms control color
-changes and pending indicators, and follows GTK's reduced-motion setting.
+bundled neutral surface and palette. Controls use 160 ms color changes and pending
+indicators. After accepted login, all outputs fade to black in 240 ms; Hyprland
+reveals the ready wallpaper and bar over 320 ms, with a four-second readiness
+timeout. Both compositors keep an uncovered black background across the handoff.
+The curtain takes no input or keyboard focus. GTK reduced motion (or
+`SHELL_SESSION_REDUCED_MOTION=1`) skips the curtain and its readiness wait.

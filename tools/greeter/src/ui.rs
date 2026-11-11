@@ -223,6 +223,7 @@ impl Ui {
                         "Preview complete — no session was started. Close the preview to finish.",
                         false,
                     );
+                    crate::transition::greeter(&self.app, true);
                     return;
                 }
                 let user = self.user();
@@ -234,7 +235,7 @@ impl Ui {
                 if let Err(error) = state.save(&self.config.state) {
                     eprintln!("Could not remember session: {error}");
                 }
-                self.app.quit();
+                crate::transition::greeter(&self.app, false);
             }
             Event::Cancelled => {
                 self.cancelling.set(false);

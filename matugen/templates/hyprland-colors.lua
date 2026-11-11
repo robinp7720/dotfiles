@@ -6,5 +6,6 @@ hl.config({
             inactive_border = "rgba({{colors.outline_variant.default.hex_stripped}}ff)",
         },
     },
-    misc = { background_color = "rgb({{colors.surface.default.hex_stripped}})" },
+    -- Keep the compositor handoff black until the desktop wallpaper is ready.
+    misc = { background_color = "rgb(000000)" },
 })

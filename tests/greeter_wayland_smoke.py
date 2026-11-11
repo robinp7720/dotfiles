@@ -2,9 +2,13 @@
 """Exercise the real GTK client in an explicitly supplied isolated compositor.
 
 GREETER_TEST_RUNTIME_DIR=/path/to/private/runtime \
+GREETER_TEST_HYPRLAND_INSTANCE_SIGNATURE=isolated-instance \
 GREETER_TEST_WAYLAND_DISPLAY=wayland-1 python3 tests/greeter_wayland_smoke.py
 
 No PAM or session commands run: the only authentication peer is a fake socket.
+Start the isolated compositor with HYPRLAND_NO_SD_VARS=1,
+HYPRLAND_NO_SD_TARGET=1 and HYPRLAND_NO_SD_NOTIFY=1 so its lifecycle cannot
+replace the live session environment or stop the live desktop services.
 """
 from pathlib import Path
 import json
@@ -18,8 +22,9 @@ import time
 root = Path(__file__).resolve().parent.parent
 runtime = os.environ.get('GREETER_TEST_RUNTIME_DIR')
 display = os.environ.get('GREETER_TEST_WAYLAND_DISPLAY')
-if not runtime or not display:
-    raise SystemExit('Explicit isolated GREETER_TEST_RUNTIME_DIR and GREETER_TEST_WAYLAND_DISPLAY required')
+instance = os.environ.get('GREETER_TEST_HYPRLAND_INSTANCE_SIGNATURE')
+if not runtime or not display or not instance:
+    raise SystemExit('Explicit isolated compositor variables required; see module docstring')
 
 with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
     base = Path(directory)
@@ -40,6 +45,7 @@ with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
     server.listen()
     server.settimeout(10)
     env = dict(os.environ, XDG_RUNTIME_DIR=runtime, WAYLAND_DISPLAY=display,
+               HYPRLAND_INSTANCE_SIGNATURE=instance,
                GDK_BACKEND='wayland', GTK_A11Y='none', GREETD_SOCK=str(sockpath))
 
     def receive(conn):
@@ -60,6 +66,15 @@ with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
     def key(*args):
         time.sleep(.2)
         subprocess.run(['wtype', *args], env=env, check=True)
+
+    def capture(name):
+        if directory := os.environ.get('GREETER_TEST_ARTIFACT_DIR'):
+            destination = Path(directory)
+            destination.mkdir(parents=True, exist_ok=True)
+            monitors = json.loads(subprocess.check_output(
+                ['hyprctl', '-j', 'monitors'], env=env, text=True))
+            output = sorted(m['name'] for m in monitors)[0]
+            subprocess.run(['grim', '-o', output, str(destination / name)], env=env, check=True)
 
     with (base / 'client.log').open('w') as log:
         process = subprocess.Popen(
@@ -91,8 +106,25 @@ with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
                 time.sleep(.2)
                 assert process.poll() is None, 'Client exited before launch acknowledgement'
                 assert not (base / 'state.json').exists(), 'State persisted before acknowledgement'
+                def transition_count():
+                    layers = json.loads(subprocess.check_output(
+                        ['hyprctl', '-j', 'layers'], env=env, text=True))
+                    return sum(layer['namespace'] == 'session-transition'
+                               for output in layers.values()
+                               for level in output['levels'].values() for layer in level)
+                assert transition_count() == 0, 'Greeter faded before acknowledgement'
+                capture('greeter-before.png')
                 send(conn, {'type': 'success'})
+                deadline = time.monotonic() + 1
+                while transition_count() == 0 and time.monotonic() < deadline:
+                    time.sleep(.01)
+                assert transition_count() > 0, 'Acknowledged login did not animate'
+                assert process.poll() is None, 'Greeter exited before its fade finished'
+                if os.environ.get('GREETER_TEST_ARTIFACT_DIR'):
+                    time.sleep(.07)
+                    capture('greeter-fading.png')
                 assert process.wait(timeout=10) == 0
+                assert transition_count() == 0, 'Greeter left a curtain behind'
                 state = json.loads((base / 'state.json').read_text())
                 assert state['sessions'][state['user']] == 'wayland:test.desktop'
                 assert 'test-only-password' not in (base / 'state.json').read_text()

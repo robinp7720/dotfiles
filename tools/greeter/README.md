@@ -21,12 +21,51 @@ Run previews in an isolated layer-shell compositor, since the panel takes keyboa
 focus. Preview never opens GREETD_SOCK, writes remembered state, starts desktops,
 or invokes power commands. Enter `wrong` for an authentication error, `otp` for a
 second visible prompt, or `disconnect` for a simulated service failure. Other
-responses complete the demonstration. The preview remains open on success.
+responses complete the demonstration. Success previews the fade to black and
+back, then leaves the preview open.
 
 For an end-to-end GTK test against a fake greetd socket, run
-`tests/greeter_wayland_smoke.py` with the two isolated compositor environment
+`tests/greeter_wayland_smoke.py` with the three isolated compositor environment
 variables documented in its header. This verifies the actual widget-to-protocol
 path without PAM or real session startup.
+
+Start the isolated Hyprland itself with `HYPRLAND_NO_SD_VARS=1`,
+`HYPRLAND_NO_SD_TARGET=1`, and `HYPRLAND_NO_SD_NOTIFY=1`, and a minimal config
+without desktop startup commands. A separate Wayland socket alone does not
+isolate user systemd: without these flags, starting/exiting a nested compositor
+can replace the live activation environment and stop the live desktop services.
+
+## Session handoff
+
+After greetd acknowledges session launch, the greeter fades every output to black
+over 240 ms before exiting. Failed authentication or launch never fades the UI.
+The greeter compositor and Hyprland desktop both use black as their uncovered
+background, including after Matugen regeneration, to bridge compositor teardown.
+
+Hyprland's desktop startup helper runs `shell-greeter --desktop-reveal` before
+restarting the wallpaper and bar services. This mode does not load greeter
+configuration, contact greetd or read/write authentication state. It reports
+`ready` on stdout after drawing an opaque curtain on every discovered output;
+the startup script waits at most two seconds for that handshake. Once awww has
+an image and Vigil has a visible surface on every active output for two successive
+checks, the curtain fades away over 320 ms. After four seconds it reveals anyway.
+The transparent input region and absent keyboard focus keep it purely cosmetic.
+New outputs receive matching curtains while the helper is running.
+
+GTK's reduced-motion setting or `SHELL_SESSION_REDUCED_MOTION=1` skips both
+animations and the desktop readiness wait. Turning GTK animations off during a
+transition releases it immediately. The greeter setting belongs to the greeter
+account; a user-session preference alone does not change that separate account.
+Desktop reveal currently targets Hyprland with awww and Vigil; other selected
+sessions still receive the greeter fade-out but use their own startup behavior.
+
+`tests/session_transition_wayland_smoke.py` exercises real GTK surfaces in an
+isolated Hyprland using fixture readiness queries, captured fade frames, the
+missing-service timeout and reduced motion. It requires grim and Python Pillow.
+This and the fake-greetd test do not establish physical VT/display handoff timing;
+that requires a real logout/login acceptance pass.
+An isolated fake-greetd capture of the fade is saved in
+[`artifacts/shell-greeter/handoff-fade.png`](../../artifacts/shell-greeter/handoff-fade.png).
 
 The panel prefers DP-3, falls back to the first connector in sorted order, and
 moves when outputs disappear. It adapts to scaling and scrolls at short heights.

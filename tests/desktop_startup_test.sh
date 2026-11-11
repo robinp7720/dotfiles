@@ -28,6 +28,9 @@ args = sys.argv[1:]
 if Path(sys.argv[0]).name == 'dbus-update-activation-environment':
     assert args == ['--all'], args
     action = 'dbus'
+elif Path(sys.argv[0]).name == 'shell-greeter':
+    assert args == ['--desktop-reveal'], args
+    action = 'transition'
 else:
     assert args.pop(0) == '--user', args
     action = args.pop(0)
@@ -46,6 +49,8 @@ elif action == 'reset-failed':
     assert state.get('environment'), 'reset before session import'
     state['rate_limited'] = False
     state['reset_units'] = args
+elif action == 'transition':
+    assert state.get('environment'), 'curtain before session import'
 elif action == 'restart':
     assert not state['rate_limited'], 'service still start-limit-hit'
     assert set(args) == set(state['reset_units']), 'unreset service restarted'
@@ -53,13 +58,15 @@ elif action == 'restart':
 else:
     raise AssertionError(action)
 state_path.write_text(json.dumps(state))
+if action == 'transition':
+    print('ready', flush=True)
 '''
 
 with tempfile.TemporaryDirectory(prefix='desktop-startup-test-') as temp:
     temp = Path(temp)
     bin_dir = temp / 'bin'
     bin_dir.mkdir()
-    for name in ('systemctl', 'dbus-update-activation-environment'):
+    for name in ('systemctl', 'dbus-update-activation-environment', 'shell-greeter'):
         executable = bin_dir / name
         executable.write_text(mock)
         executable.chmod(0o755)
@@ -82,12 +89,15 @@ with tempfile.TemporaryDirectory(prefix='desktop-startup-test-') as temp:
             env=env, text=True, capture_output=True,
         )
         state = json.loads(state_path.read_text())
-        if fail or missing:
+        if (fail and fail != 'transition') or missing:
             assert result.returncode != 0, (compositor, fail, missing)
             assert 'started_units' not in state, state
             return state
         assert result.returncode == 0, result.stderr
-        assert state['calls'] == ['dbus', 'import-environment', 'reset-failed', 'restart'], state
+        expected = ['dbus', 'import-environment']
+        if compositor == 'hyprland':
+            expected += ['transition']
+        assert state['calls'] == expected + ['reset-failed', 'restart'], state
         assert set(state['started_units']) == services, state
         imported = state['environment']
         assert imported['WAYLAND_DISPLAY'] == 'wayland-new', imported
@@ -104,6 +114,7 @@ with tempfile.TemporaryDirectory(prefix='desktop-startup-test-') as temp:
         ('hyprland', 'HYPRLAND_INSTANCE_SIGNATURE'), ('niri', 'NIRI_SOCKET'),
     ):
         run(compositor)
+        run(compositor, fail='transition')  # Cosmetic failure must not prevent login.
         for fail in ('dbus', 'import-environment', 'reset-failed'):
             run(compositor, fail=fail)
         for missing in ('WAYLAND_DISPLAY', socket):
