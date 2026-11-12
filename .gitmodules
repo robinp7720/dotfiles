@@ -12,3 +12,12 @@
 [submodule "logiops"]
 	path = tools/logiops
 	url = ../logiops.git
+[submodule "tools/zeitgeist"]
+	path = tools/zeitgeist
+	url = https://gitlab.freedesktop.org/zeitgeist/zeitgeist.git
+[submodule "tools/zeitgeist-datahub"]
+	path = tools/zeitgeist-datahub
+	url = https://gitlab.freedesktop.org/zeitgeist/zeitgeist-datahub.git
+[submodule "tools/zeitgeist-datasources"]
+	path = tools/zeitgeist-datasources
+	url = https://gitlab.freedesktop.org/zeitgeist/zeitgeist-datasources.git
