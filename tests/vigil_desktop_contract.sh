@@ -71,12 +71,15 @@ make_setup_fixture() {
     "$repo_root/tools/launcher/target/release" \
     "$repo_root/tools/tv-mode/target/release" \
     "$repo_root/tools/greeter/target/release" \
+    "$repo_root/tools/wallpaper-adapter/target/release" \
     "$repo_root/tools/hypr-swipe-events" \
     "$repo_root/nwg-hello" \
     "$repo_root/hypr/hyprland-config" \
     "$repo_root/hypr/monitor_layouts" \
     "$repo_root/matugen/templates" \
     "$repo_root/greetd"
+
+  cp "$ROOT/scripts/configure_luma_wallpapers.sh" "$repo_root/scripts/configure_luma_wallpapers.sh"
 
   # Setup orchestration fixtures must not clone/build the real display backend.
   printf '#!/usr/bin/env bash\nexit 0\n' > "$repo_root/scripts/build_greeter_handoff.sh"
@@ -89,6 +92,8 @@ make_setup_fixture() {
     "$repo_root/tools/launcher/Cargo.toml" \
     "$repo_root/tools/tv-mode/Cargo.toml" \
     "$repo_root/tools/greeter/Cargo.toml" \
+    "$repo_root/tools/wallpaper-adapter/Cargo.toml" \
+    "$repo_root/tools/wallpaper-adapter/target/release/luma-wallpaper-dotfiles" \
     "$repo_root/systemd/user/example.service" \
     "$repo_root/tools/launcher/target/release/Luma" \
     "$repo_root/tools/launcher/target/release/luma-mail-eds" \
@@ -396,9 +401,10 @@ require_fixed 'fn execute_vigil_command(' "tools/launcher/src/main.rs"
 require_fixed 'fn desktop_mode_row(' "tools/bar/src/ui/control_center.rs"
 require_fixed '"scripts/night_light.sh"' "tools/bar/src/actions.rs"
 require_fixed '"scripts/night_light.sh"' "tools/launcher/src/actions/desktop_controls.rs"
-require_fixed '"awww-wallpaper.service"' "tools/launcher/src/actions/desktop_controls.rs"
+require_fixed '"awww-wallpaper.service"' "tools/wallpaper-adapter/src/main.rs"
 require_fixed '("wall:", SearchMode::Wallpapers' "tools/launcher/src/model.rs"
-require_fixed '.dotfiles/scripts/awww_wallpapers.conf' "tools/launcher/src/sources/wallpapers.rs"
+reject_fixed '.dotfiles/' "tools/launcher/src/sources/wallpapers.rs"
+require_fixed 'output_with_input' "tools/launcher/src/sources/wallpapers.rs"
 require_fixed 'merge_context_results' "tools/launcher/src/main.rs"
 require_fixed 'Action::OpenCockpitContext' "tools/launcher/src/main.rs"
 require_fixed '.launcher-context {' "matugen/templates/luma.css"

@@ -8,7 +8,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.dotfiles/scripts/awww_wallpaper_watcher.sh --watch
+ExecStart=%h/.dotfiles/scripts/awww_wallpaper_watcher.sh --watch --no-theme
 Restart=on-failure
 RestartSec=2
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin

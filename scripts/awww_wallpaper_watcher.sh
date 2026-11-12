@@ -10,6 +10,7 @@ DEFAULT_WALLPAPER_FALLBACK="${AWWW_DEFAULT_WALLPAPER:-$HOME/.wallpaper.png}"
 THEME_WALLPAPER_OVERRIDE="${AWWW_THEME_WALLPAPER:-}"
 RUN_MATUGEN=true
 GREETER_ONLY=false
+THEME_ONLY=false
 WATCH=true
 MATUGEN_PREFER="${AWWW_MATUGEN_PREFER:-saturation}"
 WAYLAND_DISPLAY_NAME="${WAYLAND_DISPLAY:-wayland-0}"
@@ -20,6 +21,7 @@ usage() {
 Usage: awww_wallpaper_watcher.sh [--once] [--watch] [--config path]
                                  [--wallpaper path] [--theme path] [--no-theme]
 
+  --theme-only           Regenerate colors and greeter assets without applying wallpapers.
   --greeter-only         Publish only login assets, without changing the desktop.
 
 Defaults:
@@ -31,6 +33,9 @@ USAGE
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --theme-only)
+      THEME_ONLY=true
+      ;;
     --greeter-only)
       GREETER_ONLY=true
       ;;
@@ -66,11 +71,14 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if ! "$GREETER_ONLY" && ! command -v awww >/dev/null 2>&1; then
+if ! "$GREETER_ONLY" && ! "$THEME_ONLY" && ! command -v awww >/dev/null 2>&1; then
   exit 0
 fi
 
 # The long-lived watcher and standalone asset publication use separate locks.
+if "$THEME_ONLY"; then
+  LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/desktop-theme-$(id -u).lock"
+fi
 if "$GREETER_ONLY"; then
   LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/greeter-assets-$(id -u).lock"
 fi
@@ -78,7 +86,9 @@ fi
 # Ensure only one instance is running.
 exec 9>"$LOCK_FILE"
 if command -v flock >/dev/null 2>&1; then
-  if ! flock -n 9; then
+  if "$THEME_ONLY"; then
+    flock -w 25 9 || { printf 'Theme generation is busy.\n' >&2; exit 1; }
+  elif ! flock -n 9; then
     exit 0
   fi
 fi
@@ -209,8 +219,10 @@ run_matugen() {
     -c "$HOME/.config/matugen/config.toml" \
     >/dev/null; then
     printf 'Matugen theme generation failed for %s\n' "$THEME_WALLPAPER" >&2
+    return 1
   elif ! "$SCRIPT_DIR/publish_greeter_theme.sh" "$THEME_WALLPAPER"; then
     printf 'Greeter theme publication failed; retaining the previous assets.\n' >&2
+    return 1
   fi
 }
 
@@ -341,6 +353,13 @@ watch_hypr() {
 
 load_config
 resolve_wallpapers
+
+if "$THEME_ONLY"; then
+  command -v matugen >/dev/null || { printf 'Matugen is unavailable.\n' >&2; exit 1; }
+  [[ -f "$THEME_WALLPAPER" ]] || { printf 'Theme wallpaper is unavailable.\n' >&2; exit 1; }
+  run_matugen
+  exit 0
+fi
 
 if "$GREETER_ONLY"; then
   if [[ ! -d /var/cache/shell-greeter || ! -w /var/cache/shell-greeter ]]; then

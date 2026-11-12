@@ -7,6 +7,10 @@ TEMP_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "$TEMP_ROOT"' EXIT
 
 mkdir -p "$TEMP_ROOT/bin" "$TEMP_ROOT/runtime"
+# Keep theme publication isolated from the installed greeter asset directory.
+cp "$ROOT/scripts/awww_wallpaper_watcher.sh" "$TEMP_ROOT/watcher.sh"
+printf '#!/bin/sh\nexit 0\n' >"$TEMP_ROOT/publish_greeter_theme.sh"
+chmod +x "$TEMP_ROOT/publish_greeter_theme.sh"
 touch "$TEMP_ROOT/wallpaper.png"
 printf 'default=%s\n' "$TEMP_ROOT/wallpaper.png" >"$TEMP_ROOT/wallpapers.conf"
 
@@ -46,7 +50,7 @@ PATH="$TEMP_ROOT/bin:/usr/bin:/bin" \
 XDG_RUNTIME_DIR="$TEMP_ROOT/runtime" \
 WAYLAND_DISPLAY="wayland-test" \
 AWWW_WALLPAPER_CONFIG="$TEMP_ROOT/wallpapers.conf" \
-  "$ROOT/scripts/awww_wallpaper_watcher.sh" --once --no-theme
+  "$TEMP_ROOT/watcher.sh" --once --no-theme
 
 [[ "$(<"$TEMP_ROOT/query-count")" -ge 3 ]] \
   || { printf 'watcher did not wait for the supervised daemon\n' >&2; exit 1; }
@@ -59,7 +63,7 @@ XDG_RUNTIME_DIR="$TEMP_ROOT/runtime" \
 WAYLAND_DISPLAY="wayland-test" \
 AWWW_WALLPAPER_CONFIG="$TEMP_ROOT/wallpapers.conf" \
 HOME="$TEMP_ROOT" \
-  "$ROOT/scripts/awww_wallpaper_watcher.sh" --once
+  "$TEMP_ROOT/watcher.sh" --once
 
 grep -Fq -- "image $TEMP_ROOT/wallpaper.png --prefer saturation" "$TEMP_ROOT/matugen.log" \
   || { printf 'watcher did not make Matugen source selection deterministic\n' >&2; exit 1; }

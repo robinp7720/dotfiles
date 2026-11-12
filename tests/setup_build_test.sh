@@ -39,7 +39,7 @@ elif name == 'cargo':
     tool = manifest.parent.name
     if os.environ.get('SETUP_TEST_FAIL') == tool:
         sys.exit(17)
-    for binary in {'bar': ['vigil'], 'launcher': ['Luma', 'luma-mail-eds'], 'tv-mode': ['tv-mode'], 'greeter': ['shell-greeter']}[tool]:
+    for binary in {'bar': ['vigil'], 'launcher': ['Luma', 'luma-mail-eds'], 'tv-mode': ['tv-mode'], 'greeter': ['shell-greeter'], 'wallpaper-adapter': ['luma-wallpaper-dotfiles']}[tool]:
         output = target / 'release' / binary
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text('#!/usr/bin/env bash\nexit 0\n')
@@ -76,9 +76,13 @@ def check(failure='', missing_submodule=''):
         shutil.copy2(root / 'setup.sh', repo / 'setup.sh')
         (repo / 'Luma').mkdir()
         (repo / 'Luma/style.css').touch()
+        (repo / 'scripts').mkdir()
+        shutil.copy2(root / 'scripts/configure_luma_wallpapers.sh', repo / 'scripts/configure_luma_wallpapers.sh')
+        (repo / 'scripts/build_greeter_handoff.sh').write_text('#!/bin/sh\nexit 0\n')
+        (repo / 'scripts/build_greeter_handoff.sh').chmod(0o755)
         (repo / 'zshrc').touch()
         (home / '.zshrc').write_text('original shell config\n')
-        for tool in ('bar', 'launcher', 'tv-mode', 'greeter', 'hypr-swipe-events'):
+        for tool in ('bar', 'launcher', 'tv-mode', 'greeter', 'wallpaper-adapter', 'hypr-swipe-events'):
             directory = repo / 'tools' / tool
             directory.mkdir(parents=True)
             if tool != missing_submodule:
@@ -89,7 +93,7 @@ def check(failure='', missing_submodule=''):
             stub.chmod(0o755)
         env = dict(os.environ, HOME=str(home), PATH=f'{stubs}:/usr/bin:/bin',
                    INSTALL_SYSTEM_CONFIG='0', AUTO_ENABLE_SPOTIFY_SERVICE='0',
-                   XDG_DATA_HOME=str(base / 'data'), CARGO_TARGET_DIR=str(base / 'foreign-target'),
+                   XDG_CONFIG_HOME=str(home / '.config'), XDG_DATA_HOME=str(base / 'data'), CARGO_TARGET_DIR=str(base / 'foreign-target'),
                    SETUP_TEST_REPO=str(repo), SETUP_TEST_LOG=str(base / 'commands'),
                    SETUP_TEST_FAIL=failure)
         result = subprocess.run(['bash', str(repo / 'setup.sh')], env=env,
@@ -103,19 +107,19 @@ def check(failure='', missing_submodule=''):
             assert not any(line.startswith('systemctl ') for line in commands)
         else:
             assert result.returncode == 0, result.stderr
-            for binary in ('vigil', 'Luma', 'luma-mail-eds', 'tv-mode'):
+            for binary in ('vigil', 'Luma', 'luma-mail-eds', 'tv-mode', 'luma-wallpaper-dotfiles'):
                 assert (home / '.local/bin' / binary).is_file(), binary
             assert (home / '.config/Luma/style.css').is_file()
             assert (home / '.config/Luma/style.css').resolve() == repo / 'Luma/style.css'
             assert (base / 'data/hyprland/plugins/hypr-swipe-events.so').is_file()
-            assert len([line for line in commands if line.startswith('cargo ')]) == 4
+            assert len([line for line in commands if line.startswith('cargo ')]) == 5
             assert any(line.startswith('git ') for line in commands) == bool(missing_submodule)
             assert len(list(home.glob('.zshrc.bak.*'))) == 1
 
 check()
 for submodule in ('bar', 'launcher'):
     check(missing_submodule=submodule)
-for failure in ('bar', 'launcher', 'tv-mode', 'greeter', 'plugin'):
+for failure in ('bar', 'launcher', 'tv-mode', 'greeter', 'wallpaper-adapter', 'plugin'):
     check(failure=failure)
 print('Setup builds every tool, initializes missing submodules, and preserves installation on build failure.')
 PY

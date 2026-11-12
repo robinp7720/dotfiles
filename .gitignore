@@ -25,3 +25,6 @@ nvim/.stfolder/
 
 # Generated Hyprland Lua palette
 hypr/colors.lua
+
+# Wallpaper adapter config lock
+scripts/awww_wallpapers.conf.lock

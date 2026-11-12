@@ -103,7 +103,7 @@ for tool in bar launcher; do
   fi
 done
 
-for tool in bar launcher tv-mode greeter; do
+for tool in bar launcher tv-mode greeter wallpaper-adapter; do
   echo "Building $tool (release)"
   cargo build --release --locked --bins \
     --manifest-path "$DIR/tools/$tool/Cargo.toml" \
@@ -155,9 +155,10 @@ legacy_directories=(
 for dir in "${legacy_directories[@]}"; do
   remove_managed_symlink "$HOME/.config/$dir" "$DIR/$dir"
 done
-# Keep Luma's user preferences and generated palette; only manage our style file.
+# Preserve Luma preferences; add the desktop wallpaper adapter only if unconfigured.
 mkdir -p "$HOME/.config/Luma"
 link_path "$DIR/Luma/style.css" "$HOME/.config/Luma/style.css"
+"$DIR/scripts/configure_luma_wallpapers.sh"
 
 echo "Linking Vigil configuration"
 link_path "$DIR/bar" "$HOME/.config/vigil"
@@ -171,6 +172,7 @@ mkdir -p "$HOME/.local/bin"
 scripts=(
   "scripts/launch_kitty.sh:kitty"
   "scripts/preview.sh:preview"
+  "tools/wallpaper-adapter/target/release/luma-wallpaper-dotfiles:luma-wallpaper-dotfiles"
 )
 
 for script_pair in "${scripts[@]}"; do
