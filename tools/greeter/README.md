@@ -7,6 +7,14 @@ errors, cancellation, remembered accounts/sessions, and installed Wayland/X11
 sessions. Session commands retain their desktop-entry arguments; no shell parses
 credentials or desktop entry commands. X11 entries use the existing startx path.
 
+A rejected answer explicitly cancels greetd's failed authentication session and
+opens a fresh prompt with the error still visible and the input focused. Submitted
+credentials are cleared; retries never resend them. Each new attempt also clears
+stale authentication left by a disconnected client. Cancellation is acknowledged
+before proceeding, including a bounded second cancel when greetd's exited PAM
+worker reports a broken pipe. Connection and session-creation failures remain
+manual retries to avoid repeated automatic authentication attempts.
+
 ## Development
 
 ```sh
@@ -27,7 +35,8 @@ back, then leaves the preview open.
 For an end-to-end GTK test against a fake greetd socket, run
 `tests/greeter_wayland_smoke.py` with the three isolated compositor environment
 variables documented in its header. This verifies the actual widget-to-protocol
-path without PAM or real session startup.
+path without PAM or real session startup, including two rejected passwords,
+cleanup after a broken pipe, and a successful retry with a second PAM prompt.
 
 Start the isolated Hyprland itself with `HYPRLAND_NO_SD_VARS=1`,
 `HYPRLAND_NO_SD_TARGET=1`, and `HYPRLAND_NO_SD_NOTIFY=1`, and a minimal config

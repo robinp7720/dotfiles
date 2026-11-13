@@ -84,7 +84,36 @@ with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
             conn, _ = server.accept()
             with conn:
                 conn.settimeout(10)
+                assert receive(conn) == {'type': 'cancel_session'}
+                send(conn, {'type': 'success'})
                 assert receive(conn)['type'] == 'create_session'
+                for attempt in range(2):
+                    send(conn, {'type': 'auth_message', 'auth_message_type': 'secret',
+                                'auth_message': 'Password:'})
+                    if attempt:
+                        time.sleep(.2)
+                        capture('greeter-retry.png')
+                    key('test-only-wrong-password')
+                    key('-k', 'Return')
+                    assert receive(conn) == {'type': 'post_auth_message_response',
+                                             'response': 'test-only-wrong-password'}
+                    send(conn, {'type': 'error', 'error_type': 'auth_error',
+                                'description': 'Authentication failed. Please try again.'})
+                    # greetd retains the failed session until explicitly cancelled.
+                    assert receive(conn) == {'type': 'cancel_session'}
+                    if attempt == 0:
+                        # Its exited PAM worker can make the first cancel report EPIPE,
+                        # even though the daemon has removed the failed session.
+                        send(conn, {'type': 'error', 'error_type': 'error',
+                                    'description': 'Broken pipe'})
+                        assert receive(conn) == {'type': 'cancel_session'}
+                    send(conn, {'type': 'success'})
+                    assert not (base / 'state.json').exists(), 'Failed login persisted state'
+                    # A fresh attempt clears any stale daemon state, then asks again.
+                    # No clicks or extra Enter presses should be needed to retry.
+                    assert receive(conn) == {'type': 'cancel_session'}
+                    send(conn, {'type': 'success'})
+                    assert receive(conn)['type'] == 'create_session'
                 send(conn, {'type': 'auth_message', 'auth_message_type': 'secret',
                             'auth_message': 'Password:'})
                 key('test-only-password')
@@ -129,7 +158,7 @@ with tempfile.TemporaryDirectory(prefix='greeter-protocol-') as directory:
                 assert state['sessions'][state['user']] == 'wayland:test.desktop'
                 assert 'test-only-password' not in (base / 'state.json').read_text()
             assert not (base / 'client.log').read_text(), (base / 'client.log').read_text()
-            print('GTK/greetd integration: prompts, argv, environment, acknowledgement and persistence passed.')
+            print('GTK/greetd integration: repeated rejection/retry, prompts, argv, environment, acknowledgement and persistence passed.')
         finally:
             if process.poll() is None:
                 process.terminate()

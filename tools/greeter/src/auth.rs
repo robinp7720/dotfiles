@@ -16,6 +16,7 @@ pub enum Event {
     Ready,
     Started,
     Cancelled,
+    Rejected(String),
     Failed(String),
 }
 pub struct Client {
@@ -46,16 +47,31 @@ impl Client {
         sent?;
         Ok(Response::read_from(&mut self.stream)?)
     }
+    fn reset(&mut self) -> Result<()> {
+        self.ready = false;
+        self.prompt = false;
+        // greetd 0.10.3 keeps its configuring session after an authentication
+        // error, even across socket connections. Its first cancel can report a
+        // broken pipe from the exited PAM worker AFTER removing that session.
+        // A second, idempotent cancel confirms that the daemon is clear.
+        for _ in 0..2 {
+            match self.exchange(Request::CancelSession)? {
+                Response::Success => {
+                    self.active = false;
+                    return Ok(());
+                }
+                Response::Error { .. } => (),
+                _ => anyhow::bail!("Unexpected authentication prompt during cancellation"),
+            }
+        }
+        anyhow::bail!("Could not reset authentication")
+    }
     pub fn perform(&mut self, action: Action, mut emit: impl FnMut(Event)) -> Result<()> {
         let request = match action {
             Action::Begin(user) => {
                 ensure!(!user.trim().is_empty(), "Enter a username");
-                if self.active {
-                    ensure!(
-                        matches!(self.exchange(Request::CancelSession)?, Response::Success),
-                        "Could not cancel previous authentication"
-                    );
-                }
+                // Also recover sessions left by a disconnected or older client.
+                self.reset()?;
                 self.active = true;
                 self.ready = false;
                 self.prompt = false;
@@ -72,11 +88,9 @@ impl Client {
                 }
             }
             Action::Cancel => {
-                if !self.active {
-                    emit(Event::Cancelled);
-                    return Ok(());
-                }
-                Request::CancelSession
+                self.reset()?;
+                emit(Event::Cancelled);
+                return Ok(());
             }
             Action::Launch { cmd, env } => {
                 ensure!(self.active && self.ready, "Authentication is not complete");
@@ -84,7 +98,7 @@ impl Client {
             }
         };
         let launching = matches!(request, Request::StartSession { .. });
-        let cancelling = matches!(request, Request::CancelSession);
+        let answering = matches!(request, Request::PostAuthMessageResponse { .. });
         let mut response = self.exchange(request)?;
         loop {
             match response {
@@ -94,39 +108,31 @@ impl Client {
                         self.active = false;
                         self.ready = false;
                         emit(Event::Started);
-                    } else if cancelling {
-                        self.active = false;
-                        self.ready = false;
-                        emit(Event::Cancelled);
                     } else {
                         self.ready = true;
                         emit(Event::Ready);
                     }
                     return Ok(());
                 }
-                Response::Error { description, .. } => {
-                    // greetd cancels failed authentication automatically. A failed start
-                    // may leave an authenticated session: cancel it before allowing retry.
-                    if launching {
-                        ensure!(
-                            matches!(self.exchange(Request::CancelSession)?, Response::Success),
-                            "Could not reset failed session launch"
-                        );
+                Response::Error {
+                    error_type,
+                    description,
+                } => {
+                    self.reset()?;
+                    // Only a rejected answer opens a fresh prompt automatically.
+                    // Creation/transport failures require an explicit retry.
+                    if answering && matches!(error_type, greetd_ipc::ErrorType::AuthError) {
+                        emit(Event::Rejected(description));
+                    } else {
+                        emit(Event::Failed(description));
                     }
-                    self.active = false;
-                    self.ready = false;
-                    self.prompt = false;
-                    emit(Event::Failed(description));
                     return Ok(());
                 }
                 Response::AuthMessage {
                     auth_message_type,
                     auth_message,
                 } => {
-                    ensure!(
-                        !launching && !cancelling,
-                        "Unexpected authentication prompt"
-                    );
+                    ensure!(!launching, "Unexpected authentication prompt");
                     match auth_message_type {
                         AuthMessageType::Secret | AuthMessageType::Visible => {
                             self.prompt = true;
@@ -172,7 +178,7 @@ pub fn worker(
                     }
                     Action::Answer(mut text) => {
                         if text == "wrong" {
-                            emit(Event::Failed(
+                            emit(Event::Rejected(
                                 "Authentication failed. Please try again.".into(),
                             ));
                         } else if text == "disconnect" {
@@ -237,7 +243,13 @@ mod tests {
         run: impl FnOnce(&mut Client),
     ) {
         let (a, b) = UnixStream::pair().unwrap();
-        let server = std::thread::spawn(move || script(b));
+        let server = std::thread::spawn(move || {
+            let mut b = b;
+            b.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            assert!(matches!(receive(&mut b), Request::CancelSession));
+            reply(&mut b, Response::Success);
+            script(b)
+        });
         run(&mut Client::new(a).unwrap());
         server.join().unwrap();
     }
@@ -321,6 +333,90 @@ mod tests {
         );
     }
     #[test]
+    fn rejected_password_resets_daemon_before_retry() {
+        conversation(
+            |mut s| {
+                assert!(matches!(receive(&mut s), Request::CreateSession { .. }));
+                prompt(&mut s, AuthMessageType::Secret, "Password");
+                assert!(matches!(
+                    receive(&mut s),
+                    Request::PostAuthMessageResponse { .. }
+                ));
+                reply(
+                    &mut s,
+                    Response::Error {
+                        error_type: greetd_ipc::ErrorType::AuthError,
+                        description: "Authentication failed".into(),
+                    },
+                );
+                // Like greetd 0.10.3, retain the configuring session until cancelled.
+                assert!(matches!(receive(&mut s), Request::CancelSession));
+                reply(&mut s, Response::Success);
+                assert!(matches!(receive(&mut s), Request::CancelSession));
+                reply(&mut s, Response::Success);
+                assert!(matches!(receive(&mut s), Request::CreateSession { .. }));
+                prompt(&mut s, AuthMessageType::Secret, "Password");
+                assert!(matches!(
+                    receive(&mut s),
+                    Request::PostAuthMessageResponse { .. }
+                ));
+                reply(&mut s, Response::Success);
+            },
+            |c| {
+                c.perform(Action::Begin("test".into()), |_| {}).unwrap();
+                c.perform(Action::Answer("wrong".into()), |e| {
+                    assert_eq!(e, Event::Rejected("Authentication failed".into()))
+                })
+                .unwrap();
+                c.perform(Action::Begin("test".into()), |_| {}).unwrap();
+                c.perform(Action::Answer("correct".into()), |e| {
+                    assert_eq!(e, Event::Ready)
+                })
+                .unwrap();
+            },
+        );
+    }
+    #[test]
+    fn reset_confirms_cleanup_after_worker_exit_and_bounds_errors() {
+        for succeeds in [false, true] {
+            conversation(
+                move |mut s| {
+                    assert!(matches!(receive(&mut s), Request::CreateSession { .. }));
+                    prompt(&mut s, AuthMessageType::Secret, "Password");
+                    for second in [false, true] {
+                        assert!(matches!(receive(&mut s), Request::CancelSession));
+                        reply(
+                            &mut s,
+                            if second && succeeds {
+                                Response::Success
+                            } else {
+                                Response::Error {
+                                    error_type: greetd_ipc::ErrorType::Error,
+                                    description: "Broken pipe".into(),
+                                }
+                            },
+                        );
+                    }
+                },
+                |c| {
+                    c.perform(Action::Begin("test".into()), |_| {}).unwrap();
+                    let mut events = vec![];
+                    let result = c.perform(Action::Cancel, |e| events.push(e));
+                    assert_eq!(result.is_ok(), succeeds);
+                    assert!(!c.ready && !c.prompt);
+                    assert_eq!(
+                        events,
+                        if succeeds {
+                            vec![Event::Cancelled]
+                        } else {
+                            vec![]
+                        }
+                    );
+                },
+            );
+        }
+    }
+    #[test]
     fn switching_user_cancels_and_errors_allow_retry() {
         conversation(
             |mut s| {
@@ -338,6 +434,10 @@ mod tests {
                         description: "Denied".into(),
                     },
                 );
+                assert!(matches!(receive(&mut s), Request::CancelSession));
+                reply(&mut s, Response::Success);
+                assert!(matches!(receive(&mut s), Request::CancelSession));
+                reply(&mut s, Response::Success);
                 assert!(matches!(receive(&mut s), Request::CreateSession { .. }));
                 prompt(&mut s, AuthMessageType::Secret, "Password");
                 assert!(matches!(receive(&mut s), Request::CancelSession));
@@ -417,9 +517,6 @@ mod tests {
                 )
                 .is_err()
         );
-        client
-            .perform(Action::Cancel, |e| assert_eq!(e, Event::Cancelled))
-            .unwrap();
     }
     #[test]
     fn preview_never_connects_and_exercises_extra_prompts() {

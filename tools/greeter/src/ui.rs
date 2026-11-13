@@ -43,6 +43,7 @@ struct Ui {
     cancelling: Cell<bool>,
     power_busy: Cell<bool>,
     notice: RefCell<String>,
+    retry_error: RefCell<Option<String>>,
     tx: mpsc::Sender<Action>,
     window: gtk::ApplicationWindow,
     backgrounds: RefCell<Vec<gtk::ApplicationWindow>>,
@@ -128,6 +129,7 @@ impl Ui {
         }
         self.clear();
         self.notice.borrow_mut().clear();
+        self.retry_error.borrow_mut().take();
         self.message("Connecting…", false);
         self.send(Action::Begin(user));
     }
@@ -142,6 +144,7 @@ impl Ui {
                 };
                 self.clear();
                 self.notice.borrow_mut().clear();
+                self.retry_error.borrow_mut().take();
                 self.message("Authenticating…", false);
                 self.send(Action::Answer(answer));
             }
@@ -191,7 +194,7 @@ impl Ui {
                 } else {
                     Phase::Visible
                 });
-                self.message(&self.notice.borrow(), false);
+                self.prompt_status();
                 if secret {
                     self.secret.grab_focus();
                 } else {
@@ -200,7 +203,7 @@ impl Ui {
             }
             Event::Notice(message) => {
                 self.notice.replace(message.clone());
-                self.message(&message, false);
+                self.prompt_status();
             }
             Event::Ready => {
                 let Some(session) = self.sessions.get(self.session.selected() as usize) else {
@@ -239,6 +242,7 @@ impl Ui {
             }
             Event::Cancelled => {
                 self.cancelling.set(false);
+                self.retry_error.borrow_mut().take();
                 self.clear();
                 self.phase(Phase::Idle);
                 self.message("", false);
@@ -248,6 +252,12 @@ impl Ui {
                     self.submit.grab_focus();
                 }
             }
+            Event::Rejected(message) => {
+                self.phase(Phase::Idle);
+                self.begin();
+                self.retry_error.replace(Some(message.clone()));
+                self.message(&message, true);
+            }
             Event::Failed(message) => {
                 self.cancelling.set(false);
                 self.clear();
@@ -255,6 +265,20 @@ impl Ui {
                 self.message(&message, true);
                 self.submit.grab_focus();
             }
+        }
+    }
+    fn prompt_status(&self) {
+        let error = self.retry_error.borrow();
+        let notice = self.notice.borrow();
+        if let Some(error) = error.as_ref() {
+            let message = if notice.is_empty() {
+                error.clone()
+            } else {
+                format!("{error}\n{notice}")
+            };
+            self.message(&message, true);
+        } else {
+            self.message(&notice, false);
         }
     }
     fn resize_panel(&self) {
@@ -586,6 +610,7 @@ pub fn start(app: &gtk::Application, config: Config, sessions: Vec<Session>, pre
         cancelling: Cell::new(false),
         power_busy: Cell::new(false),
         notice: RefCell::new(String::new()),
+        retry_error: RefCell::new(None),
         tx,
         window,
         backgrounds: RefCell::new(Vec::new()),
