@@ -1,5 +1,27 @@
 # Native greeter verification
 
+## Authentication retry fix — 2026-11-13
+
+`auth-retry.png` shows the real GTK client after a rejected password: the error
+remains visible, the empty password field has focus, and the next answer can be
+typed immediately. Captured with a fake greetd socket in isolated Hyprland,
+nested inside Niri and headless Weston; no real PAM authentication was attempted.
+
+The integration test rejected two passwords before accepting a fresh password
+and verification code. It required explicit cancellation of each failed session,
+returned a broken-pipe error on the first cancellation, and verified cleanup was
+acknowledged before retry. No failed attempt persisted session state or launched
+a session. The existing launch acknowledgement and transition checks also passed.
+
+Thirteen Rust tests, Clippy with warnings denied, formatting, and the release
+build passed. Regression coverage also includes a dropped connection followed by
+a fresh connection that clears the daemon's stranded authentication session,
+bounded cancellation failures, and session-creation failures without automatic
+retry. A real wrong-password-then-correct-password login remains the acceptance
+check after installing and activating the updated executable.
+
+## Initial implementation — 2026-11-11
+
 Verified on 2026-11-11 in an isolated Niri compositor nested in headless Weston.
 The host desktop and its login service were not restarted.
 

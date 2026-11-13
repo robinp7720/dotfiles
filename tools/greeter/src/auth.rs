@@ -498,6 +498,61 @@ mod tests {
         );
     }
     #[test]
+    fn reconnect_resets_stranded_authentication() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("greetd.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut first, _) = listener.accept().unwrap();
+            first
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            assert!(matches!(receive(&mut first), Request::CancelSession));
+            reply(&mut first, Response::Success);
+            assert!(matches!(receive(&mut first), Request::CreateSession { .. }));
+            prompt(&mut first, AuthMessageType::Secret, "Password");
+            assert!(matches!(
+                receive(&mut first),
+                Request::PostAuthMessageResponse { .. }
+            ));
+            // Transport loss does not clear greetd's daemon-wide session.
+            drop(first);
+            let (mut second, _) = listener.accept().unwrap();
+            second
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            assert!(matches!(receive(&mut second), Request::CancelSession));
+            reply(&mut second, Response::Success);
+            assert!(matches!(
+                receive(&mut second),
+                Request::CreateSession { .. }
+            ));
+            prompt(&mut second, AuthMessageType::Secret, "Password");
+            assert!(matches!(
+                receive(&mut second),
+                Request::PostAuthMessageResponse { .. }
+            ));
+            reply(&mut second, Response::Success);
+        });
+        let (send, events) = worker(Some(path), false);
+        send.send(Action::Begin("test".into())).unwrap();
+        assert!(matches!(
+            events.recv_blocking().unwrap(),
+            Event::Prompt { .. }
+        ));
+        send.send(Action::Answer("test-only".into())).unwrap();
+        assert!(matches!(events.recv_blocking().unwrap(), Event::Failed(_)));
+        send.send(Action::Begin("test".into())).unwrap();
+        assert!(matches!(
+            events.recv_blocking().unwrap(),
+            Event::Prompt { .. }
+        ));
+        send.send(Action::Answer("test-only".into())).unwrap();
+        assert_eq!(events.recv_blocking().unwrap(), Event::Ready);
+        drop(send);
+        server.join().unwrap();
+    }
+    #[test]
     fn out_of_sequence_actions_are_rejected_without_io() {
         let (a, _b) = UnixStream::pair().unwrap();
         let mut client = Client::new(a).unwrap();
